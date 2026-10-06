@@ -49,13 +49,29 @@ A guarded DEV migráció preflight/apply/verify PASS. A post-activation verify s
 
 ## DEV aktiválás
 
-- új runtime: `dimpro-drive-v0913-auth044-personalbox-d0e255cb-p3384`;
+Első PERSONAL CsomagBOX candidate:
+- runtime: `dimpro-drive-v0913-auth044-personalbox-d0e255cb-p3384`;
 - port: `3384`;
 - PM2: online, 0 restart;
-- publikus upstream: `drive.dev.dimpro.hu` → `127.0.0.1:3384`;
-- header: `d0e255cb DRIVE V0.9.13 AUTH V0.6.5 PERSONAL CSOMAGBOX + LINKED PROJECTS + IDENTITY + BROWSER FULLSCREEN + SSO TERMINAL + DESKTOP SCAN AUTH DEV`;
-- rollback runtime: `dimpro-drive-v0913-auth044-v065-0aa54e28-p3381`, port `3381`, online és érintetlen;
+- source: `d0e255cb8e61a1a495aefdd72969fea4170d2108`;
+- build ID: `Ua_bDqr4eEJABVzqfo9Ct`;
 - Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-personalbox/dimpro-dev.conf.before-d0e255cb-20261006T174818Z`.
+
+A cutover után BenjaminAI újabb Drive Desktop V0.1.8 candidate-et aktivált. Read-only Git ancestry ellenőrzés igazolta, hogy a `d0e255cb8...` PERSONAL CsomagBOX commit a jelenlegi integrált `9a0a4b513ea66bb742527af2028407d27303d42c` őse. Ezért a CsomagBOX fejlesztés nem veszett el és nem kell visszaváltani a 3384-es candidate-re.
+
+Jelenlegi publikus integrált DEV állapot:
+- runtime: `dimpro-drive-v018-open-handler-9a0a4b513-p3385`;
+- port: `3385`;
+- PM2: online, 0 restart;
+- source commit: `9a0a4b513ea66bb742527af2028407d27303d42c`;
+- source branch: `worker/benjaminai/drive-desktop-v015-fix1-20261003`;
+- build ID: `Xahz_oxIUJVtzWfcsmqcF`;
+- header: `9a0a4b51 DRIVE V0.9.13 AUTH V0.6.5 PERSONAL CSOMAGBOX + WINDOWS OPEN V0.1.8 + DESKTOP SCAN AUTH DEV`;
+- a live standalone release tartalmazza mind a 8 PERSONAL BOX API route-ot;
+- `d0e255cb8...` → `9a0a4b51...` ancestry: PASS;
+- PROD DENY.
+
+A 3384-es CsomagBOX candidate és a 3381-es korábbi személyes Drive runtime rollbackként online maradtak.
 
 Publikus smoke:
 - `/drive` → 307 central SSO start, no-store/no-cache;

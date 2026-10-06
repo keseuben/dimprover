@@ -3590,7 +3590,9 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új additív personal CsomagBOX schema marker: `0.1.0`, bootstrap `personal-drive-boxes-v010-20261006`; guarded DEV migration preflight/apply/verify PASS.
 - Schema commit `0cf320504554bb730b1b7833e102e8bfd70a7a68`; runtime source `d0e255cb8e61a1a495aefdd72969fea4170d2108`.
 - Build02 manual safe fallback a Build Transport Gateway HTTP 403 miatt; build ID `Ua_bDqr4eEJABVzqfo9Ct`; artifact SHA-256 `6ae8e0ca869b020e173ee5269ae45ef7109ea0c5ae42558ac4d0060570544cbe`.
-- DEV runtime `dimpro-drive-v0913-auth044-personalbox-d0e255cb-p3384`, port `3384`; publikus Drive upstream 3384. Rollback `0aa54e28` port `3381` online maradt.
+- Első CsomagBOX runtime `dimpro-drive-v0913-auth044-personalbox-d0e255cb-p3384`, port `3384`, source `d0e255cb8...`, build `Ua_bDqr4eEJABVzqfo9Ct`.
+- Ezt később a BenjaminAI Drive Desktop V0.1.8 integrált candidate váltotta: source `9a0a4b513ea66bb742527af2028407d27303d42c`, build `Xahz_oxIUJVtzWfcsmqcF`, port `3385`. Git ancestry szerint `d0e255cb8...` a `9a0a4b51...` őse, ezért a PERSONAL CsomagBOX teljes kódja megmaradt az integrált runtime-ban.
+- A 3385-ös standalone release mind a 8 PERSONAL BOX API route-ot tartalmazza; publikus header: `9a0a4b51 DRIVE V0.9.13 AUTH V0.6.5 PERSONAL CSOMAGBOX + WINDOWS OPEN V0.1.8 + DESKTOP SCAN AUTH DEV`.
 - App contract 14/14, SQL 13/13, migration-order 3/3, ProjectGate compare 10/10, ProjectGate BOX 13/13, history 18/18, compact BOX 19/19, panel/folder 13/13, compare/issue ACL 18/18 PASS; lint/TypeScript/build PASS.
 - Publikus smoke: `/drive` 307 central SSO, Personal BOX API auth nélkül 401, PM2 error log 0 byte.
 - DEV ONLY · PROD DENY. Bejelentkezett böngészős E2E még szükséges.
