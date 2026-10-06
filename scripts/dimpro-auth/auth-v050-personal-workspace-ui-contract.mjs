@@ -5,7 +5,7 @@ check("DriveShell loads unified workspace API",()=>assert.match(shell,/fetch\("\
 check("DriveShell renders PERSONAL separately from PROJECT",()=>{assert.match(shell,/selectedWorkspace\.type === "PERSONAL"/);assert.match(shell,/<PersonalDriveWorkspace/);assert.match(shell,/<DriveWorkspace/)});
 check("project creation selects project-prefixed workspace id",()=>assert.match(shell,/setSelectedWorkspaceId\(`project:\$\{payload\.project\.id\}`\)/));
 check("workspace options preserve PERSONAL vs PROJECT kind",()=>assert.match(shell,/kind: workspace\.type/));
-check("personal workspace preserves honest USER_ROOT fallback while allowing folder-core activation",()=>{assert.match(personal,/USER_ROOT/);assert.match(personal,/folderCoreReady/);assert.match(personal,/mappafa adatbázis-magja még nincs aktiválva/)});
+check("personal workspace preserves honest USER_ROOT fallback while allowing folder-core activation",()=>{assert.match(personal,/USER_ROOT/);assert.match(personal,/folderCoreReady/);assert.match(personal,/mappamag nem aktív/)});
 check("personal content API requires exact personal entitlement",()=>{assert.match(list,/hasPersonalDriveAccess\(auth\.actor\.userId\)/);assert.match(download,/hasPersonalDriveAccess\(auth\.actor\.userId\)/)});
 check("personal list is owner-scoped",()=>{assert.match(repo,/\.eq\("owner_type", "USER"\)/);assert.match(repo,/\.eq\("owner_user_id", input\.userId\)/)});
 check("personal download is owner-scoped and clean-only",()=>{assert.match(download,/getUserContentItemByRefId\(\{ userId: auth\.actor\.userId, refId \}\)/);assert.match(download,/security_status !== "clean"/);assert.match(download,/virus_scan_status !== "clean"/)});

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-const repo=read("app/lib/content-core/repository.ts"),folders=read("app/api/drive/personal/folders/route.ts"),folder=read("app/api/drive/personal/folders/[folderId]/route.ts"),move=read("app/api/drive/personal/content/[refId]/route.ts"),content=read("app/api/drive/personal/content/route.ts"),workspace=read("app/api/drive/workspaces/route.ts"),ui=read("components/drive/PersonalDriveWorkspace.tsx"),tree=read("components/drive/PersonalDriveFolderTree.tsx");
+const repo=read("app/lib/content-core/repository.ts"),folders=read("app/api/drive/personal/folders/route.ts"),folder=read("app/api/drive/personal/folders/[folderId]/route.ts"),move=read("app/api/drive/personal/content/[refId]/route.ts"),content=read("app/api/drive/personal/content/route.ts"),workspace=read("app/api/drive/workspaces/route.ts"),ui=read("components/drive/PersonalDriveWorkspace.tsx"),tree=read("components/drive/FolderTreePanel.tsx"),grid=read("components/drive/FileGridPanel.tsx");
 check("personal folder readiness is marker gated",()=>{assert.match(repo,/content-personal-folders-v010-20261006/);assert.match(repo,/getPersonalFolderCoreReadiness/)});
 check("folder repository is exact owner scoped",()=>{assert.match(repo,/\.eq\("owner_user_id", input\.userId\)/);assert.match(repo,/\.eq\("status", "ACTIVE"\)/)});
 check("safe personal folder names reject path/control syntax",()=>assert.match(repo,/CONTENT_PERSONAL_FOLDER_NAME_INVALID/));
@@ -12,10 +12,10 @@ check("all personal folder mutations require personal Drive entitlement",()=>{as
 check("personal content payload exposes logical folder id",()=>assert.match(content,/folderId: ref\.folder_id/));
 check("workspace advertises folder capability from backend readiness",()=>{assert.match(workspace,/getPersonalFolderCoreReadiness/);assert.match(workspace,/folderTree: personalFolderCore\.ready/);assert.match(workspace,/browsing: personalFolderCore\.ready \? "FULL"/)});
 check("personal UI loads content and folders together",()=>{assert.match(ui,/Promise\.all/);assert.match(ui,/\/api\/drive\/personal\/folders/)});
-check("personal folder tree uses inline create and rename, never browser prompt",()=>{assert.match(tree,/Új mappa neve/);assert.match(tree,/Mappanév szerkesztése/);assert.doesNotMatch(tree,/\bprompt\s*\(/)});
-check("personal folder tree is hierarchical and collapsible",()=>{assert.match(tree,/ChevronRight/);assert.match(tree,/ChevronDown/);assert.match(tree,/renderFolder\(child, depth \+ 1\)/)});
-check("personal file list filters by selected folder",()=>assert.match(ui,/items\.filter\(\(item\) => \(item\.folderId \|\| null\) === selectedFolderId\)/));
-check("file move is exposed only when folder core is ready",()=>{assert.match(ui,/folderCoreReady \? \(/);assert.match(ui,/Fájl áthelyezése/)});
-check("personal view capabilities remain simple plus engineering only",()=>assert.match(ui,/allowedModes=\{\["simple", "engineering"\]\}/));
+check("personal folder create and rename reuse shared Drive UI patterns",()=>{assert.match(grid,/aria-label="Új mappa neve"/);assert.match(ui,/Mappa átnevezése/);assert.match(ui,/api\/drive\/personal\/folders\/\$\{encodeURIComponent\(dialog\.folderId\)\}/);assert.doesNotMatch(ui,/\bprompt\s*\(/)});
+check("personal folder tree reuses shared hierarchical collapsible panel",()=>{assert.match(tree,/ChevronRight/);assert.match(tree,/ChevronDown/);assert.match(tree,/visibleRows\.map/);assert.match(tree,/toggleFolder\(folder\.id\)/)});
+check("personal file list filters by selected folder through shared document adapter",()=>{assert.match(ui,/const visibleDocuments = useMemo/);assert.match(ui,/document\.folderId === selectedFolderId/);assert.match(ui,/allFilesMode \? descendantFolderIds\.has\(document\.folderId\)/)});
+check("file move is exposed only when folder core is ready",()=>{assert.match(ui,/canWrite=\{folderCoreReady\}/);assert.match(ui,/moveReady=\{folderCoreReady\}/);assert.match(ui,/if \(!folderCoreReady/)});
+check("personal view capabilities remain simple plus engineering only",()=>assert.match(ui,/allowedViewModes=\{\["simple", "engineering"\]\}/));
 check("no personal folder DELETE endpoint is introduced in foundation phase",()=>{assert.doesNotMatch(folders,/export async function DELETE/);assert.doesNotMatch(folder,/export async function DELETE/)});
 console.log(`DIMPRO AUTH V0.6.0 personal folder core contract PASS · ${n}/${n}`);

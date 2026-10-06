@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const rows = await listUserContentItems({ userId: auth.actor.userId, limit: 250 });
     const items = rows.map(({ ref, object }) => ({
       id: ref.id,
+      objectId: object.id,
       name: ref.display_name || object.display_name || object.original_name || "DIMPRO fájl",
       originalName: object.original_name,
       mimeType: object.mime_type,
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
     }));
     return NextResponse.json({
       ok: true,
-      workspace: { type: "PERSONAL", storageScope: "USER_ROOT", folderTree: false },
+      workspace: { type: "PERSONAL", storageScope: "USER_ROOT", folderTree: true },
       items,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {

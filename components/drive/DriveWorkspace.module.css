@@ -5539,3 +5539,22 @@
 :global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb { background: #0d1e2c; border-color: #20394d; color: #839bad; }
 :global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb strong { color: #c4d8e6; }
 @media (max-width: 920px) { .personalDriveWorkspaceGrid { grid-template-columns: 1fr; } .personalFolderTreeRows { max-height: 240px; } }
+
+/* DIMPRO Drive · Personal shared inspector */
+.personalPreviewStage { min-height: 0; height: 100%; display: grid; place-items: center; background: #f4f7fa; border: 1px solid #dce5ec; border-radius: 8px; overflow: hidden; }
+.personalPreviewImage { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.personalPreviewFrame { width: 100%; height: 100%; min-height: 360px; border: 0; background: #fff; }
+.personalDetailsGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; width: 100%; }
+.personalDetailsGrid > div { min-width: 0; border: 1px solid #dce5ec; border-radius: 7px; background: #fbfdff; padding: 8px 9px; }
+.personalDetailsGrid span { display: block; color: #71879a; font-size: 10px; margin-bottom: 4px; }
+.personalDetailsGrid strong { display: block; color: #29465c; font-size: 11px; overflow-wrap: anywhere; }
+.personalDetailsWide { grid-column: 1 / -1; }
+.personalDetailsActions { display: flex; gap: 7px; padding: 8px 12px; border-top: 1px solid #e5edf3; }
+.personalDetailsActions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; border: 1px solid #cad8e3; border-radius: 6px; background: #fff; color: #395b72; font-size: 10px; font-weight: 800; padding: 0 9px; cursor: pointer; }
+.personalDetailsActions button:disabled { opacity: .45; cursor: default; }
+:global(html[data-drive-theme="dark"]) .personalPreviewStage { background: #0a1a27; border-color: #223d50; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid > div { background: #0e2231; border-color: #29465a; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid span { color: #8ca4b5; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid strong { color: #c4d7e4; }
+:global(html[data-drive-theme="dark"]) .personalDetailsActions { border-color: #223b4e; }
+:global(html[data-drive-theme="dark"]) .personalDetailsActions button { background: #102535; border-color: #2d4b60; color: #c2d5e2; }

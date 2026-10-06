@@ -14,6 +14,7 @@ type Props = {
   selectedDocumentId: string;
   viewMode: DriveViewMode;
   onViewModeChange: (value: DriveViewMode) => void;
+  allowedViewModes?: DriveViewMode[];
   onSelectDocument: (document: DriveDocument) => void;
   onOpenDocument?: (document: DriveDocument) => void;
   onRefresh: () => void;
@@ -223,13 +224,13 @@ function BoxInlineMarker({ tokens }: { tokens: string[] }) {
   );
 }
 
-function FavoriteToggle({ favorite, busy, onToggle, label }: { favorite: boolean; busy: boolean; onToggle: () => void; label: string }) {
+function FavoriteToggle({ favorite, busy, enabled, onToggle, label }: { favorite: boolean; busy: boolean; enabled: boolean; onToggle: () => void; label: string }) {
   return (
     <button
       type="button"
       className={`${styles.favoriteToggle} ${favorite ? styles.favoriteToggleActive : ""}`}
-      disabled={busy}
-      title={favorite ? "Eltávolítás a kedvencek közül" : "Hozzáadás a kedvencekhez"}
+      disabled={busy || !enabled}
+      title={!enabled ? "Kedvencek – ebben a munkatérben még nem aktív" : favorite ? "Eltávolítás a kedvencek közül" : "Hozzáadás a kedvencekhez"}
       aria-label={`${label} – ${favorite ? "eltávolítás a kedvencek közül" : "hozzáadás a kedvencekhez"}`}
       aria-pressed={favorite}
       onClick={(event) => {
@@ -291,16 +292,16 @@ function FileRowActions({
   const browserReady = readable && browserRowPreviewExtensions.has((document.extension || "").toLowerCase());
   return (
     <div className={styles.rowQuickActions} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-      <button type="button" disabled={!browserReady || busy} title={browserReady ? "Megnyitás böngészőben" : "Ehhez a fájltípushoz nincs böngészős előnézet"} onClick={onOpenBrowser}><ExternalLink size={14} /></button>
-      <button type="button" disabled={!readable || busy} title="Megnyitás Windows alkalmazásban" onClick={onOpenWindows}><MonitorUp size={14} /></button>
-      <button type="button" disabled={!canWrite || busy} title={canWrite ? "CsomagBOX" : "Nincs jogosultságod CsomagBOX módosításához"} onClick={onOpenBox}><PackagePlus size={14} /></button>
-      <button type="button" disabled={!readable || busy} title="Letöltés" onClick={onDownload}><Download size={14} /></button>
+      <button type="button" disabled={!browserReady || !onOpenBrowser || busy} title={!onOpenBrowser ? "Böngészős megnyitás – ebben a munkatérben még nem aktív" : browserReady ? "Megnyitás böngészőben" : "Ehhez a fájltípushoz nincs böngészős előnézet"} onClick={onOpenBrowser}><ExternalLink size={14} /></button>
+      <button type="button" disabled={!readable || !onOpenWindows || busy} title={!onOpenWindows ? "Windows megnyitás – ebben a munkatérben még nem aktív" : "Megnyitás Windows alkalmazásban"} onClick={onOpenWindows}><MonitorUp size={14} /></button>
+      <button type="button" disabled={!canWrite || !onOpenBox || busy} title={!onOpenBox ? "CsomagBOX – ebben a munkatérben még nem aktív" : canWrite ? "CsomagBOX" : "Nincs jogosultságod CsomagBOX módosításához"} onClick={onOpenBox}><PackagePlus size={14} /></button>
+      <button type="button" disabled={!readable || !onDownload || busy} title={!onDownload ? "Letöltés nem érhető el" : "Letöltés"} onClick={onDownload}><Download size={14} /></button>
       <button type="button" className={styles.rowTrashAction} disabled={!canDelete || busy} title={canDelete ? "Lomtárba helyezés" : "Nincs jogosultságod a törléshez"} onClick={onDelete}><Trash2 size={14} /></button>
       <button type="button" aria-expanded={menuOpen} title="További műveletek" onClick={onToggleMenu}><EllipsisVertical size={15} /></button>
       {menuOpen && (
         <div className={styles.rowActionMenu}>
           <button type="button" onClick={onDetails}>Részletek</button>
-          <button type="button" onClick={onVersions}>Verziók és revíziók</button>
+          <button type="button" disabled={!onVersions} onClick={onVersions}>Verziók és revíziók</button>
           <button type="button" disabled={!canDelete || busy} className={styles.rowActionMenuDanger} onClick={onDelete}>Lomtárba helyezés</button>
         </div>
       )}
@@ -327,13 +328,13 @@ function FolderRowActions({
 }) {
   return (
     <div className={styles.rowQuickActions} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-      <button type="button" disabled={busy} title="Mappa letöltése ZIP-ként" onClick={onDownload}><Download size={14} /></button>
+      <button type="button" disabled={!onDownload || busy} title={onDownload ? "Mappa letöltése ZIP-ként" : "Mappa ZIP letöltés – ebben a munkatérben még nem aktív"} onClick={onDownload}><Download size={14} /></button>
       <button type="button" className={styles.rowTrashAction} disabled={!canDelete || busy} title={canDelete ? "Mappa Lomtárba helyezése" : "Nincs jogosultságod a mappa törléséhez"} onClick={onDelete}><Trash2 size={14} /></button>
       <button type="button" aria-expanded={menuOpen} title="További műveletek" onClick={onToggleMenu}><EllipsisVertical size={15} /></button>
       {menuOpen && (
         <div className={styles.rowActionMenu}>
           <button type="button" onClick={onOpen}>Megnyitás</button>
-          <button type="button" onClick={onDownload}>ZIP letöltés</button>
+          <button type="button" disabled={!onDownload} onClick={onDownload}>ZIP letöltés</button>
           <button type="button" disabled={!canDelete || busy} className={styles.rowActionMenuDanger} onClick={onDelete}>Lomtárba helyezés</button>
         </div>
       )}
@@ -835,6 +836,7 @@ export default function FileGridPanel({
   selectedDocumentId,
   viewMode,
   onViewModeChange,
+  allowedViewModes = ["simple", "engineering", "review"],
   onSelectDocument,
   onOpenDocument,
   onRefresh,
@@ -888,6 +890,9 @@ export default function FileGridPanel({
   const selectedIds = selectedDocumentIds ?? internalSelectedIds;
   const favoriteSet = useMemo(() => new Set(favoriteDocumentIds), [favoriteDocumentIds]);
   const favoriteBusySet = useMemo(() => new Set(favoriteBusyDocumentIds), [favoriteBusyDocumentIds]);
+  const metadataActionsEnabled = Boolean(onOpenReviewDetail);
+  const boxActionsEnabled = Boolean(onOpenBoxDocument);
+  const favoriteActionsEnabled = Boolean(onToggleFavorite);
   const setSelectedIds = (next: string[] | ((current: string[]) => string[])) => {
     const resolved = typeof next === "function" ? next(selectedIds) : next;
     if (onSelectionChange) onSelectionChange(resolved);
@@ -1262,7 +1267,7 @@ export default function FileGridPanel({
           <OverflowTooltipText text={title} className={styles.filePanelTitleMain} />
           <OverflowTooltipText text={subtitle} className={styles.filePanelSubtitle} />
         </div>
-        <DriveViewModeToggle value={viewMode} onChange={onViewModeChange} onRefresh={onRefresh} />
+        <DriveViewModeToggle value={viewMode} onChange={onViewModeChange} allowedModes={allowedViewModes} onRefresh={onRefresh} />
       </header>
 
       <div className={styles.fileFolderNav}>
@@ -1477,7 +1482,7 @@ export default function FileGridPanel({
                     busy={busy}
                     actionMenuOpen={rowActionMenu === `folder:${folder.id}`}
                     onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
-                    onDownload={() => onDownloadFolder?.(folder)}
+                    onDownload={onDownloadFolder ? () => onDownloadFolder(folder) : undefined}
                     onDelete={() => void onDeleteFolder?.(folder)}
                   />
                 ))}
@@ -1509,15 +1514,15 @@ export default function FileGridPanel({
                         >
                           <FileKindIcon extension={row.document.extension} />
                         </span>
-                        <FavoriteToggle favorite={favoriteSet.has(row.document.id)} busy={favoriteBusySet.has(row.document.id)} label={row.displayName} onToggle={() => onToggleFavorite?.(row.document)} />
+                        <FavoriteToggle favorite={favoriteSet.has(row.document.id)} busy={favoriteBusySet.has(row.document.id)} enabled={favoriteActionsEnabled} label={row.displayName} onToggle={() => onToggleFavorite?.(row.document)} />
                         <BoxInlineMarker tokens={boxColorsByDocument[row.document.id] || []} />
                       </div>
                     </td>
-                    <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
+                    <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? row.planNo || "Tervszám megadása" : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
                     <td className={styles.reviewNameCell}>
-                      <DisplayNameValue document={row.document} metadata={metadataByDocument[row.document.id]} canWrite={canWrite} onEdit={() => openDetail(row.document, "planTitle")} />
+                      <DisplayNameValue document={row.document} metadata={metadataByDocument[row.document.id]} canWrite={canWrite && metadataActionsEnabled} onEdit={() => openDetail(row.document, "planTitle")} />
                     </td>
-                    <td><button type="button" className={styles.metadataCellButton} title={row.scale.title} onClick={() => openDetail(row.document, "scales")}>{row.scale.text}</button></td>
+                    <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? row.scale.title : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(row.document, "scales")}>{row.scale.text}</button></td>
                     <td className={styles.reviewFileName}><OverflowTooltipText text={row.document.name} /></td>
                     <td><OverflowTooltipText text={uploaderLabel(row.document.currentVersion?.createdBy)} /></td>
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
@@ -1598,7 +1603,7 @@ export default function FileGridPanel({
                     busy={busy}
                     actionMenuOpen={rowActionMenu === `folder:${folder.id}`}
                     onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
-                    onDownload={() => onDownloadFolder?.(folder)}
+                    onDownload={onDownloadFolder ? () => onDownloadFolder(folder) : undefined}
                     onDelete={() => void onDeleteFolder?.(folder)}
                   />
                 ))}
@@ -1616,21 +1621,21 @@ export default function FileGridPanel({
                           <ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} />
                           <span
                             className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
-                            draggable
+                            draggable={boxActionsEnabled}
                             onPointerDown={(event) => event.stopPropagation()}
                             onDragStart={(event) => beginDocumentDrag(event, document)}
                             title="Húzd a fájlt CsomagBOX-ba"
                             aria-label={`${displayName.value} CsomagBOX-ba húzása`}
                           ><FileKindIcon extension={document.extension} /></span>
-                          <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} />
+                          <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} />
                           <BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} />
                         </div>
                       </td>
-                      <td><div className={styles.fileNameCell}><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
+                      <td><div className={styles.fileNameCell}><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite && metadataActionsEnabled} onEdit={() => openDetail(document, "planTitle")} /></div></td>
                       <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
                       <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
-                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához" : "Verzió/revízió szerkesztés – ebben a munkatérben még nem aktív"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
                       <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td>{formatDate(document.updatedAt)}</td>
@@ -1643,13 +1648,13 @@ export default function FileGridPanel({
                           busy={busy}
                           menuOpen={rowActionMenu === `document:${document.id}`}
                           onToggleMenu={() => setRowActionMenu((current) => current === `document:${document.id}` ? "" : `document:${document.id}`)}
-                          onOpenBrowser={() => onOpenBrowserDocument?.(document)}
-                          onOpenWindows={() => onOpenWindowsDocument?.(document)}
-                          onOpenBox={() => onOpenBoxDocument?.(document)}
-                          onDownload={() => onDownloadDocument?.(document)}
+                          onOpenBrowser={onOpenBrowserDocument ? () => onOpenBrowserDocument(document) : undefined}
+                          onOpenWindows={onOpenWindowsDocument ? () => onOpenWindowsDocument(document) : undefined}
+                          onOpenBox={onOpenBoxDocument ? () => onOpenBoxDocument(document) : undefined}
+                          onDownload={onDownloadDocument ? () => onDownloadDocument(document) : undefined}
                           onDelete={() => void onDeleteSelected?.([document.id])}
                           onDetails={() => { setRowActionMenu(""); onSelectDocument(document); }}
-                          onVersions={() => { setRowActionMenu(""); openDetail(document, "numbering"); }}
+                          onVersions={metadataActionsEnabled ? () => { setRowActionMenu(""); openDetail(document, "numbering"); } : undefined}
                         />
                       </td>
                     </tr>
@@ -1722,21 +1727,21 @@ export default function FileGridPanel({
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
-                        draggable
+                        draggable={boxActionsEnabled}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd a fájlt CsomagBOX-ba"
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
-                      <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
-                      <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></td>
-                      <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
+                      ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
+                      <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? metadata?.planNo || "Tervszám megadása" : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
+                      <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite && metadataActionsEnabled} onEdit={() => openDetail(document, "planTitle")} /></td>
+                      <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? scaleSummary(metadata).title : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
                       <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
                       <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td><OverflowTooltipText text={document.mimeType || "–"} /></td>
-                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
-                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{versionLabel(version?.versionNumber || document.currentVersionNumber)}</button></td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához" : "Verzió/revízió szerkesztés – ebben a munkatérben még nem aktív"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához" : "Verzió/revízió szerkesztés – ebben a munkatérben még nem aktív"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{versionLabel(version?.versionNumber || document.currentVersionNumber)}</button></td>
                       <td><OverflowTooltipText text={document.source} /></td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td className={styles.versionStatusCell}><VersionStatusDot status={version?.status} /></td>
@@ -1748,13 +1753,13 @@ export default function FileGridPanel({
                           busy={busy}
                           menuOpen={rowActionMenu === `document:${document.id}`}
                           onToggleMenu={() => setRowActionMenu((current) => current === `document:${document.id}` ? "" : `document:${document.id}`)}
-                          onOpenBrowser={() => onOpenBrowserDocument?.(document)}
-                          onOpenWindows={() => onOpenWindowsDocument?.(document)}
-                          onOpenBox={() => onOpenBoxDocument?.(document)}
-                          onDownload={() => onDownloadDocument?.(document)}
+                          onOpenBrowser={onOpenBrowserDocument ? () => onOpenBrowserDocument(document) : undefined}
+                          onOpenWindows={onOpenWindowsDocument ? () => onOpenWindowsDocument(document) : undefined}
+                          onOpenBox={onOpenBoxDocument ? () => onOpenBoxDocument(document) : undefined}
+                          onDownload={onDownloadDocument ? () => onDownloadDocument(document) : undefined}
                           onDelete={() => void onDeleteSelected?.([document.id])}
                           onDetails={() => { setRowActionMenu(""); onSelectDocument(document); }}
-                          onVersions={() => { setRowActionMenu(""); openDetail(document, "numbering"); }}
+                          onVersions={metadataActionsEnabled ? () => { setRowActionMenu(""); openDetail(document, "numbering"); } : undefined}
                         />
                       </td>
                     </tr>
