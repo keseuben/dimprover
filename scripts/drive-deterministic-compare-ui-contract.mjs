@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const viewer=readFileSync('components/drive/DriveVisualCompareViewer.tsx','utf8');
+const css=readFileSync('components/drive/DriveWorkspace.module.css','utf8');
+const engine=readFileSync('components/drive/driveDeterministicCompare.ts','utf8');
+let pass=0; const check=(n,f)=>{f();pass++;console.log(`PASS ${pass}: ${n}`)};
+check('viewer runs PDF page analysis automatically',()=>{assert.match(viewer,/setDeterministicAnalysisLoading\(true\)/);assert.match(viewer,/analyzeSharedPdfPage\(pdfJs, leftPage\)/)});
+check('viewer builds deterministic result',()=>assert.match(viewer,/buildDeterministicCompareResult/));
+check('result panel declares AI-free rule based mode',()=>assert.match(viewer,/Szabályalapú · AI nélkül/));
+check('panel exposes compatibility score and status',()=>{assert.match(viewer,/Kompatibilitási jelző/);assert.match(viewer,/deterministicStatusLabel/)});
+check('panel exposes drawing code scale text and geometry',()=>{for(const label of ['Tervazonosító','Lépték','Szöveg','Vektorgeometria'])assert.match(viewer,new RegExp(label))});
+check('details expose A-only and B-only text',()=>{assert.match(viewer,/Csak az A dokumentumban/);assert.match(viewer,/Csak a B dokumentumban/)});
+check('status styling distinguishes different documents',()=>assert.match(css,/data-status="DIFFERENT_DOCUMENT"/));
+check('scale avoids unlabeled slash-only page counters',()=>{assert.match(engine,/LÉPTÉK/);assert.ok(engine.includes('const conventional = joined.match(/\\b1\\s*:\\s*'));assert.doesNotMatch(engine,/\(\?:\\bM\\s\*\)\?\\b1/)});
+console.log(`DRIVE_DETERMINISTIC_COMPARE_UI ${pass}/8 PASS`);

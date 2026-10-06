@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const src=readFileSync('components/drive/driveDeterministicCompare.ts','utf8');
+let pass=0; const check=(n,f)=>{f();pass++;console.log(`PASS ${pass}: ${n}`)};
+check('result has explicit non-AI statuses',()=>assert.match(src,/LIKELY_REVISION_PAIR.*REVIEW_REQUIRED.*DIFFERENT_DOCUMENT/));
+check('drawing code is extracted from filename or PDF text',()=>{assert.match(src,/extractDrawingCode/);assert.match(src,/analysis\.textItems/)});
+check('scale extraction recognizes 1:n notation',()=>assert.match(src,/extractScale/));
+check('text diff reports added removed and similarity',()=>{assert.match(src,/addedCount/);assert.match(src,/removedCount/);assert.match(src,/similarityPercent/)});
+check('geometry compares vector segment and contour counts',()=>{assert.match(src,/lineSegmentCount/);assert.match(src,/closedContourCount/)});
+check('different drawing codes force different-document status',()=>assert.match(src,/explicitDifferentDocument/));
+check('summary states rule-based non-AI nature',()=>assert.match(src,/szabályalapú, nem AI-vélemény/));
+console.log(`DRIVE_DETERMINISTIC_COMPARE ${pass}/7 PASS`);

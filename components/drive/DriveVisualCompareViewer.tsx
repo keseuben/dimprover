@@ -33,8 +33,10 @@ import {
   loadSharedPdfJs,
   renderSharedPdfPage,
   type SharedPdfDocument,
+  type SharedPdfPageAnalysis,
 } from "@/components/viewers/pdfDocumentEngine";
 import { buildDriveAutoAlignmentPairProposals, type DriveAutoAlignmentSource } from "./driveAutoAlignment";
+import { buildDeterministicCompareResult } from "./driveDeterministicCompare";
 import type { DriveDocument } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -655,6 +657,7 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
   const leftPdfRef = useRef<SharedPdfDocument | null>(null);
   const rightPdfRef = useRef<SharedPdfDocument | null>(null);
   const renderRunRef = useRef(0);
+  const deterministicAnalysisRunRef = useRef(0);
   const stableStageWidthRef = useRef(0);
 
   const leftKind = useMemo(() => documentKind(leftDocument), [leftDocument]);
@@ -704,6 +707,10 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
   const [error, setError] = useState("");
   const [stageWidth, setStageWidth] = useState(0);
   const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 });
+  const [deterministicAnalysis, setDeterministicAnalysis] = useState<{ pageNumber: number; left: SharedPdfPageAnalysis; right: SharedPdfPageAnalysis } | null>(null);
+  const [deterministicAnalysisLoading, setDeterministicAnalysisLoading] = useState(false);
+  const [deterministicAnalysisError, setDeterministicAnalysisError] = useState("");
+  const [deterministicAnalysisExpanded, setDeterministicAnalysisExpanded] = useState(false);
 
   const sharedPageCount = leftKind === "PDF" && rightKind === "PDF"
     ? Math.min(leftPageCount || 0, rightPageCount || 0)
@@ -967,6 +974,35 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
     void left?.destroy?.();
     void right?.destroy?.();
   }, []);
+
+  useEffect(() => {
+    if (leftKind !== "PDF" || rightKind !== "PDF" || !sharedPageCount) {
+      setDeterministicAnalysis(null);
+      setDeterministicAnalysisError("");
+      setDeterministicAnalysisLoading(false);
+      return;
+    }
+    const leftPdf = leftPdfRef.current;
+    const rightPdf = rightPdfRef.current;
+    if (!leftPdf || !rightPdf) return;
+    const run = ++deterministicAnalysisRunRef.current;
+    setDeterministicAnalysisLoading(true);
+    setDeterministicAnalysisError("");
+    Promise.all([loadSharedPdfJs(), leftPdf.getPage(pageNumber), rightPdf.getPage(pageNumber)])
+      .then(async ([pdfJs, leftPage, rightPage]) => {
+        const [left, right] = await Promise.all([analyzeSharedPdfPage(pdfJs, leftPage), analyzeSharedPdfPage(pdfJs, rightPage)]);
+        if (run !== deterministicAnalysisRunRef.current) return;
+        setDeterministicAnalysis({ pageNumber, left, right });
+      })
+      .catch((caught) => {
+        if (run !== deterministicAnalysisRunRef.current) return;
+        setDeterministicAnalysis(null);
+        setDeterministicAnalysisError(caught instanceof Error ? caught.message : "A szabályalapú PDF-elemzés sikertelen.");
+      })
+      .finally(() => {
+        if (run === deterministicAnalysisRunRef.current) setDeterministicAnalysisLoading(false);
+      });
+  }, [leftDocument.id, leftDocument.currentVersion?.id, leftKind, pageNumber, rightDocument.id, rightDocument.currentVersion?.id, rightKind, sharedPageCount]);
 
   useEffect(() => {
     const leftPdf = leftPdfRef.current;
@@ -1576,6 +1612,16 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
 
   const isPdf = leftKind === "PDF" && rightKind === "PDF";
   const ready = Boolean(leftPreview && rightPreview) && (!isPdf || sharedPageCount > 0);
+  const deterministicResult = isPdf && deterministicAnalysis?.pageNumber === pageNumber
+    ? buildDeterministicCompareResult({
+        leftDocument, rightDocument,
+        leftAnalysis: deterministicAnalysis.left, rightAnalysis: deterministicAnalysis.right,
+        leftPageCount, rightPageCount,
+      })
+    : null;
+  const deterministicStatusLabel = deterministicResult?.status === "LIKELY_REVISION_PAIR"
+    ? "Valószínű revíziópár"
+    : deterministicResult?.status === "DIFFERENT_DOCUMENT" ? "Eltérő tervlap" : "Ellenőrzendő";
   const topOpacity = mode === "DIFFERENCE" ? 1 : overlayOpacity / 100;
   const topBlend = mode === "DIFFERENCE" ? "difference" : "normal";
   const alignmentFactor = alignmentScale / 100;
@@ -1697,6 +1743,55 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
       </div>
 
       {error && <div className={styles.visualCompareError}>{error}</div>}
+
+      {isPdf && (
+        <section className={styles.deterministicComparePanel} data-status={deterministicResult?.status || "LOADING"} aria-label="AI nélküli összehasonlítási eredmény">
+          <div className={styles.deterministicCompareHeader}>
+            <div className={styles.deterministicCompareLead}>
+              <ClipboardList size={14} />
+              <span><strong>Összehasonlítási eredmény</strong><small>Szabályalapú · AI nélkül · {pageNumber}. oldal</small></span>
+            </div>
+            {deterministicResult ? (
+              <div className={styles.deterministicCompareHeadline}>
+                <span className={styles.deterministicCompareStatus}>{deterministicStatusLabel}</span>
+                <strong>{deterministicResult.headline}</strong>
+                <small>Kompatibilitási jelző: {deterministicResult.compatibilityScore}/100</small>
+              </div>
+            ) : <span className={styles.deterministicComparePending}>{deterministicAnalysisLoading ? "Elemzés…" : "Nincs eredmény"}</span>}
+            <button type="button" className={styles.deterministicCompareToggle} onClick={() => setDeterministicAnalysisExpanded((current) => !current)} disabled={!deterministicResult}>
+              {deterministicAnalysisExpanded ? "Részletek elrejtése" : "Részletek"}
+            </button>
+          </div>
+          {deterministicAnalysisError ? <div className={styles.deterministicCompareError}>Szabályalapú elemzés: {deterministicAnalysisError}</div> : null}
+          {deterministicResult ? (
+            <>
+              <div className={styles.deterministicCompareMetrics}>
+                <span><small>Tervazonosító</small><strong>{deterministicResult.drawingCode.left || "?"} ↔ {deterministicResult.drawingCode.right || "?"}</strong></span>
+                <span><small>Lépték</small><strong>{deterministicResult.scale.left || "?"} ↔ {deterministicResult.scale.right || "?"}</strong></span>
+                <span><small>Szöveg</small><strong>{deterministicResult.text.similarityPercent}% egyezés</strong><em>+{deterministicResult.text.addedCount} / -{deterministicResult.text.removedCount}</em></span>
+                <span><small>Vektorgeometria</small><strong>{deterministicResult.geometry.segmentDeltaPercent}% darabszám-eltérés</strong><em>{deterministicResult.geometry.leftSegments} ↔ {deterministicResult.geometry.rightSegments} szakasz</em></span>
+              </div>
+              <p className={styles.deterministicCompareSummary}>{deterministicResult.summary}</p>
+              {deterministicAnalysisExpanded ? (
+                <div className={styles.deterministicCompareDetails}>
+                  <div className={styles.deterministicCompareChecks}>
+                    {deterministicResult.checks.map((check) => (
+                      <div key={check.key} className={styles.deterministicCompareCheck} data-check-status={check.status}>
+                        <span><strong>{check.label}</strong><small>{check.status === "MATCH" ? "egyező" : check.status === "DIFFERENT" ? "eltérő" : check.status === "UNKNOWN" ? "nem felismerhető" : "információ"}</small></span>
+                        <b>A: {check.left}</b><b>B: {check.right}</b><em>{check.detail}</em>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={styles.deterministicCompareTextDiff}>
+                    <div><strong>Csak az A dokumentumban · -{deterministicResult.text.removedCount}</strong>{deterministicResult.text.removed.length ? deterministicResult.text.removed.map((text, index) => <span key={`removed-${index}`}>{text}</span>) : <small>Nincs egyedi törölt szövegelem.</small>}</div>
+                    <div><strong>Csak a B dokumentumban · +{deterministicResult.text.addedCount}</strong>{deterministicResult.text.added.length ? deterministicResult.text.added.map((text, index) => <span key={`added-${index}`}>{text}</span>) : <small>Nincs egyedi hozzáadott szövegelem.</small>}</div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      )}
 
       {mode !== "SIDE_BY_SIDE" && (
         <div className={`${styles.visualCompareAlignmentBar} ${alignmentEnabled ? styles.visualCompareAlignmentBarActive : ""}`}>
