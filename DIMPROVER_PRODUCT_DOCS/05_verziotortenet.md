@@ -3606,3 +3606,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - DEV runtime `dimpro-drive-v0913-auth044-pdfrender-1b3517caf-p3386`; rollback `9a0a4b51` / 3385 online.
 - PDF guard 7/7, PERSONAL BOX 14/14, compare 10/10, ACL 18/18, Windows Open 36/36 + 8/8 PASS; TypeScript/ESLint/build PASS.
 - PROD DENY; böngészős hiba-megszűnés fizikai újratesztje szükséges.
+
+### Drive PERSONAL V0.6.6 hotfix – fullscreen compare stabilizálás
+
+- Fullscreen párhuzamos PDF összehasonlítás layout-vibrálása javítva.
+- Külső stage scrollbar-visszacsatolás megszüntetve, panelek stabil scrollbar-guttert kaptak.
+- ResizeObserver RAF-coalescing + 4 px hysteresis került be.
+- Source `f2b4a3ed900eb20d1c1304b977bc8bf241c48cc0`, build `2aWPn8q01rbTJ5Ycklfs6`, artifact SHA-256 `cc40f2bc05c85f0e1c2f82e44aa537a485b9aa5b7f9eb88391b021db91021c06`, DEV 3387.
+- Fullscreen stability 6/6, PDF canvas guard 7/7, ProjectGate compare 10/10 PASS; TypeScript/ESLint/build PASS.
+- PROD DENY.

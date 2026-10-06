@@ -115,3 +115,15 @@ Javítás:
 Ellenőrzések: PDF canvas guard 7/7 PASS, PERSONAL CsomagBOX 14/14 PASS, ProjectGate compare 10/10 PASS, Compare/Issue ACL 18/18 PASS, Windows Open V0.1.8 36/36 PASS, Windows acceptance 8/8 PASS, TypeScript/ESLint PASS.
 
 Integrált source: `1b3517caf9368eb0d1a55530ef4f8b0352387c63`. Build ID: `ydKhzJs9p-nPqyDVZzkWy`. Artifact SHA-256: `fb0d439e6b2b7e7c2dda893d1d495fdc5611d9065cd730c38e009166bc089693`. DEV runtime: `dimpro-drive-v0913-auth044-pdfrender-1b3517caf-p3386`, publikus upstream `3386`; korábbi `9a0a4b51` / 3385 online rollback. PROD DENY.
+
+## Fullscreen compare stabilizálás – 2026-10-06
+
+A böngészős E2E során a teljes képernyős párhuzamos PDF összehasonlításnál layout-vibrálás jelentkezett. A gyökérok a külső compare-stage és a belső panelek egymásba visszacsatolt scrollbar/ResizeObserver méretváltozása volt.
+
+Javítás:
+- fullscreen párhuzamos módban a külső stage `overflow:hidden`, a két belső tervpanel marad görgethető;
+- a panelek stabil scrollbar-guttert kapnak;
+- a ResizeObserver requestAnimationFrame-coalescinget használ;
+- 4 px alatti méretzaj nem indít új PDF renderelést.
+
+Contract: fullscreen stability 6/6 PASS, PDF canvas guard 7/7 PASS, ProjectGate compare 10/10 PASS, TypeScript/ESLint PASS. Integrált source `f2b4a3ed900eb20d1c1304b977bc8bf241c48cc0`, build `2aWPn8q01rbTJ5Ycklfs6`, artifact SHA-256 `cc40f2bc05c85f0e1c2f82e44aa537a485b9aa5b7f9eb88391b021db91021c06`, DEV runtime 3387. PROD DENY.
