@@ -420,3 +420,53 @@ Remaining physical acceptance gate:
 1. rerun Windows Bridge-backed V0.1.7 security scan acceptance against the same reviewed plan;
 2. require `scanCount = 5` and `cleanCount = 5` with exact SHA-256 matches;
 3. only after that PASS, run the restart-safe DOWNLOAD Apply acceptance.
+
+
+## V0.1.7 Phase 2 FIX2 – FINAL physical Windows acceptance PASS 2026-10-06
+
+Physical Windows PowerShell `5.1.22621.6133` acceptance completed against `https://drive.dev.dimpro.hu` using Bridge auth and the already reviewed immutable plan.
+
+Reviewed plan binding:
+- project: `d6-irodaepulet`;
+- reviewed plan SHA-256: `d5533020951ba11d2a345d873bc9246f7a63a5c072c077f97f65a3311023000a`;
+- reviewed download operation count: 5.
+
+Security scan acceptance completed first:
+- code: `DIMPRO_DRIVE_DESKTOP_V017_SECURITY_SCAN_ACCEPTANCE_PASS`;
+- scanCount: 5;
+- cleanCount: 5;
+- scannerReady: true;
+- scanner engine: ClamAV `1.5.4`;
+- signature version: `28144`;
+- documentContentMutation: false;
+- localMutation: false;
+- delete: false.
+
+Restart-safe DOWNLOAD Apply acceptance:
+- code: `DIMPRO_DRIVE_DESKTOP_V017_DOWNLOAD_APPLY_ACCEPTANCE_PASS`;
+- downloadCount: 5;
+- newlyDownloadedCount: 3;
+- alreadyPresentVerifiedCount: 2;
+- cursorSaved: true;
+- documentMutation: false;
+- localMutation: true;
+- delete: false;
+- result path: `C:\\Users\\admin\\AppData\\Local\\Temp\\DIMPRO-Drive-V017-Download-Apply-Acceptance\\apply-result-20261006T154122Z.json`.
+
+This physically proves:
+- the reviewed plan SHA binding survives end-to-end;
+- all 5 remote versions passed server-side malware scanning before download;
+- already present local files are SHA-256 verified and reused instead of overwritten;
+- 3 missing files were downloaded successfully;
+- restart/resume behavior is safe and deterministic;
+- cursor persistence completes successfully;
+- no delete operation is used;
+- no server-side document content mutation occurs.
+
+V0.1.7 Phase 2 FIX2 DEV acceptance is therefore functionally CLOSED.
+
+Non-blocking terminology cleanup for a later patch:
+- the acceptance result currently reports `serverMutation: "ACCEPTANCE_CURSOR_ONLY"`;
+- this label is narrower than the complete transport behavior because download-init can create audit/download metadata while document content remains immutable;
+- recommended future label: `DOWNLOAD_AUDIT_AND_ACCEPTANCE_CURSOR`;
+- this is a reporting/contract wording cleanup only and does not invalidate the physical PASS.
