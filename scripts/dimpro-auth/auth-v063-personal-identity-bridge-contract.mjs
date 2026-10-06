@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const identity=read("app/lib/content-core/personalIdentity.ts"),auth=read("app/lib/content-core/personalAuth.ts");
+const routes=["app/api/drive/personal/content/route.ts","app/api/drive/personal/folders/route.ts","app/api/drive/personal/folders/[folderId]/route.ts","app/api/drive/personal/content/[refId]/route.ts","app/api/drive/personal/content/[refId]/download/route.ts","app/api/drive/personal/content/[refId]/preview/route.ts"].map(read).join("\n");
+check("personal entitlement remains authoritative in central AUTH",()=>{assert.match(auth,/hasPersonalDriveAccess\(auth\.actor\.userId\)/);assert.match(auth,/resolveProjectCoreAuth/)});
+check("canonical identity resolves by auth user id first",()=>assert.match(identity,/\.eq\("auth_user_id", authUserId\)/));
+check("canonical identity falls back to normalized e-mail",()=>assert.match(identity,/\.eq\("email_normalized", email\)/));
+check("canonical identity rejects an existing conflicting auth binding",()=>assert.match(identity,/PERSONAL_DRIVE_IDENTITY_AUTH_CONFLICT/));
+check("canonical identity can create missing profile with auth binding",()=>{assert.match(identity,/\.rpc\("dimpro_create_user"/);assert.match(identity,/p_auth_user_id: authUserId/)});
+check("pending canonical profile is activated only after personal entitlement passed",()=>{assert.match(auth,/hasPersonalDriveAccess[\s\S]*ensurePersonalDriveCanonicalUser/);assert.match(identity,/row\.status === "pending" \? "active"/)});
+check("content actor exposes canonical content user id",()=>assert.match(auth,/contentUserId: canonical\.id/));
+check("all personal routes use canonical content actor",()=>{const matches=routes.match(/resolvePersonalDriveContentActor/g)||[];assert.equal(matches.length>=6,true)});
+check("personal routes no longer use auth uuid directly as content owner",()=>{assert.doesNotMatch(routes,/userId:\s*auth\.actor\.userId/);assert.doesNotMatch(routes,/userId:\s*access\.actor\.userId/)});
+check("folder creator records canonical actor",()=>assert.match(routes,/actorUserId:access\.contentUserId/));
+console.log(`DIMPRO AUTH V0.6.3 personal identity bridge contract PASS · ${n}/${n}`);

@@ -1,20 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { hasPersonalDriveAccess } from "@/app/lib/dimpro-auth/repository";
 import { listUserContentItems } from "@/app/lib/content-core/repository";
-import { resolveProjectCoreAuth } from "@/app/lib/project-core/auth";
+import { resolvePersonalDriveContentActor } from "@/app/lib/content-core/personalAuth";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const auth = await resolveProjectCoreAuth(request);
-  if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status, headers: { "cache-control": "no-store" } });
+  const access = await resolvePersonalDriveContentActor(request);
+  if (!access.ok) return access.response;
   try {
-    if (!(await hasPersonalDriveAccess(auth.actor.userId))) {
-      return NextResponse.json({ ok: false, error: "PERSONAL_DRIVE_FORBIDDEN" }, { status: 403, headers: { "cache-control": "no-store" } });
-    }
-    const rows = await listUserContentItems({ userId: auth.actor.userId, limit: 250 });
+    const rows = await listUserContentItems({ userId: access.contentUserId, limit: 250 });
     const items = rows.map(({ ref, object }) => ({
       id: ref.id,
       objectId: object.id,

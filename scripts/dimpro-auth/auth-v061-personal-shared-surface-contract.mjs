@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-const personal=read("components/drive/PersonalDriveWorkspace.tsx"), toolbar=read("components/drive/DriveToolbar.tsx"), grid=read("components/drive/FileGridPanel.tsx"), details=read("components/drive/PersonalDriveDetailsPanel.tsx"), preview=read("app/api/drive/personal/content/[refId]/preview/route.ts");
+const personal=read("components/drive/PersonalDriveWorkspace.tsx"), toolbar=read("components/drive/DriveToolbar.tsx"), grid=read("components/drive/FileGridPanel.tsx"), details=read("components/drive/PersonalDriveDetailsPanel.tsx"), preview=read("app/api/drive/personal/content/[refId]/preview/route.ts"), personalAuth=read("app/lib/content-core/personalAuth.ts");
 check("personal workspace uses shared DriveToolbar",()=>assert.match(personal,/<DriveToolbar/));
 check("personal workspace uses shared FolderTreePanel",()=>assert.match(personal,/<FolderTreePanel/));
 check("personal workspace uses shared FileGridPanel",()=>assert.match(personal,/<FileGridPanel/));
@@ -11,7 +11,7 @@ check("personal workspace uses shared zoom state",()=>{assert.match(personal,/ta
 check("personal FileGrid allows simple and engineering only",()=>assert.match(personal,/allowedViewModes=\{\["simple", "engineering"\]\}/));
 check("shared FileGrid supports capability-filtered view modes",()=>{assert.match(grid,/allowedViewModes\?: DriveViewMode\[\]/);assert.match(grid,/allowedModes=\{allowedViewModes\}/)});
 check("personal inspector has details and preview but no review tab",()=>{assert.match(details,/>Részletek</);assert.match(details,/>Előnézet</);assert.doesNotMatch(details,/Tervellenőrzés/)});
-check("personal preview is owner scoped and clean-only",()=>{assert.match(preview,/hasPersonalDriveAccess/);assert.match(preview,/getUserContentItemByRefId/);assert.match(preview,/security_status !== "clean"/);assert.match(preview,/virus_scan_status !== "clean"/)});
+check("personal preview is owner scoped and clean-only",()=>{assert.match(preview,/resolvePersonalDriveContentActor/);assert.match(personalAuth,/hasPersonalDriveAccess/);assert.match(preview,/getUserContentItemByRefId/);assert.match(preview,/userId: access.contentUserId/);assert.match(preview,/security_status !== "clean"/);assert.match(preview,/virus_scan_status !== "clean"/)});
 check("personal preview uses inline signed object access",()=>{assert.match(preview,/createDriveSignedGetUrl/);assert.match(preview,/disposition: "inline"/)});
 check("toolbar can disable personal upload, box and compare backends independently",()=>{assert.match(toolbar,/canUpload\?: boolean/);assert.match(toolbar,/boxEnabled\?: boolean/);assert.match(toolbar,/compareEnabled\?: boolean/)});
 check("personal disables unfinished backends without project API fallback",()=>{assert.match(personal,/canUpload=\{false\}/);assert.match(personal,/boxEnabled=\{false\}/);assert.match(personal,/compareEnabled=\{false\}/);assert.doesNotMatch(personal,/\/api\/projects\//)});
