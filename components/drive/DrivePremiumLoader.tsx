@@ -94,7 +94,8 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
     return Math.min(index, bootSteps.length - 1);
   }, [bootSteps, progress]);
 
-  const status = complete ? "DIMPRO Drive készen áll." : statusForProgress(progress, workspaceType);
+  const ready = complete && roundedProgress >= 100;
+  const status = ready ? "DIMPRO Drive készen áll." : statusForProgress(progress, workspaceType);
   const slowHint = !complete && elapsedMs > 7000;
 
   return (
@@ -103,10 +104,10 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
       <div className={styles.ambientGlow} aria-hidden="true" />
 
       <div className={styles.loaderComposition}>
-        <div className={[styles.loaderCard, complete ? styles.loaderCardComplete : ""].filter(Boolean).join(" ")}>
+        <div className={[styles.loaderCard, ready ? styles.loaderCardComplete : ""].filter(Boolean).join(" ")}>
         <div className={styles.brandLine}>
           <span className={styles.brandKicker}>DIMPRO SYSTEM</span>
-          <span className={styles.brandPulse}><i /> {complete ? "SYSTEM READY" : "SECURE BOOT"}</span>
+          <span className={styles.brandPulse}><i /> {ready ? "SYSTEM READY" : "SECURE BOOT"}</span>
         </div>
 
         <div className={styles.visualStage} aria-hidden="true">
@@ -134,7 +135,7 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
 
         <div className={styles.heading}>
           <span className={styles.productLabel}>DIMPRO DRIVE</span>
-          <h2>{complete ? "DIMPRO Drive készen áll" : workspaceType === "PERSONAL" ? "Személyes Drive betöltése" : "Digitális projektmunkatér betöltése"}</h2>
+          <h2>{ready ? "DIMPRO Drive készen áll" : workspaceType === "PERSONAL" ? "Személyes Drive betöltése" : "Digitális projektmunkatér betöltése"}</h2>
           <p>{status}</p>
         </div>
 
@@ -153,7 +154,7 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
             </span>
           </div>
           <div className={styles.progressMeta}>
-            <span>{complete ? "RENDSZER KÉSZ" : "RENDSZERINDÍTÁS"}</span>
+            <span>{ready ? "RENDSZER KÉSZ" : "RENDSZERINDÍTÁS"}</span>
             <strong>{roundedProgress}%</strong>
           </div>
         </div>
@@ -161,8 +162,8 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
         <div className={styles.bootSteps}>
           {bootSteps.map((step, index) => {
             const Icon = step.icon;
-            const done = complete || progress >= step.threshold;
-            const active = !complete && !done && index === currentStepIndex;
+            const done = ready || progress >= step.threshold;
+            const active = !ready && !done && index === currentStepIndex;
             return (
               <div
                 key={step.key}
@@ -186,11 +187,11 @@ export default function DrivePremiumLoader({ complete = false, workspaceType = "
           <span><i className={styles.liveDot} /> DEV WORKSPACE</span>
           <span>Workspace 1.0</span>
           <span className={styles.footerDivider} />
-          <span>{complete ? "Munkatér előkészítve" : slowHint ? "Kapcsolat ellenőrzése folyamatban…" : workspaceType === "PERSONAL" ? "Titkosított személyes Drive kapcsolat" : "Titkosított projektkapcsolat"}</span>
+          <span>{ready ? "Munkatér előkészítve" : slowHint ? "Kapcsolat ellenőrzése folyamatban…" : workspaceType === "PERSONAL" ? "Titkosított személyes Drive kapcsolat" : "Titkosított projektkapcsolat"}</span>
         </div>
         </div>
 
-        <div className={[styles.driveWordmark, complete ? styles.driveWordmarkReady : ""].filter(Boolean).join(" ")} aria-label="DIMPRO Drive">
+        <div className={[styles.driveWordmark, ready ? styles.driveWordmarkReady : ""].filter(Boolean).join(" ")} aria-label="DIMPRO Drive">
           <div className={styles.driveWordmarkMain}>
             <strong>DIMPRO</strong>
             <span>DRIVE</span>

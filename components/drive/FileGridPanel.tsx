@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, RotateCcw, Search, ShieldCheck, Star, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
+import DriveViewModeToggle from "./DriveViewModeToggle";
 import styles from "./DriveWorkspace.module.css";
 
 type Props = {
@@ -1261,18 +1262,7 @@ export default function FileGridPanel({
           <OverflowTooltipText text={title} className={styles.filePanelTitleMain} />
           <OverflowTooltipText text={subtitle} className={styles.filePanelSubtitle} />
         </div>
-        <div className={styles.viewToggle}>
-          <button type="button" className={viewMode === "simple" ? styles.viewToggleActive : ""} onClick={() => onViewModeChange("simple")}>
-            Egyszerű nézet
-          </button>
-          <button type="button" className={viewMode === "engineering" ? styles.viewToggleActive : ""} onClick={() => onViewModeChange("engineering")}>
-            Mérnöki nézet
-          </button>
-          <button type="button" className={viewMode === "review" ? styles.viewToggleActive : ""} onClick={() => onViewModeChange("review")}>
-            Tervellenőrzés
-          </button>
-          <button type="button" onClick={onRefresh} title="Fájllista frissítése"><RefreshCw size={12} /></button>
-        </div>
+        <DriveViewModeToggle value={viewMode} onChange={onViewModeChange} onRefresh={onRefresh} />
       </header>
 
       <div className={styles.fileFolderNav}>

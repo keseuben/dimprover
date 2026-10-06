@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const toggle=read("components/drive/DriveViewModeToggle.tsx"), personal=read("components/drive/PersonalDriveWorkspace.tsx"), grid=read("components/drive/FileGridPanel.tsx"), loader=read("components/drive/DrivePremiumLoader.tsx");
+check("shared view toggle exposes all project view labels",()=>{assert.match(toggle,/Egyszerű nézet/);assert.match(toggle,/Mérnöki nézet/);assert.match(toggle,/Tervellenőrzés/)});
+check("project grid uses shared view toggle with default full capability",()=>assert.match(grid,/<DriveViewModeToggle value=\{viewMode\} onChange=\{onViewModeChange\} onRefresh=\{onRefresh\}/));
+check("personal workspace allows only simple and engineering",()=>assert.match(personal,/allowedModes=\{\["simple", "engineering"\]\}/));
+check("personal workspace never enables review mode",()=>{assert.doesNotMatch(personal,/allowedModes=\{\[[^\]]*"review"/);assert.doesNotMatch(personal,/setViewMode\("review"\)/)});
+check("personal engineering table has plan-oriented columns",()=>{for(const label of ["Tervszám","Megnevezés","Revízió","Lépték","Fájlnév"]) assert.match(personal,new RegExp(label))});
+check("missing personal engineering metadata is not fabricated",()=>{assert.match(personal,/<td>—<\/td>/);assert.match(personal,/még nem rögzített tervszám, revízió és lépték/)});
+check("personal view choice persists locally",()=>{assert.match(personal,/dimpro-drive-personal-view/);assert.match(personal,/localStorage\.setItem/)});
+check("loader ready state requires actual 100 percent",()=>assert.match(loader,/const ready = complete && roundedProgress >= 100/));
+check("loader ready labels use ready instead of raw complete",()=>{assert.match(loader,/ready \? "SYSTEM READY"/);assert.match(loader,/ready \? "DIMPRO Drive készen áll"/);assert.match(loader,/ready \? "RENDSZER KÉSZ"/)});
+check("boot step completion follows ready/progress, not raw complete",()=>assert.match(loader,/const done = ready \|\| progress >= step\.threshold/));
+console.log(`DIMPRO AUTH V0.5.2 personal view capabilities contract PASS · ${n}/${n}`);

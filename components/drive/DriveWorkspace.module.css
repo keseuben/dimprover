@@ -5490,3 +5490,8 @@
 :global(html[data-drive-theme="dark"]) .personalDriveTable tbody tr:hover { background: #102534; }
 :global(html[data-drive-theme="dark"]) .personalDriveIntro button,
 :global(html[data-drive-theme="dark"]) .personalDriveDownload { background: #122a3b; border-color: #2d4d64; color: #c2d7e6; }
+
+.personalEngineeringHint { display: flex; align-items: flex-start; gap: 10px; border: 1px solid #cbdceb; background: #f7fbfe; border-radius: 8px; padding: 9px 12px; font-size: 11px; line-height: 1.45; color: #5a7185; }
+.personalEngineeringHint strong { flex: 0 0 auto; color: #244763; font-size: 11px; }
+:global(html[data-drive-theme="dark"]) .personalEngineeringHint { background: #0d2130; border-color: #29465b; color: #8fa9bb; }
+:global(html[data-drive-theme="dark"]) .personalEngineeringHint strong { color: #c9dce9; }

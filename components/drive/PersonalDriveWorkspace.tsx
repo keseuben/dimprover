@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Download, FileText, HardDrive, HelpCircle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Bell, Download, FileText, HardDrive, HelpCircle, Loader2, ShieldCheck } from "lucide-react";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import DrivePremiumLoader from "./DrivePremiumLoader";
+import DriveViewModeToggle from "./DriveViewModeToggle";
+import type { DriveViewMode } from "./driveTypes";
 import type { DriveWorkspaceOption } from "./driveWorkspaceTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -58,6 +60,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloadBusyId, setDownloadBusyId] = useState("");
+  const [viewMode, setViewMode] = useState<DriveViewMode>("simple");
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
   const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
   const bootLoaderVisibleRef = useRef(true);
@@ -91,6 +94,17 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("dimpro-drive-personal-view");
+      if (stored === "simple" || stored === "engineering") setViewMode(stored);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("dimpro-drive-personal-view", viewMode); } catch {}
+  }, [viewMode]);
 
   useEffect(() => {
     bootLoaderVisibleRef.current = true;
@@ -176,9 +190,12 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
             <HardDrive size={22} />
             <div><strong>Saját Drive · USER_ROOT</strong><span>A személyes és a projekt Drive külön tulajdonosi tartomány. A projekt-hozzáférés megszűnése nem törli a saját példányokat.</span></div>
           </div>
-          <button type="button" onClick={() => void loadContent()} disabled={loading}>
-            {loading ? <Loader2 className={styles.spin} size={15} /> : <RefreshCw size={15} />} Frissítés
-          </button>
+          <DriveViewModeToggle
+            value={viewMode}
+            onChange={setViewMode}
+            allowedModes={["simple", "engineering"]}
+            onRefresh={() => void loadContent()}
+          />
         </section>
 
         <div className={styles.personalDriveNotice}>
@@ -197,26 +214,60 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
             <span>A Terepi Gyorsrögzítőből vagy későbbi személyes Drive feltöltésből ide mentett fájlok ebben a gyökérben jelennek meg.</span>
           </div>
         ) : (
-          <div className={styles.personalDriveTableWrap}>
-            <table className={styles.personalDriveTable}>
-              <thead><tr><th>Név</th><th>Forrás</th><th>Méret</th><th>Módosítva</th><th>Biztonság</th><th /></tr></thead>
-              <tbody>
-                {items.map((item) => {
-                  const clean = item.securityStatus === "clean" && item.virusScanStatus === "clean";
-                  return (
-                    <tr key={item.id}>
-                      <td><div className={styles.personalDriveFileName}><FileText size={16} /><span><strong>{item.name}</strong><small>{item.mimeType || item.originalName || "fájl"}</small></span></div></td>
-                      <td>{sourceLabel(item.sourceSystem)}</td>
-                      <td>{formatBytes(item.sizeBytes)}</td>
-                      <td>{formatDate(item.updatedAt)}</td>
-                      <td><span className={clean ? styles.personalDriveSecurityOk : styles.personalDriveSecurityWait}>{clean ? "Ellenőrzött" : "Ellenőrzés alatt"}</span></td>
-                      <td><button type="button" className={styles.personalDriveDownload} disabled={!clean || downloadBusyId === item.id} onClick={() => void download(item)}>{downloadBusyId === item.id ? <Loader2 className={styles.spin} size={14} /> : <Download size={14} />} Letöltés</button></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {viewMode === "engineering" ? (
+              <div className={styles.personalEngineeringHint}>
+                <strong>Mérnöki nézet</strong>
+                <span>A saját tervfájlok műszaki metaadatai ugyanebben a nézetben jelennek meg. A még nem rögzített tervszám, revízió és lépték helyén „—” látható; a szerkeszthető személyes metaadatmotor a következő fejlesztési fázis.</span>
+              </div>
+            ) : null}
+            <div className={styles.personalDriveTableWrap}>
+              <table className={styles.personalDriveTable}>
+                <thead>
+                  {viewMode === "engineering" ? (
+                    <tr><th>Tervszám</th><th>Megnevezés</th><th>Típus</th><th>Revízió</th><th>Lépték</th><th>Fájlnév</th><th>Forrás</th><th>Méret</th><th>Módosítva</th><th>Biztonság</th><th /></tr>
+                  ) : (
+                    <tr><th>Név</th><th>Típus</th><th>Forrás</th><th>Méret</th><th>Módosítva</th><th>Biztonság</th><th /></tr>
+                  )}
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const clean = item.securityStatus === "clean" && item.virusScanStatus === "clean";
+                    const fileType = item.mimeType || item.originalName?.split(".").pop()?.toUpperCase() || "fájl";
+                    const fileName = item.originalName || item.name;
+                    if (viewMode === "engineering") {
+                      return (
+                        <tr key={item.id}>
+                          <td>—</td>
+                          <td><div className={styles.personalDriveFileName}><FileText size={16} /><span><strong>{item.name}</strong><small>Saját Drive dokumentum</small></span></div></td>
+                          <td>{fileType}</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>{fileName}</td>
+                          <td>{sourceLabel(item.sourceSystem)}</td>
+                          <td>{formatBytes(item.sizeBytes)}</td>
+                          <td>{formatDate(item.updatedAt)}</td>
+                          <td><span className={clean ? styles.personalDriveSecurityOk : styles.personalDriveSecurityWait}>{clean ? "Ellenőrzött" : "Ellenőrzés alatt"}</span></td>
+                          <td><button type="button" className={styles.personalDriveDownload} disabled={!clean || downloadBusyId === item.id} onClick={() => void download(item)}>{downloadBusyId === item.id ? <Loader2 className={styles.spin} size={14} /> : <Download size={14} />} Letöltés</button></td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={item.id}>
+                        <td><div className={styles.personalDriveFileName}><FileText size={16} /><span><strong>{item.name}</strong><small>{item.mimeType || item.originalName || "fájl"}</small></span></div></td>
+                        <td>{fileType}</td>
+                        <td>{sourceLabel(item.sourceSystem)}</td>
+                        <td>{formatBytes(item.sizeBytes)}</td>
+                        <td>{formatDate(item.updatedAt)}</td>
+                        <td><span className={clean ? styles.personalDriveSecurityOk : styles.personalDriveSecurityWait}>{clean ? "Ellenőrzött" : "Ellenőrzés alatt"}</span></td>
+                        <td><button type="button" className={styles.personalDriveDownload} disabled={!clean || downloadBusyId === item.id} onClick={() => void download(item)}>{downloadBusyId === item.id ? <Loader2 className={styles.spin} size={14} /> : <Download size={14} />} Letöltés</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
