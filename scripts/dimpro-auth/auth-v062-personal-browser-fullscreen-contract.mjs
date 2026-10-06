@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";import fs from "node:fs";
+const ui=fs.readFileSync("components/drive/PersonalDriveWorkspace.tsx","utf8");
+let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("personal full table enters browser fullscreen",()=>assert.match(ui,/document\.documentElement\.requestFullscreen\(\)/));
+check("personal full table exits browser fullscreen",()=>assert.match(ui,/document\.exitFullscreen\(\)/));
+check("toolbar uses shared fullscreen toggle handler",()=>assert.match(ui,/onToggleTableFullscreen=\{toggleTableFullscreen\}/));
+check("fullscreen bar exits through shared close handler",()=>assert.match(ui,/onToggleFullscreen=\{closeTableFullscreen\}/));
+check("fullscreenchange keeps React state synchronized",()=>{assert.match(ui,/fullscreenchange/);assert.match(ui,/if \(!document\.fullscreenElement\)/)});
+check("body scrolling is disabled while full table is open",()=>assert.match(ui,/document\.body\.style\.overflow = "hidden"/));
+check("escape state path is handled without stale overlay",()=>assert.match(ui,/event\.key === "Escape"/));
+console.log(`DIMPRO AUTH V0.6.2 personal browser fullscreen contract PASS · ${n}/${n}`);

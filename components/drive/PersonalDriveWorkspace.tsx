@@ -157,6 +157,26 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const bootLoaderHoldTimerRef = useRef<number | null>(null);
   const browserRef = useRef<HTMLDivElement>(null);
 
+  const closeTableFullscreen = useCallback(() => {
+    setTableFullscreen(false);
+    setFullTableInspectorOpen(false);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, []);
+
+  const toggleTableFullscreen = useCallback(() => {
+    if (tableFullscreen) {
+      closeTableFullscreen();
+      return;
+    }
+    setTableFullscreen(true);
+    setFullTableInspectorOpen(false);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  }, [closeTableFullscreen, tableFullscreen]);
+
   const load = useCallback(async () => {
     setError("");
     try {
@@ -216,10 +236,26 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   }, [load]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape" && tableFullscreen) setTableFullscreen(false); };
+    if (!tableFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.fullscreenElement) closeTableFullscreen();
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setTableFullscreen(false);
+        setFullTableInspectorOpen(false);
+      }
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [tableFullscreen]);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, [closeTableFullscreen, tableFullscreen]);
 
   const driveFolders = useMemo(() => buildDriveFolders(folders), [folders]);
   const commanderFolders = useMemo<DriveFolder[]>(() => [
@@ -438,7 +474,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
         tableFullscreen={tableFullscreen}
-        onToggleTableFullscreen={() => setTableFullscreen((current) => !current)}
+        onToggleTableFullscreen={toggleTableFullscreen}
         tableZoom={tableZoom}
         onTableZoomChange={setTableZoom}
         canWrite={folderCoreReady}
@@ -478,7 +514,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       </div>
 
       {tableFullscreen ? <section className={`${styles.fullTableOverlay} ${fullTableInspectorOpen && fullTableInspectorLayout === "bottom" ? styles.fullTableOverlayBottomInspector : ""}`}>
-        <TableFullscreenBar title={title} subtitle={subtitle} layoutMode={layoutMode} onLayoutModeChange={(next) => { setLayoutMode(next); setTableFullscreen(false); }} zoom={tableZoom} onZoomChange={setTableZoom} onToggleFullscreen={() => setTableFullscreen(false)} inspectorOpen={fullTableInspectorOpen} inspectorDisabled={!selectedItem} inspectorLayout={fullTableInspectorLayout} onToggleInspector={() => setFullTableInspectorOpen((current) => !current)} onInspectorLayoutChange={(next) => { setFullTableInspectorLayout(next); if (!fullTableInspectorOpen) setFullTableInspectorOpen(true); }} />
+        <TableFullscreenBar title={title} subtitle={subtitle} layoutMode={layoutMode} onLayoutModeChange={(next) => { setLayoutMode(next); closeTableFullscreen(); }} zoom={tableZoom} onZoomChange={setTableZoom} onToggleFullscreen={closeTableFullscreen} inspectorOpen={fullTableInspectorOpen} inspectorDisabled={!selectedItem} inspectorLayout={fullTableInspectorLayout} onToggleInspector={() => setFullTableInspectorOpen((current) => !current)} onInspectorLayoutChange={(next) => { setFullTableInspectorLayout(next); if (!fullTableInspectorOpen) setFullTableInspectorOpen(true); }} />
         <div className={styles.fullTableBody}>{grid()}</div>
         {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
       </section> : null}
