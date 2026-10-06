@@ -45,9 +45,10 @@ check("desktop redeem requires desktop-access before consuming ticket", () => {
   assert.ok(auth >= 0 && consume > auth);
 });
 check("redeem rechecks project document.read", () => assert.match(files.redeem, /requireProjectPermission\(request, ticket\.projectId, "document\.read"\)/));
-check("redeem binds ticket actor to Desktop identity aliases", () => {
-  assert.match(files.redeem, /access\.actor\.userAliases\.includes\(ticket\.actorUserId\)/);
-  assert.match(files.redeem, /DRIVE_OPEN_TICKET_ACTOR_MISMATCH/);
+check("redeem preserves server-issued web actor for download audit", () => assert.match(files.redeem, /actorUserId: ticket\.actorUserId/));
+check("DEV does not pretend dpat1 has canonical user binding", () => {
+  assert.doesNotMatch(files.redeem, /userAliases\.includes\(ticket\.actorUserId\)/);
+  assert.match(files.redeem, /device ↔ canonical DIMPRO user binding/);
 });
 check("redeem uses normal security-gated download initializer", () => assert.match(files.redeem, /initDriveObjectDownload/));
 check("download record exposes SHA-256", () => {

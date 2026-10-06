@@ -21,19 +21,14 @@ export async function POST(request: NextRequest) {
     if (!access.ok) {
       return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { "cache-control": "no-store" } });
     }
-    if (!access.actor.userAliases.includes(ticket.actorUserId)) {
-      return NextResponse.json({
-        ok: false,
-        error: "A Windows megnyitási jegy más DIMPRO felhasználóhoz tartozik.",
-        code: "DRIVE_OPEN_TICKET_ACTOR_MISMATCH",
-      }, { status: 403, headers: { "cache-control": "no-store" } });
-    }
-
+    // A V0.1.8 DEV Desktop token device/agent/client identity-t hordoz, canonical DIMPRO user claimet még nem.
+    // A ticket kiadóját a szerver írja bele a ticketbe; a Desktop redeem külön újraellenőrzi a projekt document.read jogot.
+    // PROD/multi-user rollout előtt kötelező a Bridge device ↔ canonical DIMPRO user binding.
     const result = await initDriveObjectDownload({
       projectId: ticket.projectId,
       documentId: ticket.documentId,
       versionId: ticket.versionId,
-      actorUserId: access.actor.userId,
+      actorUserId: ticket.actorUserId,
       clientId: driveAuth.clientId || null,
       access: access.access,
     });

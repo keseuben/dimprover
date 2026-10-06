@@ -492,7 +492,7 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 3. Only the SHA-256 hash of the ticket is stored server-side.
 4. Browser invokes `dimpro-drive://open-file?ticket=...`; no server URL is carried in the custom URI.
 5. The Windows handler reads the already paired Bridge token from DPAPI storage and exchanges it for the short-lived Drive Desktop `dpat1` token.
-6. `/api/drive/desktop-open/redeem` accepts only `desktop-access` auth, atomically consumes the ticket, rechecks project `document.read`, binds the ticket issuer to the Desktop identity aliases, and uses the normal Drive download initializer.
+6. `/api/drive/desktop-open/redeem` accepts only `desktop-access` auth, atomically consumes the ticket, rechecks project `document.read`, preserves the server-issued web actor for download audit, and uses the normal Drive download initializer. V0.1.8 DEV does **not** claim canonical user binding for `dpat1`; that requires the future Bridge device ↔ DIMPRO user ownership layer.
 7. The normal download initializer keeps the existing security-scan gate and returns a short-lived signed GET URL plus exact file SHA-256 and size.
 8. The Windows handler writes only into the configured workfiles root, verifies size and SHA-256, updates a local workfile index, and launches the file through the Windows default file association.
 
@@ -531,7 +531,7 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 
 ### Static acceptance at implementation checkpoint
 
-- V0.1.8 Windows Open Handler contract: **35/35 PASS**.
+- V0.1.8 Windows Open Handler contract: **36/36 PASS**.
 - V0.1.8 Windows acceptance contract: **8/8 PASS**.
 - Existing Drive V0.4.5 open/download/ZIP regression: **26/26 PASS**.
 - Existing Desktop access contract: **16/16 PASS**.
