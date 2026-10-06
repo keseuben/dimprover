@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Folder, HardDrive, Pin } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, HardDrive, Link2, Pin, Plus } from "lucide-react";
 import type { DriveFolder } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
+
+export type DriveLinkedProjectItem = {
+  id: string;
+  code: string;
+  name: string;
+  status?: string;
+  access?: string;
+};
 
 type Props = {
   folders: DriveFolder[];
@@ -12,6 +20,9 @@ type Props = {
   documentCounts: Map<string, number>;
   totalDocumentCount: number;
   onSelectFolder: (folderId: string) => void;
+  linkedProjects?: DriveLinkedProjectItem[];
+  onOpenLinkedProject?: (project: DriveLinkedProjectItem) => void;
+  onManageLinkedProjects?: () => void;
   responsiveClassName?: string;
 };
 
@@ -45,6 +56,9 @@ export default function FolderTreePanel({
   documentCounts,
   totalDocumentCount,
   onSelectFolder,
+  linkedProjects = [],
+  onOpenLinkedProject,
+  onManageLinkedProjects,
   responsiveClassName = "",
 }: Props) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
@@ -185,35 +199,13 @@ export default function FolderTreePanel({
           const expanded = expandedFolderIds.has(folder.id);
           const security = folderSecurityVisual(folder);
           return (
-            <div
-              key={folder.id}
-              className={styles.folderTreeItem}
-              style={{ paddingLeft: depth * 15 }}
-            >
+            <div key={folder.id} className={styles.folderTreeItem} style={{ paddingLeft: depth * 15 }}>
               {hasChildren ? (
-                <button
-                  type="button"
-                  className={styles.folderTreeToggle}
-                  aria-label={(expanded ? "Mappa összecsukása: " : "Mappa kibontása: ") + (folder.displayName || folder.name)}
-                  aria-expanded={expanded}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    toggleFolder(folder.id);
-                  }}
-                >
+                <button type="button" className={styles.folderTreeToggle} aria-label={(expanded ? "Mappa összecsukása: " : "Mappa kibontása: ") + (folder.displayName || folder.name)} aria-expanded={expanded} onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleFolder(folder.id); }}>
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
-              ) : (
-                <span className={styles.folderTreeTogglePlaceholder} aria-hidden="true" />
-              )}
-
-              <button
-                type="button"
-                className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")}
-                onClick={() => onSelectFolder(folder.id)}
-                aria-label={(folder.displayPath || folder.path) + ". " + security.title}
-              >
+              ) : <span className={styles.folderTreeTogglePlaceholder} aria-hidden="true" />}
+              <button type="button" className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")} onClick={() => onSelectFolder(folder.id)} aria-label={(folder.displayPath || folder.path) + ". " + security.title}>
                 <span className={styles.folderTreeSecurityIcon + " " + security.className}><Folder size={13} /></span>
                 <OverflowTooltipText text={folder.displayName || folder.name} className={styles.folderTreeLabel} />
                 <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
@@ -221,6 +213,22 @@ export default function FolderTreePanel({
             </div>
           );
         })}
+
+        {(onManageLinkedProjects || linkedProjects.length > 0) ? (
+          <div className={styles.linkedProjectsSection}>
+            <div className={styles.linkedProjectsHeader}>
+              <span><Link2 size={12} /> Kapcsolt projektek</span>
+              {onManageLinkedProjects ? <button type="button" onClick={onManageLinkedProjects} title="Kapcsolt projektek kezelése"><Plus size={12} /> Kezelés</button> : null}
+            </div>
+            {linkedProjects.length ? linkedProjects.map((project) => (
+              <button key={project.id} type="button" className={styles.linkedProjectRow} onClick={() => onOpenLinkedProject?.(project)} title={`${project.name}${project.code ? ` · ${project.code}` : ""}`}>
+                <Link2 size={13} />
+                <span className={styles.linkedProjectText}><strong>{project.name}</strong>{project.code ? <small>{project.code}</small> : null}</span>
+                <ChevronRight size={12} />
+              </button>
+            )) : <div className={styles.linkedProjectsEmpty}>Nincs csatolt projekt.</div>}
+          </div>
+        ) : null}
       </div>
     </aside>
   );

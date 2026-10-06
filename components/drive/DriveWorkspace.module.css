@@ -5558,3 +5558,42 @@
 :global(html[data-drive-theme="dark"]) .personalDetailsGrid strong { color: #c4d7e4; }
 :global(html[data-drive-theme="dark"]) .personalDetailsActions { border-color: #223b4e; }
 :global(html[data-drive-theme="dark"]) .personalDetailsActions button { background: #102535; border-color: #2d4b60; color: #c2d5e2; }
+
+/* DIMPRO Drive · linked projects in personal workspace */
+.linkedProjectsSection { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2eaf0; }
+.linkedProjectsHeader { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px 4px 10px; }
+.linkedProjectsHeader > span { display: inline-flex; align-items: center; gap: 5px; color: #607b8e; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+.linkedProjectsHeader button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; border: 1px solid #cedbe5; border-radius: 5px; background: #fff; color: #35617c; padding: 0 6px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.linkedProjectRow { width: 100%; min-height: 38px; display: grid; grid-template-columns: 20px minmax(0,1fr) 16px; align-items: center; gap: 4px; border: 0; border-top: 1px solid #eef3f6; background: transparent; color: #34566e; padding: 4px 8px 4px 12px; text-align: left; cursor: pointer; }
+.linkedProjectRow:hover { background: #edf7fc; }
+.linkedProjectText { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.linkedProjectText strong, .linkedProjectText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linkedProjectText strong { font-size: 10px; font-weight: 800; }
+.linkedProjectText small { color: #8094a3; font-size: 9px; }
+.linkedProjectsEmpty { padding: 10px 12px 12px; color: #8a9aa6; font-size: 9px; }
+.projectLinksDialogPanel { width: min(720px, calc(100vw - 36px)); max-height: min(720px, calc(100vh - 42px)); }
+.projectLinksDialogBody { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; overflow: auto; }
+.projectLinksColumn { min-width: 0; border: 1px solid #dbe5ec; border-radius: 8px; overflow: hidden; background: #fbfdff; }
+.projectLinksColumn > header { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; background: #f4f8fb; border-bottom: 1px solid #e0e8ee; }
+.projectLinksColumn > header strong { color: #35556b; font-size: 10px; text-transform: uppercase; letter-spacing: .035em; }
+.projectLinksColumn > header span { color: #7990a1; font-size: 10px; }
+.projectLinksList { max-height: 390px; overflow: auto; }
+.projectLinkCard { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 9px 10px; border-bottom: 1px solid #eaf0f4; }
+.projectLinkCard:last-child { border-bottom: 0; }
+.projectLinkCardText { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.projectLinkCardText strong { color: #2d4e64; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectLinkCardText span { color: #8093a1; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectLinkCard button { min-height: 28px; border: 1px solid #cbd9e4; border-radius: 6px; background: #fff; color: #2d6280; padding: 0 8px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.projectLinkCard button:disabled { opacity: .5; cursor: default; }
+.projectLinkRemove button { color: #a24848; border-color: #e2c4c4; }
+.projectLinksEmptyState { padding: 24px 12px; text-align: center; color: #8598a6; font-size: 10px; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsSection { border-color: #22394a; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsHeader > span { color: #8fa8ba; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsHeader button, :global(html[data-drive-theme="dark"]) .projectLinkCard button { background: #102535; border-color: #2d4b60; color: #b8d3e3; }
+:global(html[data-drive-theme="dark"]) .linkedProjectRow { border-color: #1b3142; color: #a9c3d4; }
+:global(html[data-drive-theme="dark"]) .linkedProjectRow:hover { background: #123047; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn { background: #0e2130; border-color: #294457; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn > header { background: #102636; border-color: #294457; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn > header strong, :global(html[data-drive-theme="dark"]) .projectLinkCardText strong { color: #c1d5e2; }
+:global(html[data-drive-theme="dark"]) .projectLinkCard { border-color: #21394b; }
+@media (max-width: 760px) { .projectLinksDialogBody { grid-template-columns: 1fr; } }

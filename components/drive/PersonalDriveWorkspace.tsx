@@ -8,7 +8,7 @@ import CommanderPanel from "./CommanderPanel";
 import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
-import FolderTreePanel from "./FolderTreePanel";
+import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
 import PersonalDriveDetailsPanel, { type PersonalDriveDetailsItem } from "./PersonalDriveDetailsPanel";
 import TableFullscreenBar from "./TableFullscreenBar";
 import type { DriveDocument, DriveFolder, DriveLayoutMode, DriveViewMode, DriveVersion } from "./driveTypes";
@@ -32,6 +32,7 @@ type PersonalDriveFolder = {
 
 type ContentPayload = { ok?: boolean; error?: string; items?: PersonalDriveItem[] };
 type FolderPayload = { ok?: boolean; ready?: boolean; error?: string; folders?: PersonalDriveFolder[] };
+type ProjectLinksPayload = { ok?: boolean; error?: string; linkedProjects?: DriveLinkedProjectItem[]; availableProjects?: DriveLinkedProjectItem[] };
 
 type PersonalFolderRenameDialog = {
   folderId: string;
@@ -150,6 +151,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderSaving, setNewFolderSaving] = useState(false);
   const [folderRenameDialog, setFolderRenameDialog] = useState<PersonalFolderRenameDialog | null>(null);
+  const [linkedProjects, setLinkedProjects] = useState<DriveLinkedProjectItem[]>([]);
+  const [availableProjects, setAvailableProjects] = useState<DriveLinkedProjectItem[]>([]);
+  const [projectLinksDialogOpen, setProjectLinksDialogOpen] = useState(false);
+  const [projectLinksBusyId, setProjectLinksBusyId] = useState("");
   const [busy, setBusy] = useState(false);
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
   const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
@@ -180,19 +185,24 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const load = useCallback(async () => {
     setError("");
     try {
-      const [contentResponse, folderResponse] = await Promise.all([
+      const [contentResponse, folderResponse, projectLinksResponse] = await Promise.all([
         fetch("/api/drive/personal/content", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/folders", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" }),
       ]);
       const contentPayload = await contentResponse.json() as ContentPayload;
       const folderPayload = await folderResponse.json() as FolderPayload;
+      const projectLinksPayload = await projectLinksResponse.json() as ProjectLinksPayload;
       if (!contentResponse.ok || !contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
       if (!folderResponse.ok || !folderPayload.ok) throw new Error(folderPayload.error || "A Saját Drive mappái nem tölthetők be.");
+      if (!projectLinksResponse.ok || !projectLinksPayload.ok) throw new Error(projectLinksPayload.error || "A kapcsolt projektek nem tölthetők be.");
       const nextItems = contentPayload.items || [];
       const nextFolders = folderPayload.folders || [];
       setItems(nextItems);
       setFolders(nextFolders);
       setFolderCoreReady(folderPayload.ready === true);
+      setLinkedProjects(projectLinksPayload.linkedProjects || []);
+      setAvailableProjects(projectLinksPayload.availableProjects || []);
       setSelectedFolderId((current) => current !== "all" && !nextFolders.some((folder) => folder.id === current) ? "all" : current);
       setSelectedDocumentId((current) => nextItems.some((item) => item.id === current) ? current : "");
       setSelectedDocumentIds((current) => current.filter((id) => nextItems.some((item) => item.id === id)));
@@ -356,6 +366,40 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     }
   }
 
+  const refreshProjectLinks = useCallback(async () => {
+    const response = await fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" });
+    const payload = await response.json() as ProjectLinksPayload;
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "A kapcsolt projektek nem tölthetők be.");
+    setLinkedProjects(payload.linkedProjects || []);
+    setAvailableProjects(payload.availableProjects || []);
+  }, []);
+
+  const attachProject = useCallback(async (projectId: string) => {
+    if (projectLinksBusyId) return;
+    setProjectLinksBusyId(projectId); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/drive/personal/project-links", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId }) });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt nem csatolható.");
+      await refreshProjectLinks();
+      setNotice("Projekt csatolva a Saját Drive-hoz.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A projekt nem csatolható."); }
+    finally { setProjectLinksBusyId(""); }
+  }, [projectLinksBusyId, refreshProjectLinks]);
+
+  const detachProject = useCallback(async (projectId: string) => {
+    if (projectLinksBusyId) return;
+    setProjectLinksBusyId(projectId); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/drive/personal/project-links", { method: "DELETE", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId }) });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt nem választható le.");
+      await refreshProjectLinks();
+      setNotice("Projekt leválasztva a Saját Drive-ról.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A projekt nem választható le."); }
+    finally { setProjectLinksBusyId(""); }
+  }, [projectLinksBusyId, refreshProjectLinks]);
+
   const moveItem = useCallback(async (item: PersonalDriveItem, folderId: string | null) => {
     if (!folderCoreReady || (item.folderId || null) === folderId) return;
     setBusy(true); setError(""); setNotice("");
@@ -468,6 +512,19 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         </div>
       )}
 
+      {projectLinksDialogOpen ? (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Kapcsolt projektek kezelése">
+          <section className={`${styles.projectCreatePanel} ${styles.projectLinksDialogPanel}`}>
+            <header><div><small>DIMPRO Drive · Saját Drive</small><strong>Kapcsolt projektek</strong><span>A csatolás csak nézeti kapcsolat. A projektfájlok nem másolódnak át a Saját Drive-ba.</span></div><button type="button" onClick={() => setProjectLinksDialogOpen(false)} aria-label="Bezárás">×</button></header>
+            <div className={styles.projectLinksDialogBody}>
+              <section className={styles.projectLinksColumn}><header><strong>Csatolt projektek</strong><span>{linkedProjects.length}</span></header><div className={styles.projectLinksList}>{linkedProjects.length ? linkedProjects.map((project) => <div key={project.id} className={`${styles.projectLinkCard} ${styles.projectLinkRemove}`}><div className={styles.projectLinkCardText}><strong>{project.name}</strong><span>{project.code || "Projekt"} · {project.access || "hozzáférés"}</span></div><button type="button" disabled={projectLinksBusyId === project.id} onClick={() => void detachProject(project.id)}>{projectLinksBusyId === project.id ? "…" : "Leválasztás"}</button></div>) : <div className={styles.projectLinksEmptyState}>Még nincs csatolt projekt.</div>}</div></section>
+              <section className={styles.projectLinksColumn}><header><strong>Elérhető projektek</strong><span>{availableProjects.length}</span></header><div className={styles.projectLinksList}>{availableProjects.length ? availableProjects.map((project) => <div key={project.id} className={styles.projectLinkCard}><div className={styles.projectLinkCardText}><strong>{project.name}</strong><span>{project.code || "Projekt"} · {project.access || "hozzáférés"}</span></div><button type="button" disabled={projectLinksBusyId === project.id} onClick={() => void attachProject(project.id)}>{projectLinksBusyId === project.id ? "…" : "Csatolás"}</button></div>) : <div className={styles.projectLinksEmptyState}>Nincs további csatolható projekt.</div>}</div></section>
+            </div>
+            <footer><span>A projekt hozzáférési szabályai változatlanul érvényesek.</span><button type="button" onClick={() => setProjectLinksDialogOpen(false)}>Kész</button></footer>
+          </section>
+        </div>
+      ) : null}
+
       <DriveToolbar
         query={query}
         onQueryChange={setQuery}
@@ -521,7 +578,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
 
       <div ref={browserRef} className={browserClass} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}>
         {layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete={false} /> : <>
-          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
+          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
           {layoutMode === "split" ? <div className={styles.splitResizeHandle} role="separator" aria-orientation="horizontal" onDoubleClick={() => setSplitDetailsHeight(Math.max(250, Math.round((browserRef.current?.getBoundingClientRect().height || 660) / 2)))} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + startY - moveEvent.clientY))); const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
           <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
