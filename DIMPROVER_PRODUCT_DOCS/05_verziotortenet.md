@@ -3579,3 +3579,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Contract `18/18 PASS`; TypeScript, lint és releváns SSO/Drive/Desktop regressziók PASS.
 - Source `3e8bf7672fb209cf4f9f81e644321eb93f35b159`; build `1vvwHF49TX5Cg_drne7O3`; SHA-256 `3dd41a8784fb55c1ebdf7bede00844402eb87957e8efe421d8b923d3f2813c0f`.
 - DEV Drive `3379`; rollback V0.6.0 `3378`; AUTH V0.4.4; PROD DENY.
+
+### Drive PERSONAL V0.6.6 – CsomagBOX DEV aktiválás
+
+- A Saját Drive a projekt Drive-dal közös `BoxShelf` komponenst kapta exact személyes owner-scope-pal.
+- Elérhető a BOX létrehozás, fájl hozzáadás/eltávolítás, belső mappa/almappa, elemmozgatás, lifecycle (`DRAFT/READY/SENT/ARCHIVED`), előzmények és fullscreen CsomagBOX panel.
+- A PERSONAL BOX elem `content_ref.id` hivatkozást tárol; a mögöttes Content Object immutable marad.
+- A ZIP export csak clean security + clean virus scan állapotú személyes fájlokat enged be, megtartja a BOX mappastruktúrát és `DIMPRO_Dokumentaciojegyzek.txt` jegyzéket készít.
+- A közös CompareWorkspace és DriveVisualCompareViewer PERSONAL scope adaptert kapott. A vizuális PDF/kép compare megmarad, a projekt finding/felelős/issue workflow nem kerül át.
+- Új additív personal CsomagBOX schema marker: `0.1.0`, bootstrap `personal-drive-boxes-v010-20261006`; guarded DEV migration preflight/apply/verify PASS.
+- Schema commit `0cf320504554bb730b1b7833e102e8bfd70a7a68`; runtime source `d0e255cb8e61a1a495aefdd72969fea4170d2108`.
+- Build02 manual safe fallback a Build Transport Gateway HTTP 403 miatt; build ID `Ua_bDqr4eEJABVzqfo9Ct`; artifact SHA-256 `6ae8e0ca869b020e173ee5269ae45ef7109ea0c5ae42558ac4d0060570544cbe`.
+- DEV runtime `dimpro-drive-v0913-auth044-personalbox-d0e255cb-p3384`, port `3384`; publikus Drive upstream 3384. Rollback `0aa54e28` port `3381` online maradt.
+- App contract 14/14, SQL 13/13, migration-order 3/3, ProjectGate compare 10/10, ProjectGate BOX 13/13, history 18/18, compact BOX 19/19, panel/folder 13/13, compare/issue ACL 18/18 PASS; lint/TypeScript/build PASS.
+- Publikus smoke: `/drive` 307 central SSO, Personal BOX API auth nélkül 401, PM2 error log 0 byte.
+- DEV ONLY · PROD DENY. Bejelentkezett böngészős E2E még szükséges.
