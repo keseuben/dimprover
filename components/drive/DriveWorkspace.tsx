@@ -1504,30 +1504,32 @@ export default function DriveWorkspace({
 
   async function openDocumentInWindows(document: DriveDocument) {
     if (!document.currentVersion) return;
-    const extension = (document.extension || "").toLowerCase();
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const download = await requestDownloadLink(document);
-      const protocol = nativeOfficeProtocol(extension);
-      if (protocol) {
-        window.location.assign(protocol + ":ofe|u|" + download.url);
-        setNotice("Megnyitás Windows alkalmazásban: " + (download.fileName || document.name));
-        return;
+      const response = await fetch(
+        "/api/projects/" + encodeURIComponent(projectId) + "/drive/documents/" + encodeURIComponent(document.id) + "/open-ticket",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ versionId: document.currentVersion.id, mode: "WORKFILE" }),
+        },
+      );
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        open?: { protocolUrl?: string; expiresAt?: string; notice?: string };
+      };
+      if (!response.ok || !payload.ok || !payload.open?.protocolUrl) {
+        throw new Error(payload.error || "A Windows megnyitási jegy nem hozható létre.");
       }
 
-      const anchor = window.document.createElement("a");
-      anchor.href = download.url;
-      anchor.download = download.fileName || document.name;
-      anchor.rel = "noopener";
-      window.document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+      window.location.assign(payload.open.protocolUrl);
       setNotice(
-        extension === "pdf"
-          ? "PDF letöltve Windows alkalmazásos megnyitáshoz. A közvetlen PDF→Windows átadás a DIMPRO Drive Desktop/Bridge protokoll bekötése után lesz egykattintásos."
-          : "Fájl letöltve Windows alkalmazásos megnyitáshoz: " + (download.fileName || document.name),
+        "Átadás a DIMPRO Drive Desktopnak: " + document.name
+        + ". Csak ez a fájl kerül a helyi munkafájlok közé; ez nem teljes Drive-szinkronizálás.",
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A Windows alkalmazásos megnyitás sikertelen.");
@@ -2298,9 +2300,11 @@ export default function DriveWorkspace({
         canUploadSelectedRevision={Boolean(canWrite && selectedDocument?.currentVersion && health?.storage?.realObjectWriteEnabled)}
         onUploadSelectedRevision={openRevisionUploadDialog}
         canOpenSelected={isPotentiallyReadableVersion(selectedDocument)}
+        canOpenWindowsSelected={isPotentiallyReadableVersion(selectedDocument)}
         canDownloadSelected={isPotentiallyReadableVersion(selectedDocument)}
         canDownloadFolder={Boolean(selectedFolder)}
         onOpenSelected={() => void openDocument()}
+        onOpenWindowsSelected={() => { if (selectedDocument) void openDocumentInWindows(selectedDocument); }}
         onDownloadSelected={() => void downloadSelected()}
         onDownloadFolder={downloadSelectedFolder}
         boxCount={boxes.length}

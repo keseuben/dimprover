@@ -57,6 +57,7 @@ type DbDownloadVersion = {
   original_name: string;
   mime_type: string;
   size_bytes: number | string;
+  sha256: string | null;
   storage_provider: string;
   storage_bucket: string | null;
   storage_key: string | null;
@@ -629,7 +630,7 @@ export async function getDriveDownloadVersionRecord(input: {
 
   let query = client
     .from("drive_core_document_versions")
-    .select("id,project_id,document_id,version_number,revision_number,revision_code,original_name,mime_type,size_bytes,storage_provider,storage_bucket,storage_key,status")
+    .select("id,project_id,document_id,version_number,revision_number,revision_code,original_name,mime_type,size_bytes,sha256,storage_provider,storage_bucket,storage_key,status")
     .eq("project_id", input.projectId)
     .eq("document_id", input.documentId);
   if (input.versionId) query = query.eq("id", input.versionId);
@@ -665,6 +666,7 @@ export async function getDriveDownloadVersionRecord(input: {
       originalName: version.original_name,
       mimeType: version.mime_type,
       sizeBytes: Number(version.size_bytes || 0),
+      sha256: version.sha256,
       storageProvider: version.storage_provider,
       storageBucket: version.storage_bucket,
       storageKey: version.storage_key,

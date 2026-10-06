@@ -473,6 +473,7 @@ export async function proxy(request: NextRequest) {
   const isDriveDesktopBearer = /^Bearer\s+dpat1\./i.test(driveAuthorization);
   const isDriveDesktopBearerApi = isDriveHost && isDriveDesktopBearer && (
     pathname === "/api/drive/desktop-contract" ||
+    pathname === "/api/drive/desktop-open/redeem" ||
     pathname === "/api/projects" ||
     /^\/api\/projects\/[^/]+\/drive\/(?:health|tree|changes|sync\/cursor|uploads\/init)$/.test(pathname) ||
     /^\/api\/projects\/[^/]+\/drive\/uploads\/[^/]+\/(?:complete|abort)$/.test(pathname) ||

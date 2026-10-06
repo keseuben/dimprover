@@ -380,3 +380,163 @@ Acceptance requirement after deployment:
 1. existing Bridge Probe remains PASS;
 2. reviewed security scan returns 5/5 `CLEAN` with exact SHA-256 matches;
 3. only then may restart-safe DOWNLOAD Apply continue.
+
+
+## V0.1.7 Phase 2 FIX2 – DEV deployment evidence 2026-10-05
+
+Integrated source after the current Drive V0.9.13 / AUTH V0.4.4 SSO HOSTFIX line was merged:
+- source commit: `01fd976ace0b828e74ec085c8f368287465079ac`;
+- source branch: `worker/benjaminai/drive-desktop-v015-fix1-20261003`;
+- BUILD-01 run: `drive-v017-scan-auth-01fd976a-20261005-b1`;
+- build ID: `CXb0i535hLDf8T9B7R2Oa`;
+- artifact SHA-256: `97b20435a0a0ff1a8a4774642d59715c1da1c4c94ce22193525bdd3e2f991460`;
+- BUILD-01 result: PASS;
+- Next production build and TypeScript phase completed successfully.
+
+DEV deployment:
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/01fd976ace0b`;
+- runtime: `/srv/dimpro-dev/runtime/drive-v0913-auth044-scanfix-01fd976a`;
+- PM2 candidate: `dimpro-drive-v0913-auth044-scanfix-01fd976a-p3372`;
+- candidate port: `3372`;
+- previous public rollback candidate: `09d5856f / 3371`, intentionally kept online;
+- nginx backup before cutover: `/srv/dimpro-dev/coordination/backups/dimpro-dev.conf.before-drive-scanfix-20261005T203345`;
+- public `drive.dev.dimpro.hu` upstream changed from `3371` to `3372`;
+- nginx config test: PASS;
+- nginx reload: PASS;
+- PM2 state saved after successful cutover.
+
+Public smoke after cutover:
+- `/drive` -> `307` central SSO redirect;
+- redirect target -> `/api/dimpro-auth/start?return_to=%2Fdrive`;
+- central authorize callback resolves to `https://drive.dev.dimpro.hu/api/dimpro-auth/callback`;
+- cache policy remains `no-store`;
+- unauthenticated Drive health remains `401 AUTH_REQUIRED`;
+- public candidate header: `01fd976a DRIVE V0.9.13 AUTH V0.4.4 SSO HOSTFIX + DESKTOP SCAN AUTH DEV`;
+- `X-DIMPRO-Production-Access: DENY`;
+- candidate PM2 status: online, zero restarts at cutover smoke;
+- rollback candidate `09d5856f / 3371`: online, zero restarts.
+
+Remaining physical acceptance gate:
+1. rerun Windows Bridge-backed V0.1.7 security scan acceptance against the same reviewed plan;
+2. require `scanCount = 5` and `cleanCount = 5` with exact SHA-256 matches;
+3. only after that PASS, run the restart-safe DOWNLOAD Apply acceptance.
+
+
+## V0.1.7 Phase 2 FIX2 – FINAL physical Windows acceptance PASS 2026-10-06
+
+Physical Windows PowerShell `5.1.22621.6133` acceptance completed against `https://drive.dev.dimpro.hu` using Bridge auth and the already reviewed immutable plan.
+
+Reviewed plan binding:
+- project: `d6-irodaepulet`;
+- reviewed plan SHA-256: `d5533020951ba11d2a345d873bc9246f7a63a5c072c077f97f65a3311023000a`;
+- reviewed download operation count: 5.
+
+Security scan acceptance completed first:
+- code: `DIMPRO_DRIVE_DESKTOP_V017_SECURITY_SCAN_ACCEPTANCE_PASS`;
+- scanCount: 5;
+- cleanCount: 5;
+- scannerReady: true;
+- scanner engine: ClamAV `1.5.4`;
+- signature version: `28144`;
+- documentContentMutation: false;
+- localMutation: false;
+- delete: false.
+
+Restart-safe DOWNLOAD Apply acceptance:
+- code: `DIMPRO_DRIVE_DESKTOP_V017_DOWNLOAD_APPLY_ACCEPTANCE_PASS`;
+- downloadCount: 5;
+- newlyDownloadedCount: 3;
+- alreadyPresentVerifiedCount: 2;
+- cursorSaved: true;
+- documentMutation: false;
+- localMutation: true;
+- delete: false;
+- result path: `C:\\Users\\admin\\AppData\\Local\\Temp\\DIMPRO-Drive-V017-Download-Apply-Acceptance\\apply-result-20261006T154122Z.json`.
+
+This physically proves:
+- the reviewed plan SHA binding survives end-to-end;
+- all 5 remote versions passed server-side malware scanning before download;
+- already present local files are SHA-256 verified and reused instead of overwritten;
+- 3 missing files were downloaded successfully;
+- restart/resume behavior is safe and deterministic;
+- cursor persistence completes successfully;
+- no delete operation is used;
+- no server-side document content mutation occurs.
+
+V0.1.7 Phase 2 FIX2 DEV acceptance is therefore functionally CLOSED.
+
+Non-blocking terminology cleanup for a later patch:
+- the acceptance result currently reports `serverMutation: "ACCEPTANCE_CURSOR_ONLY"`;
+- this label is narrower than the complete transport behavior because download-init can create audit/download metadata while document content remains immutable;
+- recommended future label: `DOWNLOAD_AUDIT_AND_ACCEPTANCE_CURSOR`;
+- this is a reporting/contract wording cleanup only and does not invalidate the physical PASS.
+
+## V0.1.8 – Windows Open Handler / partial workfiles architecture
+
+V0.1.8 deliberately separates **Windows file opening** from future **Drive Desktop Sync**.
+
+### Product rule
+
+`Megnyitás Windowsban` must NOT mirror the complete DIMPRO Drive project tree and must NOT imply that a project is synchronized locally.
+
+The user selects one **Helyi munkafájlok** root. Only documents explicitly opened from Drive are written below that root. V0.1.8 may use one shallow per-project bucket for collision avoidance and readability, for example:
+
+`<user root>\D6-001 D6 Irodaépület - DIMPRO MUNKAFÁJLOK\G-101_....dwg`
+
+No remote subfolder hierarchy is reproduced. Empty Drive folders are never created locally by the Open Handler. Full or selective Drive folder synchronization remains a separate future `DIMPRO Drive Desktop Sync` feature.
+
+### Web-to-Windows flow
+
+1. Browser user chooses `Megnyitás Windowsban` for a readable document version.
+2. Web API requires `document.read`, an exact version with a valid SHA-256 identity, and issues a 90-second opaque `dimpro-drive` open ticket.
+3. Only the SHA-256 hash of the ticket is stored server-side.
+4. Browser invokes `dimpro-drive://open-file?ticket=...`; no server URL is carried in the custom URI.
+5. The Windows handler reads the already paired Bridge token from DPAPI storage and exchanges it for the short-lived Drive Desktop `dpat1` token.
+6. `/api/drive/desktop-open/redeem` accepts only `desktop-access` auth, atomically consumes the ticket, rechecks project `document.read`, preserves the server-issued web actor for download audit, and uses the normal Drive download initializer. V0.1.8 DEV does **not** claim canonical user binding for `dpat1`; that requires the future Bridge device ↔ DIMPRO user ownership layer.
+7. The normal download initializer keeps the existing security-scan gate and returns a short-lived signed GET URL plus exact file SHA-256 and size.
+8. The Windows handler writes only into the configured workfiles root, verifies size and SHA-256, updates a local workfile index, and launches the file through the Windows default file association.
+
+### Local workfile safety
+
+- Workfiles are **not automatically deleted**.
+- The index explicitly records `PARTIAL_WORKFILES_NOT_SYNC` semantics.
+- The local index keeps **two hashes**: `baseServerSha256` = the last server hash actually downloaded/accepted as the local baseline, and `remoteSha256` = the latest server hash observed during the current open.
+- If the local file hash still equals `baseServerSha256` and the server has a newer version, V0.1.8 may safely refresh the local file and advance the baseline.
+- If the local file is modified, `baseServerSha256` is preserved even when `remoteSha256` changes, so the original editing baseline is not lost.
+- If the local file hash differs from the previously downloaded server hash, the state becomes `LOCAL_MODIFIED`; the handler opens the local file and does **not** overwrite it.
+- If both the local file and server version changed, the handler warns that conflict handling is required before any later upload/sync action.
+- New downloads are written to a temporary sibling file, size/SHA-256 verified, and only then moved into the final path.
+- Unknown filename collisions do not overwrite existing files; a document-id suffix is used.
+
+### Protocol and trust boundary
+
+- URI scheme: `dimpro-drive`.
+- Registration is per-user under `HKCU:\Software\Classes\dimpro-drive`; no administrator rights are required.
+- The URI may contain only the opaque open ticket. URI-provided server override is denied.
+- V0.1.8 DEV handler accepts only `https://drive.dev.dimpro.hu`; arbitrary HTTPS hosts are rejected so the Bridge token cannot be redirected to another service.
+- Existing BENJADMIN Windows Bridge heartbeat behavior remains unchanged: no remote terminal command execution is enabled and no inbound port is opened.
+- **DEV limitation:** the current `dpat1` token contains device/agent/client identity but no canonical DIMPRO user claim. DEV alias compatibility allows the present single-user physical acceptance flow, but this must not be treated as final multi-user identity binding. Before production or general multi-user rollout, the Bridge device must be explicitly bound to a canonical DIMPRO user and that user identity must be carried/verified by the Desktop access token or equivalent server-side device ownership mapping.
+- PROD remains DENY.
+
+### Implementation files
+
+- `app/lib/drive/openTicketStore.ts`
+- `app/api/projects/[projectId]/drive/documents/[documentId]/open-ticket/route.ts`
+- `app/api/drive/desktop-open/redeem/route.ts`
+- `scripts/dimpro-drive-desktop-open-handler-v018.ps1`
+- `scripts/dimpro-drive-desktop-open-handler-manager-v018.ps1`
+- `scripts/dimpro-drive-desktop-v018-windows-acceptance.ps1`
+- `scripts/drive-desktop-open-v018-contract.mjs`
+- `scripts/drive-desktop-open-v018-windows-acceptance-contract.mjs`
+
+### Static acceptance at implementation checkpoint
+
+- V0.1.8 Windows Open Handler contract: **36/36 PASS**.
+- V0.1.8 Windows acceptance contract: **8/8 PASS**.
+- Existing Drive V0.4.5 open/download/ZIP regression: **26/26 PASS**.
+- Existing Desktop access contract: **16/16 PASS**.
+- Existing V0.1.7 Plan contract: **47/47 PASS**.
+- Existing V0.1.7 security scan acceptance contract: **15/15 PASS**.
+- Existing V0.1.7 restart-safe Download Apply acceptance contract: **16/16 PASS**.
+
+Physical Windows installation/open acceptance is still required before V0.1.8 may be closed.
