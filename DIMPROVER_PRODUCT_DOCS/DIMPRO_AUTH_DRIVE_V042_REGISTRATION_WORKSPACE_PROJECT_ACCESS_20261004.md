@@ -212,3 +212,45 @@ A V0.4.8 javítást a közben live-ra került BenjaminAI Desktop scan-auth ágga
 Integrált build ID: `QCWId8ANOj8Sr1wV85kRQ`. Artifact SHA-256: `f196cc8e126ca76cee3ca31907880000df111496f7ae711353b17e4c88dee513`.
 
 DEV Drive upstream: `127.0.0.1:3373`. Header: `12f62a7d DRIVE V0.9.13 AUTH V0.4.4 SSO SINGLE-GATE + DESKTOP SCAN AUTH DEV`. A korábbi `01fd976a` scanfix runtime `127.0.0.1:3372` porton rollbackként online maradt. PROD DENY.
+
+## 14. V0.4.9 – terminal central SSO proxy ág
+
+A böngészős E2E napló alapján a central SSO authorize és token exchange sikeres volt, az app-session létrejött, és a konkrét sessionhöz `drive.access = TRUE` tartozott. A tényleges redirect-loop oka a Drive proxy vezérlési láncában volt: sikeres central SSO ellenőrzés után a kérés továbbfutott a legacy Supabase auth-rétegbe, amely Supabase session hiányában `/login` redirectet adott.
+
+A V0.4.9 javítás sikeres central Drive SSO + `drive.access` ellenőrzés után azonnali `return response`-szal terminálja a Drive auth-láncot. A legacy Supabase auth többé nem kaphatja meg ugyanazt a már central SSO-val hitelesített Drive kérést.
+
+Contract: `auth-v049-drive-proxy-terminal-sso-contract.mjs` → `6/6 PASS`.
+
+Source commit: `9f45b8bf9ec0b49901ecccf7806c60334df44afd`. Build ID: `TLFlNLDXd43zn4HIVsWGp`. Artifact SHA-256: `b4377b153fcab88d17c4cd10bf7c6835757aedf9b581d4d9832ed8c25e2b82bb`.
+
+A böngészős E2E a javítás után sikeres volt: a Drive felület betöltött, és az SSO redirect-loop megszűnt.
+
+## 15. V0.5.0 – első osztályú Saját Drive munkatér
+
+A DriveShell a korábbi `/api/projects` lista helyett a közös `/api/drive/workspaces` contractot használja. A személyes Drive és a projektmunkaterek külön típusok maradnak; a Saját Drive nem álprojekt.
+
+Fő működés:
+
+- `PERSONAL` workspace ID: `personal:<userId>`;
+- `PROJECT` workspace ID: `project:<projectId>`;
+- személyes jogosultság esetén a Saját Drive az elsődleges/alapértelmezett munkatér;
+- projekt létrehozása után a `project:<id>` munkatér kerül kiválasztásra;
+- projekt-specifikus provisioning, ACL, Beérkező Drop, Kedvencek és CsomagBOX nem fut személyes módban;
+- a projekt-Drive meglévő motorja változatlanul projektmunkatérként működik.
+
+A személyes Drive jelenlegi backend-képessége szándékosan `USER_ROOT` szintű. A teljes személyes mappafa még nincs aktiválva, ezért a UI ezt egyértelműen jelzi és nem imitál projektmappafát.
+
+Új személyes tartalom API-k:
+
+- `GET /api/drive/personal/content` – kizárólag exact `drive.personal.access` entitlement után, owner-scoped USER tartalomreferenciák;
+- `GET /api/drive/personal/content/[refId]/download` – exact tulajdonosi ellenőrzés, csak `security_status=clean` és `virus_scan_status=clean` tartalomhoz, szerveroldali signed GET URL-lel.
+
+A Content Core lekérdezés `owner_type=USER` + exact `owner_user_id` alapján történik. Storage key nem kerül ki a listázó API válaszában.
+
+Új UI: `PersonalDriveWorkspace`, amely a tényleges USER_ROOT tartalmakat mutatja név, forrás, méret, módosítási idő és biztonsági státusz szerint. Üres USER_ROOT esetén külön személyes Drive üres állapot jelenik meg, nem a korábbi „Nincs elérhető projekt” üzenet.
+
+Contract: `auth-v050-personal-workspace-ui-contract.mjs` → `10/10 PASS`. TypeScript PASS 4 GB heap mellett; targeted ESLint PASS; teljes AUTH/Drive/Desktop regressziós csomag PASS.
+
+V0.5.0 source commit: `711b7e1bc7d52e1113faf05f56ec7e5cfc45ed8b`. Build ID: `tmnNr9d2QZO_det4YRogW`. Artifact SHA-256: `f53b3e11011eb856f8cadf9fe07df2a2d4e8864034fdd786cc6b8ae2b3d4a5e4`.
+
+DEV aktiválás: Drive `127.0.0.1:3375`; publikus header: `711b7e1b DRIVE V0.9.13 AUTH V0.5.0 PERSONAL USER_ROOT + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. Előző `9f45b8bf / 3374` runtime rollbackként online maradt. AUTH továbbra is V0.4.4 `3367`. PROD DENY.

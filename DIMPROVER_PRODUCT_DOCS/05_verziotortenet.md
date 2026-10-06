@@ -3530,3 +3530,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A javítás integrálva lett a BenjaminAI `01fd976a` Desktop scan/download restart-safe ággal; merge commit `12f62a7d39a5263860deeb8a3ee4074b81cce963`.
 - Integrált build ID `QCWId8ANOj8Sr1wV85kRQ`; SHA-256 `f196cc8e126ca76cee3ca31907880000df111496f7ae711353b17e4c88dee513`.
 - DEV Drive: `127.0.0.1:3373`; rollback `3372`; AUTH V0.4.4 változatlan; PROD DENY.
+
+### Drive AUTH V0.4.9 – terminal central SSO
+
+- A sikeres central SSO Drive proxyág most azonnal terminál `return response`-szal, így nem esik tovább a legacy Supabase authba.
+- Bizonyított hibaminta: `authorize SUCCESS → token exchange SUCCESS → drive.access TRUE → legacy Supabase fallthrough → /login`.
+- Source `9f45b8bf9ec0b49901ecccf7806c60334df44afd`; build `TLFlNLDXd43zn4HIVsWGp`; SHA-256 `b4377b153fcab88d17c4cd10bf7c6835757aedf9b581d4d9832ed8c25e2b82bb`.
+- Böngészős E2E PASS: a Drive UI betöltött, az SSO-loop megszűnt.
+
+### Drive AUTH V0.5.0 – Saját Drive USER_ROOT workspace
+
+- A DriveShell most `/api/drive/workspaces` alapján kezeli a PERSONAL és PROJECT munkatereket.
+- A Saját Drive nem fake projekt; személyes entitlement esetén alapértelmezett munkatér.
+- Új `PersonalDriveWorkspace` USER_ROOT nézettel, valós Content Core személyes tartalomlistával.
+- Személyes lista és letöltés exact `drive.personal.access` és exact owner scope szerint; letöltés csak clean security/virus státusznál.
+- A személyes mappafa még nincs aktiválva, ezt a UI és capability contract explicit jelzi.
+- V0.5.0 contract `10/10 PASS`; TypeScript, lint és teljes regressziós csomag PASS.
+- Source `711b7e1bc7d52e1113faf05f56ec7e5cfc45ed8b`; build ID `tmnNr9d2QZO_det4YRogW`; SHA-256 `f53b3e11011eb856f8cadf9fe07df2a2d4e8864034fdd786cc6b8ae2b3d4a5e4`.
+- DEV Drive `3375`; rollback `3374`; AUTH V0.4.4 `3367`; PROD DENY.
