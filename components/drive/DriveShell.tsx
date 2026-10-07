@@ -573,6 +573,7 @@ export default function DriveShell({
             onWorkspaceChange={handleWorkspaceChange}
             navigationRequest={navigationRequest}
             userEmail={workspaceUserEmail}
+            userDisplayName={workspaceUserDisplayName}
             onStorageQuotaChange={handleStorageQuotaChange}
           />
         ) : (
@@ -586,6 +587,7 @@ export default function DriveShell({
           setUserIdentities(identities);
           const verified = identities.filter((identity) => identity.status === "VERIFIED");
           setSelectedProjectIdentityId((current) => verified.some((identity) => identity.id === current) ? current : verified.find((identity) => identity.isPrimary)?.id || verified[0]?.id || "");
+          setWorkspaceRevision((value) => value + 1);
         }}
       />
     </div>

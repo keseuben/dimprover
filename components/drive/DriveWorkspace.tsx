@@ -64,6 +64,7 @@ type Props = {
   onWorkspaceChange?: (workspaceId: string) => void;
   navigationRequest?: DriveNavigationRequest;
   userEmail?: string | null;
+  userDisplayName?: string | null;
   onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
 };
 
@@ -243,6 +244,7 @@ export default function DriveWorkspace({
   onWorkspaceChange,
   navigationRequest,
   userEmail = null,
+  userDisplayName = null,
   onStorageQuotaChange,
 }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
@@ -320,6 +322,7 @@ export default function DriveWorkspace({
   const [desktopOpenPromptDocument, setDesktopOpenPromptDocument] = useState<DriveDocument | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
+  const fullscreenInspectTimerRef = useRef<number | null>(null);
   const splitDetailsInitializedRef = useRef(false);
   const foldersDetailsInitializedRef = useRef(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
@@ -339,11 +342,35 @@ export default function DriveWorkspace({
   const canPurgeTrash = effectivePermissions.includes("folder.purge") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
   const securityReady = Boolean(health?.security?.ready);
 
+  const cancelFullscreenInspectTimer = useCallback(() => {
+    if (fullscreenInspectTimerRef.current !== null) {
+      window.clearTimeout(fullscreenInspectTimerRef.current);
+      fullscreenInspectTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFullscreenInspector = useCallback((documentId: string) => {
+    cancelFullscreenInspectTimer();
+    setSelectedDocumentId(documentId);
+    fullscreenInspectTimerRef.current = window.setTimeout(() => {
+      setFullTableInspectorOpen(true);
+      fullscreenInspectTimerRef.current = null;
+    }, 320);
+  }, [cancelFullscreenInspectTimer]);
+
+  const openFullscreenPreview = useCallback((documentId: string) => {
+    cancelFullscreenInspectTimer();
+    setSelectedDocumentId(documentId);
+    setFullTableInspectorOpen(false);
+    setPreviewDocumentId(documentId);
+  }, [cancelFullscreenInspectTimer]);
+
   const closeTableFullscreen = useCallback(() => {
+    cancelFullscreenInspectTimer();
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
-  }, []);
+  }, [cancelFullscreenInspectTimer]);
 
   const toggleTableFullscreen = useCallback(() => {
     if (tableFullscreen) {
@@ -360,8 +387,9 @@ export default function DriveWorkspace({
       if (bootLoaderHoldTimerRef.current !== null) {
         window.clearTimeout(bootLoaderHoldTimerRef.current);
       }
+      cancelFullscreenInspectTimer();
     };
-  }, []);
+  }, [cancelFullscreenInspectTimer]);
 
   useEffect(() => {
     if (layoutMode !== "split" || splitDetailsInitializedRef.current) return;
@@ -2504,6 +2532,10 @@ export default function DriveWorkspace({
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
   const headerRole = projectRoleBadge(membershipRole);
   const headerEmail = membershipEmail || userEmail || "—";
+  const normalizedMembershipName = membershipDisplayName.trim();
+  const headerDisplayName = normalizedMembershipName && normalizedMembershipName.toLowerCase() !== headerEmail.toLowerCase()
+    ? normalizedMembershipName
+    : userDisplayName?.trim() || normalizedMembershipName || "DIMPRO felhasználó";
 
   return (
 
@@ -2560,9 +2592,9 @@ export default function DriveWorkspace({
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
           <ProjectAccessMenu projectId={projectId} compact />
           <div className={styles.userPill}>
-            <span className={styles.avatar}>{(membershipDisplayName || headerEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span>
+            <span className={styles.avatar}>{(headerDisplayName || headerEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span>
             <div className={styles.userIdentityText}>
-              <strong>{membershipDisplayName || "DIMPRO felhasználó"}</strong>
+              <strong>{headerDisplayName}</strong>
               <span title={headerEmail}>{headerEmail}</span>
             </div>
             <span className={styles.userRoleBadge} data-role-tone={headerRole.tone} title={headerRole.label} aria-label={headerRole.label}>{headerRole.short}</span>
@@ -3301,8 +3333,8 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setFullTableInspectorOpen(true); }}
-              onOpenDocument={(document) => { setSelectedDocumentId(document.id); setFullTableInspectorOpen(false); setPreviewDocumentId(document.id); }}
+              onSelectDocument={(document) => scheduleFullscreenInspector(document.id)}
+              onOpenDocument={(document) => openFullscreenPreview(document.id)}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}

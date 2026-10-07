@@ -991,6 +991,10 @@
 .driveViewerToolbarSpacer { min-width: 8px; flex: 1 1 auto; }
 .driveViewerPage,.driveViewerZoom { min-width: 38px; text-align: center; font-size: var(--drive-font-xs); font-weight: 900; color: #5d7389; white-space: nowrap; }
 .driveViewerStage { position: relative; min-height: 250px; height: 320px; overflow: auto; display: flex; align-items: flex-start; justify-content: flex-start; padding: 12px; background-color: #dfe6ec; background-image: linear-gradient(45deg,rgba(255,255,255,.26) 25%,transparent 25%),linear-gradient(-45deg,rgba(255,255,255,.26) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,rgba(255,255,255,.26) 75%),linear-gradient(-45deg,transparent 75%,rgba(255,255,255,.26) 75%); background-size: 20px 20px; background-position: 0 0,0 10px,10px -10px,-10px 0; }
+.driveViewerStagePan { cursor: grab; touch-action: none; }
+.driveViewerStagePanning { cursor: grabbing; user-select: none; }
+.driveViewerStagePan .driveViewerCanvas,
+.driveViewerStagePan .driveViewerImage { pointer-events: none; user-select: none; }
 .driveViewerCanvas { display: block; margin: 0 auto; max-width: none; background: #fff; box-shadow: 0 5px 18px rgba(34,52,69,.18); }
 .driveViewerImage { display: block; height: auto; max-width: none; margin: auto; transform-origin: center center; background: #fff; box-shadow: 0 5px 18px rgba(34,52,69,.18); }
 .driveViewerLoading { position: sticky; z-index: 3; top: 10px; left: 50%; align-self: flex-start; margin: 8px auto 0; border: 1px solid #c9d9e5; border-radius: 999px; background: rgba(255,255,255,.94); color: #4c657d; box-shadow: 0 5px 18px rgba(35,55,75,.12); padding: 6px 9px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--drive-font-xs); font-weight: 800; }
@@ -6354,7 +6358,7 @@
 .toolbarActionClusterMisc { border-left-color:#8295a7; background:#f7f9fb; }
 .toolbarActionClusterUpload { border-left-color:#2d75d8; background:#f3f7fd; }
 .toolbarActionClusterOpen { border-left-color:#2c9870; background:#f2faf6; }
-.toolbarActionClusterPackage { border-left-color:#7253bf; background:#f7f4fc; }
+.toolbarActionClusterPackage { border:1px solid #ddd3f4; border-left:3px solid #7253bf; background:#f7f4fc; box-shadow:inset 0 0 0 1px rgba(114,83,191,.035); }
 .toolbarActionClusterOther { border-left-color:#b18a3e; background:#fbf8f1; }
 
 :global(html[data-drive-theme="dark"]) .detailsSubTabs,

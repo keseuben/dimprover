@@ -182,12 +182,30 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const bootLoaderVisibleRef = useRef(true);
   const bootLoaderHoldTimerRef = useRef<number | null>(null);
   const browserRef = useRef<HTMLDivElement>(null);
+  const fullscreenInspectTimerRef = useRef<number | null>(null);
+
+  const cancelFullscreenInspectTimer = useCallback(() => {
+    if (fullscreenInspectTimerRef.current !== null) {
+      window.clearTimeout(fullscreenInspectTimerRef.current);
+      fullscreenInspectTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFullscreenInspector = useCallback((documentId: string) => {
+    cancelFullscreenInspectTimer();
+    setSelectedDocumentId(documentId);
+    fullscreenInspectTimerRef.current = window.setTimeout(() => {
+      setFullTableInspectorOpen(true);
+      fullscreenInspectTimerRef.current = null;
+    }, 320);
+  }, [cancelFullscreenInspectTimer]);
 
   const closeTableFullscreen = useCallback(() => {
+    cancelFullscreenInspectTimer();
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
-  }, []);
+  }, [cancelFullscreenInspectTimer]);
 
   const toggleTableFullscreen = useCallback(() => {
     if (tableFullscreen) {
@@ -274,8 +292,11 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     setBootLoaderVisible(true);
     setBootLoaderComplete(false);
     void load();
-    return () => { if (bootLoaderHoldTimerRef.current !== null) window.clearTimeout(bootLoaderHoldTimerRef.current); };
-  }, [load]);
+    return () => {
+      if (bootLoaderHoldTimerRef.current !== null) window.clearTimeout(bootLoaderHoldTimerRef.current);
+      cancelFullscreenInspectTimer();
+    };
+  }, [cancelFullscreenInspectTimer, load]);
 
   useEffect(() => {
     if (!tableFullscreen) return;
@@ -650,10 +671,11 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   }, []);
 
   const openDocument = useCallback((document: DriveDocument) => {
+    cancelFullscreenInspectTimer();
     setSelectedDocumentId(document.id);
     if (tableFullscreen) setFullTableInspectorOpen(false);
     setPreviewDocumentId(document.id);
-  }, [tableFullscreen]);
+  }, [cancelFullscreenInspectTimer, tableFullscreen]);
 
   const browserClass = [styles.browser, layoutMode === "folders" ? styles.layoutFolders : "", layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
   const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
@@ -667,7 +689,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     viewMode={viewMode}
     onViewModeChange={setViewMode}
     allowedViewModes={["simple", "engineering"]}
-    onSelectDocument={(document) => { setSelectedDocumentId(document.id); if (tableFullscreen) setFullTableInspectorOpen(true); }}
+    onSelectDocument={(document) => {
+      if (tableFullscreen) scheduleFullscreenInspector(document.id);
+      else setSelectedDocumentId(document.id);
+    }}
     onOpenDocument={(document) => void openDocument(document)}
     onRefresh={() => void load()}
     boxColorsByDocument={boxColorsByDocument}

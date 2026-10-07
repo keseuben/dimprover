@@ -833,3 +833,7 @@ A V0.9.24 DEV-en aktív. Runtime source `4b7f57ab9135a153f088ba14097b132462de85d
 A központi DIMPRO-fiók megjelenítési neve most közvetlenül az `E-mail-címek és munkahelyek` ablakból szerkeszthető. A módosítás nem hoz létre új felhasználót vagy új identitást: ugyanazt a központi usert frissíti a session-bound profile API, és a kapcsolódó aktív projekttagságok megjelenítési nevét szinkronizálja.
 
 A teljes ablakos Drive táblázatban az adatpanel viselkedése projekt és Saját Drive esetén azonos. Egy kattintás kijelöli a fájlt és megnyitja a részleteket; dupla kattintás fájlelőnézetet nyit. Panelen kívüli kattintás csak a panelt zárja. Esc hierarchia: előnézet → részletek → teljes nézet. PROD DENY.
+
+## AUTH V0.4.8 / Drive V0.9.26 – önkiszolgáló megjelenítési név
+
+A központi profilnév módosítása nem szélesíti az AUTH runtime tábla-jogosultságait. A `dimpro_auth_app_*` role továbbra sem kap általános `UPDATE` jogot az `auth_users` táblára. A `011_auth_v048_self_profile_display_name.sql` migráció csak a `public.auth_update_self_display_name(uuid,text)` SECURITY DEFINER függvény EXECUTE jogát adja a runtime szerepkörnek. A függvény kizárólag aktív, login-enabled userre fut, 2–160 karakteres nevet fogad, és egy tranzakcióban frissíti a központi usert és a primary e-mail-identitást. Az API a session user ID-ját adja át, same-origin védelemmel, majd a projekt-tagságok megjelenítési nevét is szinkronizálja. PROD DENY.

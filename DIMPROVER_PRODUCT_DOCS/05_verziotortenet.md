@@ -4000,3 +4000,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új contract: `scripts/drive-v0925-ux-details-fullscreen-contract.mjs` – 26/26 PASS.
 - Regresszió: V0.9.22 41/41 PASS; V0.9.21 42/42 PASS; V0.9.20 24/24 PASS; V0.9.19 15/15 PASS; V0.9.18 26/26 PASS. A V0.9.24 contract 16/17, egyetlen szándékosan elavult assert: a `Metaadatok mentése` felirat V0.9.25-ben `Tervadatok mentése`, továbbra is a felső műveletsávban.
 - TypeScript PASS, `git diff --check` PASS, PROD DENY.
+
+## 2026-10-07 – DIMPRO Drive V0.9.26 – profilnév, fullscreen kattintás és fájlnéző pan/zoom
+
+- Javítva a saját DIMPRO-fiók és a projekt-hozzáférési kártya névmentése. A korábbi közvetlen `auth_users.display_name` írás a least-privilege runtime role miatt `permission denied for table auth_users` hibát adott.
+- Új AUTH migráció: `011_auth_v048_self_profile_display_name.sql`. A runtime nem kap általános `auth_users UPDATE` jogosultságot; helyette a szűk `auth_update_self_display_name(uuid,text)` SECURITY DEFINER RPC atomikusan módosítja az aktív központi user display nevét és annak elsődleges `auth_user_identities` rekordját. A művelet továbbra is auditált.
+- A profilnév mentése után a Drive identitáslista és az aktív munkatér frissül, így a Saját Drive és projekt fejléc név + e-mail megjelenítése azonnal szinkronba kerül. A projekt fejléc a központi Drive profilnevet fallbackként is használja, ha a projekt-tagsági név korábban az e-mail-címmel egyezett.
+- A `Mappa ZIP` a menüben és az ikonsoron is a `CsomagBOX / Drop` funkciócsoport része; a csomagcsoport erősebb vizuális keretet kapott.
+- Fullscreen táblázatban az egyszeri kattintás és dupla kattintás szétválasztása 320 ms-os click-arbitrációval működik. A kijelölés azonnali, a Részletek panel csak a késleltetés után nyílik. Dupla kattintás törli a függő panelnyitást és azonnal a fájlelőnézetet nyitja. Projekt és Saját Drive azonos logikát használ.
+- A `DIMPRO DRIVE · FÁJL MEGJELENÍTŐ` új Kéz/Pan gombot kapott. Bekapcsolva bal egérgombos húzással mozgatható a nagyított PDF vagy kép; pointer capture biztosítja a stabil húzást.
+- A viewer `Ctrl + egérgörgő` kezelése natív, `passive:false` wheel listenerre váltott. A viewer felett a böngésző oldalzoomja blokkolva van, és csak a megnyitott dokumentum zoomja változik.
+- V0.9.26 contract: `scripts/drive-v0926-profile-viewer-contract.mjs` – 24/24 PASS. TypeScript PASS, célzott ESLint 0 hiba, `git diff --check` PASS. PROD DENY.

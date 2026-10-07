@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   FileSearch2,
+  Hand,
   Image as ImageIcon,
   Loader2,
   Maximize2,
@@ -54,6 +55,7 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pdfRef = useRef<SharedPdfDocument | null>(null);
   const renderRunRef = useRef(0);
+  const panStateRef = useRef<{ pointerId: number; clientX: number; clientY: number; scrollLeft: number; scrollTop: number } | null>(null);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
@@ -64,6 +66,13 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
   const [fitWidth, setFitWidth] = useState(true);
   const [rotation, setRotation] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [panMode, setPanMode] = useState(false);
+  const [panning, setPanning] = useState(false);
+
+  const changeZoom = useCallback((delta: number) => {
+    setFitWidth(false);
+    setZoom((current) => clampZoom(current + delta));
+  }, []);
 
   const previewStatus = document.currentVersion?.status;
   const canPreview = kind !== "UNSUPPORTED"
@@ -113,6 +122,19 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
     observer.observe(target);
     return () => observer.disconnect();
   }, [compact]);
+
+  useEffect(() => {
+    const target = scrollRef.current;
+    if (!target) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      changeZoom(event.deltaY > 0 ? -0.1 : 0.1);
+    };
+    target.addEventListener("wheel", onWheel, { passive: false });
+    return () => target.removeEventListener("wheel", onWheel);
+  }, [changeZoom]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,8 +191,37 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
       .finally(() => { if (run === renderRunRef.current) setRendering(false); });
   }, [compact, containerWidth, fitWidth, kind, pageCount, pageNumber, rotation, zoom]);
 
-  function changeZoom(delta: number) {
-    setZoom((current) => clampZoom(current + delta));
+  function beginPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!panMode || event.button !== 0) return;
+    const target = scrollRef.current;
+    if (!target) return;
+    event.preventDefault();
+    target.setPointerCapture(event.pointerId);
+    panStateRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      scrollLeft: target.scrollLeft,
+      scrollTop: target.scrollTop,
+    };
+    setPanning(true);
+  }
+
+  function movePan(event: ReactPointerEvent<HTMLDivElement>) {
+    const state = panStateRef.current;
+    const target = scrollRef.current;
+    if (!state || !target || state.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    target.scrollLeft = state.scrollLeft - (event.clientX - state.clientX);
+    target.scrollTop = state.scrollTop - (event.clientY - state.clientY);
+  }
+
+  function endPan(event: ReactPointerEvent<HTMLDivElement>) {
+    const state = panStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    panStateRef.current = null;
+    setPanning(false);
+    try { scrollRef.current?.releasePointerCapture(event.pointerId); } catch {}
   }
 
   function fit() {
@@ -226,6 +277,7 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
         )}
         <div className={styles.driveViewerToolbarSpacer} />
         <div className={styles.driveViewerToolGroup}>
+          <button type="button" className={panMode ? styles.driveViewerToolActive : ""} onClick={() => setPanMode((current) => !current)} title={panMode ? "Kéz / pásztázás kikapcsolása" : "Kéz / pásztázás"} aria-pressed={panMode}><Hand size={13} /></button>
           <button type="button" onClick={() => changeZoom(-0.15)} title="Kicsinyítés"><ZoomOut size={13} /></button>
           <span className={styles.driveViewerZoom}>{Math.round(zoom * 100)}%</span>
           <button type="button" onClick={() => changeZoom(0.15)} title="Nagyítás"><ZoomIn size={13} /></button>
@@ -241,12 +293,11 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
 
       <div
         ref={scrollRef}
-        className={styles.driveViewerStage}
-        onWheel={(event) => {
-          if (!event.ctrlKey) return;
-          event.preventDefault();
-          changeZoom(event.deltaY > 0 ? -0.1 : 0.1);
-        }}
+        className={`${styles.driveViewerStage} ${panMode ? styles.driveViewerStagePan : ""} ${panning ? styles.driveViewerStagePanning : ""}`}
+        onPointerDown={beginPan}
+        onPointerMove={movePan}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
       >
         {(loading || rendering) && <div className={styles.driveViewerLoading}><Loader2 size={20} className={styles.spin} /><span>{loading ? "Előnézet betöltése…" : "Oldal renderelése…"}</span></div>}
         {kind === "PDF" && <canvas ref={canvasRef} className={styles.driveViewerCanvas} aria-label={`${document.name} PDF előnézet`} />}
@@ -257,11 +308,12 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
             src={preview.url}
             alt={`${document.name} előnézet`}
             style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `rotate(${rotation}deg)` }}
+            draggable={false}
             onError={() => setError("A kép előnézete nem tölthető be. Frissítsd az előnézeti URL-t.")}
           />
         )}
       </div>
-      {!compact && <div className={styles.driveViewerHint}>Ctrl + egérgörgő: zoom · a nézet görgetéssel pásztázható · az URL rövid élettartamú, projektjogosultsággal készül.</div>}
+      {!compact && <div className={styles.driveViewerHint}>Kéz mód: húzással pásztázás · Ctrl + egérgörgő: csak a fájl nagyítása · az URL rövid élettartamú, projektjogosultsággal készül.</div>}
     </div>
   );
 }

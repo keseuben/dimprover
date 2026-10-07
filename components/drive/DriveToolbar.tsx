@@ -177,10 +177,10 @@ export default function DriveToolbar({
             <button type="button" role="menuitem" disabled={!canDownloadSelected} onClick={() => runMenuAction(onDownloadSelected)}>
               <Download size={15} /><span>Letöltés</span>
             </button>
+            <div className={styles.toolbarMenuSeparator} />
             <button type="button" role="menuitem" disabled={!canDownloadFolder} onClick={() => runMenuAction(onDownloadFolder)}>
               <FolderDown size={15} /><span>Mappa ZIP</span>
             </button>
-            <div className={styles.toolbarMenuSeparator} />
             <button type="button" role="menuitem" disabled={!boxEnabled} onClick={() => runMenuAction(onToggleBoxShelf)}>
               <PackageCheck size={15} /><span>CsomagBOX{boxCount > 0 ? ` (${boxCount})` : ""}</span>
             </button>

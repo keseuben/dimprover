@@ -144,7 +144,7 @@ export async function updateAuthUserDisplayName(input: {
   reason?: string;
 }) {
   const displayName = typeof input.displayName === "string" ? input.displayName.trim() : null;
-  if (displayName !== null && (displayName.length < 2 || displayName.length > 160)) {
+  if (displayName === null || displayName.length < 2 || displayName.length > 160) {
     throw new DimproAuthError(
       "Display name is invalid.",
       "AUTH_PROFILE_DISPLAY_NAME_INVALID",
@@ -153,33 +153,12 @@ export async function updateAuthUserDisplayName(input: {
     );
   }
   return withAuthTransaction(async (client) => {
-    const current = await client.query<UserRow>(
-      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
-         FROM auth_users WHERE id=$1 AND status='ACTIVE' AND login_enabled=true LIMIT 1 FOR UPDATE`,
-      [input.userId],
-    );
-    const row = current.rows[0] || null;
-    if (!row) {
-      throw new DimproAuthError(
-        "Active auth user not found.",
-        "AUTH_PROFILE_USER_NOT_ACTIVE",
-        403,
-        "A fiók jelenleg nem módosítható.",
-      );
-    }
-    if ((row.display_name || null) === displayName) {
-      return { user: userFromRow(row), previousDisplayName: row.display_name, changed: false as const };
-    }
-    const updated = await client.query<UserRow>(
-      `UPDATE auth_users SET display_name=$2,updated_at=now() WHERE id=$1
-       RETURNING id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at`,
+    const updated = await client.query<UserRow & { previous_display_name: string | null }>(
+      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at,previous_display_name
+         FROM public.auth_update_self_display_name($1,$2)`,
       [input.userId, displayName],
     );
-    await client.query(
-      `UPDATE auth_user_identities SET display_name=$2,updated_at=now() WHERE user_id=$1 AND is_primary=true AND status<>'DISABLED'`,
-      [input.userId, displayName],
-    );
-    const next = updated.rows[0];
+    const next = updated.rows[0] || null;
     if (!next) {
       throw new DimproAuthError(
         "Auth profile update failed.",
@@ -190,16 +169,24 @@ export async function updateAuthUserDisplayName(input: {
     }
     await appendAudit(client, {
       eventType: "PROFILE_DISPLAY_NAME_CHANGED",
-      userId: row.id,
-      email: row.email_normalized,
+      userId: next.id,
+      email: next.email_normalized,
       method: "SELF_SERVICE",
       result: "SUCCESS",
       ip: input.ip,
       userAgent: input.userAgent,
       correlationId: input.correlationId,
-      metadata: { reason: input.reason || "USER_REQUEST", previousWasSet: Boolean(row.display_name), nextIsSet: Boolean(displayName) },
+      metadata: {
+        reason: input.reason || "USER_REQUEST",
+        previousWasSet: Boolean(next.previous_display_name),
+        nextIsSet: true,
+      },
     });
-    return { user: userFromRow(next), previousDisplayName: row.display_name, changed: true as const };
+    return {
+      user: userFromRow(next),
+      previousDisplayName: next.previous_display_name,
+      changed: next.previous_display_name !== displayName,
+    };
   });
 }
 
