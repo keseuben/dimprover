@@ -3767,3 +3767,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 6. Ellenőrizzük a Verziók panelt, a fájlelőnézetet, letöltést és current version pointert mindkét művelet után.
 7. Hibás kiterjesztésű fájllal ellenőrizzük a blokkolást.
 8. Párhuzamos/elhúzódó módosítás esetén ellenőrizzük az `expectedCurrentVersion` optimistic guardot.
+
+#### Drive V0.9.17 DEV aktiválás
+
+- Source `6c6ed5b986b74dd0a074f48c9e94574c3edf5146`; BUILD-02 PASS.
+- Build ID `grAxGcHquQBfT9vrmGGC4`; artifact SHA-256 `905aa10368ed8fa8a3dd6a120038e71e856def7e7f9118b43f8db9f561b174dd`.
+- Aktív DEV runtime `dimpro-drive-v0917-layout-version-6c6ed5b98-p3395`; előző V0.9.16 / 3394 online rollback.
+- Public smoke PASS; AUTH migrationCount 10; runtime restart 0; error log 0 byte.
+- PROD DENY.

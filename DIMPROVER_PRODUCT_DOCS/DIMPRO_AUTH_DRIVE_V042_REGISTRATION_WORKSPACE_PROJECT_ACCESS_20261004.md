@@ -672,3 +672,20 @@ A teljes ablakos táblázati mód különleges gombja a nézetválasztó sor leg
 A verzió/revízió műveletek cél-dokumentum megerősítése egységes: mindkét dialógus narancssárga figyelmeztető blokkban, nagy fájlnévvel mutatja, mely dokumentum kap új verziót vagy revíziót. Az `Új verzió` korábbi rejtett közvetlen fájlválasztó flow-ja megszűnt; a verzió is külön megerősítő dialóguson indul.
 
 Statikus ellenőrzések: V0.8.1 contract 26/26 PASS; V0.9.17 contract 18/18 PASS; TypeScript + célzott ESLint PASS. Fizikai V/R acceptance DEV mintafájlokkal estére ütemezve. PROD DENY.
+
+### Drive V0.9.17 DEV aktiválás – 2026-10-07
+
+- runtime source: `6c6ed5b986b74dd0a074f48c9e94574c3edf5146`;
+- BUILD-02 run: `drive-v0917-layout-version-6c6ed5b98-20261007-b1`;
+- build ID: `grAxGcHquQBfT9vrmGGC4`;
+- artifact SHA-256: `905aa10368ed8fa8a3dd6a120038e71e856def7e7f9118b43f8db9f561b174dd`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/6c6ed5b986b7`;
+- aktív DEV runtime: `dimpro-drive-v0917-layout-version-6c6ed5b98-p3395`;
+- publikus upstream: `127.0.0.1:3395`;
+- rollback runtime: `dimpro-drive-v0916-auth0610-lifecycle-d167992bc-p3394`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0917/dimpro-dev.conf.before-6c6ed5b98-20261007T131204`;
+- Nginx backup SHA-256: `2c9746f5162f591f7e1ac439ca7530de5e9017926e83be9309b685b9a6cfe04b`;
+- cutover: 2026-10-07 13:12:11 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO; AUTH readiness migrationCount 10; új runtime restart 0; error log 0 byte;
+- publikus header: `6c6ed5b98 DRIVE V0.9.17 AUTH V0.6.11 FOLDER+TABLE LAYOUT + VERSION/REVISION CONFIRMATION ... DEV`;
+- `X-DIMPRO-Production-Access: DENY`.
