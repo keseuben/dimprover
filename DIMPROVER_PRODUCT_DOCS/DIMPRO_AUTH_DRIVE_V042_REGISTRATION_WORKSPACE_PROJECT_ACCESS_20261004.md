@@ -699,3 +699,20 @@ Az alsó részletező vízszintes resize-handle-lel méretezhető. Minimum 150 p
 A táblázatok alapzoomja 90%. A nézetenként összecsukható oszlopok – ahol rendelkezésre állnak –: `Tervszám`, `Fájlnév`, `Feltöltő`, `Típus`. Dupla kattintás a fejlécen 28 px-es jelölőre csukja az oszlopot; a jelölő `+` gombbal és tooltipből visszanyitható. A preference browser-local és nézetenként perzisztens; oszlopszélesség persistence nem került bevezetésre.
 
 Statikus ellenőrzések: V0.9.18 26/26 PASS; sort/resize 36/36 PASS; full-table 18/18 + 28/28 PASS; V0.9.17 regresszió 18/18 PASS; TypeScript és célzott ESLint PASS. PROD DENY.
+
+### Drive V0.9.18 DEV aktiválás – 2026-10-07
+
+- runtime source: `776fb4031f1b2a76bdbf713f4bfc8da4d6ba5f71`;
+- BUILD-02 run: `drive-v0918-columns-bottom-776fb4031-20261007-b1`;
+- build ID: `TId3x5-qGlOsNXW0Gzxi-`;
+- artifact SHA-256: `3a748721a3dbdee78aef38079bd9dbe376fb13c2e2989039f701a4d813db8117`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/776fb4031f1b`;
+- aktív DEV runtime: `dimpro-drive-v0918-columns-bottom-776fb4031-p3396`;
+- publikus upstream: `127.0.0.1:3396`;
+- rollback runtime: `dimpro-drive-v0917-layout-version-6c6ed5b98-p3395`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0918/dimpro-dev.conf.before-776fb4031-20261007T141857`;
+- Nginx backup SHA-256: `f7b6387ec095e50f5b8b04567077e5c2bc6c729a136cfdff00049c1763034517`;
+- cutover: 2026-10-07 14:19:08 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO; AUTH readiness migrationCount 10; új runtime restart 0; error log 0 byte;
+- publikus header: `776fb4031 DRIVE V0.9.18 AUTH V0.6.11 DEFAULT FOLDER+TABLE + BOTTOM DETAILS + 90% ZOOM + PERSISTENT COMPACT COLUMNS ... DEV`;
+- `X-DIMPRO-Production-Access: DENY`.

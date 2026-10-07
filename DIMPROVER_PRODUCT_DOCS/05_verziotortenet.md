@@ -3795,3 +3795,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.9.18 contract 26/26 PASS; V0.7.6 sort/resize 36/36 PASS; full-table V0.4.6 18/18 PASS; V0.4.7 28/28 PASS; V0.9.17 regresszió 18/18 PASS; TypeScript + célzott ESLint PASS.
 - PROD DENY.
 - Teljes repository lint: a korábban ismert 25 error változatlanul csak az `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban van; a V0.9.18 által módosított fájlok között nincs lint error.
+
+#### Drive V0.9.18 DEV aktiválás
+
+- Source `776fb4031f1b2a76bdbf713f4bfc8da4d6ba5f71`; BUILD-02 PASS.
+- Build ID `TId3x5-qGlOsNXW0Gzxi-`; artifact SHA-256 `3a748721a3dbdee78aef38079bd9dbe376fb13c2e2989039f701a4d813db8117`.
+- Aktív DEV runtime `dimpro-drive-v0918-columns-bottom-776fb4031-p3396`; előző V0.9.17 / 3395 online rollback.
+- Nginx backup SHA-256 `f7b6387ec095e50f5b8b04567077e5c2bc6c729a136cfdff00049c1763034517`.
+- Public smoke PASS; AUTH migrationCount 10; runtime restart 0; error log 0 byte.
+- PROD DENY.
