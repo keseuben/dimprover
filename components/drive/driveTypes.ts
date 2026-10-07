@@ -315,7 +315,7 @@ export type DriveStorageQuota = {
   warningPercent: number;
   criticalPercent: number;
   hardLimit: boolean;
-  source: "PROJECT_DEFAULT" | "PLAN" | "OVERRIDE";
+  source: "PROJECT_DEFAULT" | "PERSONAL_DEFAULT" | "PLAN" | "OVERRIDE";
 };
 
 export type DriveHealth = {

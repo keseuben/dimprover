@@ -17,7 +17,7 @@ const schema=read("app/lib/drive-core/schema.ts");
 const databaseRepository=read("app/lib/drive-core/databaseRepository.ts");
 const build=read("components/drive/driveBuildInfo.ts");
 let pass=0; const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive UI remains 0.9.21 or successor",()=>assert.match(build,/"0\.9\.(?:21|22)"/));
+check("Drive UI remains 0.9.21 or successor",()=>assert.match(build,/"0\.9\.(?:21|22|23)"/));
 check("delete dependency repository reads project issue attachments",()=>{assert.match(depRepo,/project_issue_attachments/);assert.match(depRepo,/drive_document_id/)});
 check("delete dependency repository returns exact issue reference/title/status",()=>{assert.match(depRepo,/reference:/);assert.match(depRepo,/title:/);assert.match(depRepo,/status:/);assert.match(depRepo,/documentName:/)});
 check("delete dependency repository reads active formal issues",()=>{assert.match(depRepo,/drive_core_document_issues/);assert.match(depRepo,/\.eq\("status", "ISSUED"\)/)});

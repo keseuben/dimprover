@@ -229,7 +229,11 @@ export default function FloatingProjectBoard({
             <div className={styles.provisioningMeta}>
               <div><span>Tulajdon</span><strong>Személyes</strong></div>
               <div><span>Tárolási kör</span><strong>USER_ROOT</strong></div>
-              <div><span>Mappafa</span><strong>Következő fázis</strong></div>
+              <div><span>Mappafa</span><strong>Aktív</strong></div>
+            </div>
+            <div className={styles.projectStorageMeter} data-level={storageQuota && storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota && storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}>
+              <span className={styles.projectStorageLabel}>Tárhely {storageValue}</span>
+              <i><b style={{ width: `${storagePercent}%` }} /></i>
             </div>
           </section>
         )}
@@ -257,7 +261,7 @@ export default function FloatingProjectBoard({
           <button type="button" className={projectMode ? navClass("boxes") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("boxes")} title={projectMode ? "CsomagBOX" : "A személyes CsomagBOX későbbi fázis"}>
             <Box size={16} /> CsomagBOX
           </button>
-          <button type="button" className={projectMode && trashEnabled ? navClass("trash") : styles.boardNavDisabled} disabled={!projectMode || !trashEnabled} onClick={() => projectMode && trashEnabled && onNavigate("trash")} title={projectMode && trashEnabled ? "Lomtár" : projectMode ? "Nincs Lomtár-hozzáférés" : "Saját Drive Lomtár – későbbi fázis"}>
+          <button type="button" className={trashEnabled ? navClass("trash") : styles.boardNavDisabled} disabled={!trashEnabled} onClick={() => trashEnabled && onNavigate("trash")} title={trashEnabled ? "Lomtár" : "Nincs Lomtár-hozzáférés"}>
             <Archive size={16} /> Lomtár
           </button>
         </div>

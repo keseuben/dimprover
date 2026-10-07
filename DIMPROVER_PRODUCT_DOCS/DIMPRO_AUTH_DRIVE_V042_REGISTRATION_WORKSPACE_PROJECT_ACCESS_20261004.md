@@ -799,3 +799,13 @@ Drive UI target `0.9.22`; Drive Core target `0.9.4 / migrationCount 11`. V0.9.4 
 #### V0.9.22 DEV aktiválási státusz – 2026-10-07
 
 A V0.9.22 source `8e08ebec9aca89b1b9d10362604e7909e6daba66` DEV-en aktiválva. Build ID `LFZZhRApSnIF8yOlN7W8y`, artifact SHA-256 `ed61b2676b6bb4da7ca0749f340d48aaab16655cca5855129a466d93dd1a274b`. A Drive Core V0.9.4 migráció koordinált migration lock alatt sikeresen alkalmazva és visszaellenőrizve; backup `/srv/dimpro-dev/backups/drive-v094-folder-move-acl/20261007T181057Z`. Az aktív Drive runtime a 3400-as porton fut, a 3399-es V0.9.21 online rollback. Publikus DEV header V0.9.22 / PROD DENY. Bejelentkezett böngészős UX E2E még szükséges.
+
+### Drive V0.9.23 – Saját Drive tárhely- és Lomtár-szabályok – 2026-10-07
+
+A Saját Drive alapértelmezett hard kvótája 50 GiB. A kvóta személyhez tartozik, nem projekthez; az aktív és Lomtárba helyezett (`REMOVED`) személyes fájlhivatkozások mögötti egyedi content objectek egyaránt foglalják a keretet. A későbbi előfizetéses rendszer a `dimpro_personal_drive_storage_limits` táblában `PLAN` vagy `OVERRIDE` forrással adhat felhasználónként eltérő keretet.
+
+A személyes új tartalomreferencia kvótaellenőrzése DB-szinten sorosított, atomikus folyamat. A Lomtár külön személyes nézetként elérhető, visszaállítás támogatott; végleges fizikai purge ebben a verzióban szándékosan nincs bekapcsolva. A CsomagBOX-hoz kapcsolt fájl törlése továbbra is blokkolt, és a személyes fájltábla kék ponttal jelöli a CsomagBOX-tagságot.
+
+A személyes és projekt Drive fájlelőnézet egységesedik: dupla kattintás a jobb oldali nagy preview drawert nyitja. Böngésző fullscreen alatt a preview nem lépteti ki a felhasználót teljes képernyőből.
+
+Drive UI target `0.9.23`; Personal Drive Storage target `0.1.0`. DEV preflight PASS, PROD DENY.

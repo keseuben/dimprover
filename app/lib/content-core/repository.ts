@@ -3,6 +3,22 @@ import { DimproIdentityError } from "@/app/lib/identity-core/types";
 
 type DbError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
 
+export const PERSONAL_DRIVE_DEFAULT_QUOTA_BYTES = 50 * 1024 ** 3;
+
+export type PersonalDriveStorageQuota = {
+  projectId: "personal";
+  quotaBytes: number;
+  usedBytes: number;
+  reservedBytes: 0;
+  occupiedBytes: number;
+  remainingBytes: number;
+  usagePercent: number;
+  warningPercent: 80;
+  criticalPercent: 95;
+  hardLimit: boolean;
+  source: "PERSONAL_DEFAULT" | "PLAN" | "OVERRIDE";
+};
+
 type ContentObjectRow = {
   id: string;
   sha256: string;
@@ -204,6 +220,86 @@ export async function moveUserContentRef(input: { userId: string; refId: string;
 function dbError(message: string, error: DbError): never {
   throw new DimproIdentityError(message, error?.code || "CONTENT_CORE_DATABASE_ERROR", error?.code === "42501" ? 403 : 500);
 }
+
+export async function getPersonalDriveStorageQuota(input: { userId: string }): Promise<PersonalDriveStorageQuota> {
+  const db = getDimproIdentitySupabaseClient();
+  const [limitResult, refsResult] = await Promise.all([
+    db.from("dimpro_personal_drive_storage_limits")
+      .select("quota_bytes,hard_limit,source")
+      .eq("owner_user_id", input.userId)
+      .maybeSingle(),
+    db.from("dimpro_content_refs")
+      .select("content_object_id")
+      .eq("owner_type", "USER")
+      .eq("owner_user_id", input.userId)
+      .in("status", ["ACTIVE", "REMOVED"]),
+  ]);
+  if (limitResult.error && limitResult.error.code !== "42P01") dbError("A Saját Drive tárhelykerete nem olvasható.", limitResult.error);
+  if (refsResult.error) dbError("A Saját Drive tárhelyhasználata nem számítható ki.", refsResult.error);
+
+  const objectIds = [...new Set(((refsResult.data || []) as Array<{ content_object_id: string }>).map((row) => row.content_object_id).filter(Boolean))];
+  let usedBytes = 0;
+  if (objectIds.length) {
+    const objectsResult = await db.from("dimpro_content_objects")
+      .select("id,size_bytes")
+      .in("id", objectIds)
+      .eq("status", "ACTIVE");
+    if (objectsResult.error) dbError("A Saját Drive tárhelyobjektumai nem olvashatók.", objectsResult.error);
+    usedBytes = ((objectsResult.data || []) as Array<{ id: string; size_bytes: number }>).reduce((sum, row) => sum + Math.max(0, Number(row.size_bytes || 0)), 0);
+  }
+  const row = limitResult.data as { quota_bytes?: number; hard_limit?: boolean; source?: string } | null;
+  const quotaBytes = Math.max(1, Number(row?.quota_bytes || PERSONAL_DRIVE_DEFAULT_QUOTA_BYTES));
+  const occupiedBytes = usedBytes;
+  const source = row?.source === "PLAN" ? "PLAN" as const : row?.source === "OVERRIDE" ? "OVERRIDE" as const : "PERSONAL_DEFAULT" as const;
+  return {
+    projectId: "personal", quotaBytes, usedBytes, reservedBytes: 0, occupiedBytes,
+    remainingBytes: Math.max(0, quotaBytes - occupiedBytes),
+    usagePercent: quotaBytes > 0 ? Math.min(100, occupiedBytes / quotaBytes * 100) : 0,
+    warningPercent: 80, criticalPercent: 95, hardLimit: row?.hard_limit !== false, source,
+  };
+}
+
+export async function listUserRemovedContentItems(input: { userId: string; limit?: number }) {
+  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit || 200)));
+  const refsResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_refs")
+    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
+    .eq("owner_type", "USER")
+    .eq("owner_user_id", input.userId)
+    .eq("status", "REMOVED")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (refsResult.error) dbError("A Saját Drive Lomtár nem olvasható.", refsResult.error);
+  const refs = (refsResult.data || []) as ContentRefRow[];
+  if (!refs.length) return [];
+  const objectIds = [...new Set(refs.map((ref) => ref.content_object_id))];
+  const objectsResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_objects")
+    .select("id,sha256,size_bytes,mime_type,original_name,display_name,storage_provider,storage_bucket,storage_key,security_status,virus_scan_status,source_system,source_object_id,status,created_at,updated_at")
+    .in("id", objectIds)
+    .eq("status", "ACTIVE");
+  if (objectsResult.error) dbError("A Saját Drive Lomtár objektumai nem olvashatók.", objectsResult.error);
+  const objects = new Map(((objectsResult.data || []) as ContentObjectRow[]).map((object) => [object.id, object]));
+  return refs.flatMap((ref) => { const object = objects.get(ref.content_object_id); return object ? [{ ref, object }] : []; });
+}
+
+export async function restoreUserContentRefs(input: { userId: string; refIds: string[] }) {
+  const refIds = [...new Set(input.refIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!refIds.length) throw new DimproIdentityError("Legalább egy Lomtár-fájlt ki kell választani.", "PERSONAL_DRIVE_RESTORE_SELECTION_REQUIRED", 400);
+  if (refIds.length > 500) throw new DimproIdentityError("Egyszerre legfeljebb 500 Lomtár-fájl állítható vissza.", "PERSONAL_DRIVE_RESTORE_LIMIT", 400);
+  const result = await getDimproIdentitySupabaseClient().rpc("dimpro_personal_drive_restore_refs_atomic", {
+    p_owner_user_id: input.userId,
+    p_ref_ids: refIds,
+  });
+  if (result.error) {
+    const marker = [result.error.code, result.error.message, result.error.details, result.error.hint].filter(Boolean).join(" ");
+    if (marker.includes("PERSONAL_DRIVE_RESTORE_SCOPE_MISMATCH")) throw new DimproIdentityError("A kijelölt Lomtár-fájlok egy része már nem állítható vissza.", "PERSONAL_DRIVE_RESTORE_SCOPE_MISMATCH", 409);
+    if (marker.includes("PERSONAL_DRIVE_RESTORE_SELECTION_INVALID")) throw new DimproIdentityError("Egyszerre 1–500 Lomtár-fájl állítható vissza.", "PERSONAL_DRIVE_RESTORE_SELECTION_INVALID", 400);
+    dbError("A Saját Drive fájl nem állítható vissza.", result.error);
+  }
+  return result.data as { ok: true; restoredIds: string[]; restoredCount: number };
+}
+
 
 export async function getContentCoreReadiness() {
   const db = getDimproIdentitySupabaseClient();
@@ -423,37 +519,28 @@ export async function ensureUserContentRef(input: {
   sourceRef: string;
   displayName: string;
 }) {
-  const existing = await findUserContentRef({ userId: input.userId, sourceSystem: input.sourceSystem, sourceRef: input.sourceRef });
-  if (existing) {
-    if (existing.content_object_id !== input.contentObjectId) {
+  const result = await getDimproIdentitySupabaseClient().rpc("dimpro_personal_drive_ensure_ref_atomic", {
+    p_content_object_id: input.contentObjectId,
+    p_owner_user_id: input.userId,
+    p_source_system: input.sourceSystem,
+    p_source_ref: input.sourceRef,
+    p_display_name: input.displayName,
+    p_default_quota_bytes: PERSONAL_DRIVE_DEFAULT_QUOTA_BYTES,
+  });
+  if (result.error) {
+    const marker = [result.error.code, result.error.message, result.error.details, result.error.hint].filter(Boolean).join(" ");
+    if (marker.includes("PERSONAL_DRIVE_QUOTA_EXCEEDED")) {
+      throw new DimproIdentityError("A Saját Drive 50 GB-os tárhelykerete megtelt vagy ezzel a fájllal túllépésre kerülne.", "PERSONAL_DRIVE_QUOTA_EXCEEDED", 507);
+    }
+    if (marker.includes("CONTENT_CORE_USER_REF_OBJECT_MISMATCH")) {
       throw new DimproIdentityError("A Saját Drive forráshivatkozás másik tartalomobjektumhoz tartozik.", "CONTENT_CORE_USER_REF_OBJECT_MISMATCH", 409);
     }
-    return existing;
+    if (marker.includes("PERSONAL_DRIVE_CONTENT_OBJECT_NOT_FOUND")) {
+      throw new DimproIdentityError("A Saját Drive tartalomobjektum nem található.", "PERSONAL_DRIVE_CONTENT_OBJECT_NOT_FOUND", 404);
+    }
+    dbError("A Saját Drive referencia nem menthető.", result.error);
   }
-  const result = await getDimproIdentitySupabaseClient()
-    .from("dimpro_content_refs")
-    .insert({
-      content_object_id: input.contentObjectId,
-      owner_type: "USER",
-      owner_user_id: input.userId,
-      owner_project_id: null,
-      folder_id: null,
-      source_system: input.sourceSystem,
-      source_ref: input.sourceRef,
-      display_name: input.displayName,
-      retained_independently: true,
-      status: "ACTIVE",
-      created_by_user_id: input.userId,
-      updated_at: new Date().toISOString(),
-    })
-    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
-    .single();
-  if (!result.error) return result.data as ContentRefRow;
-  if (result.error.code === "23505") {
-    const raced = await findUserContentRef({ userId: input.userId, sourceSystem: input.sourceSystem, sourceRef: input.sourceRef });
-    if (raced && raced.content_object_id === input.contentObjectId) return raced;
-  }
-  dbError("A Saját Drive referencia nem menthető.", result.error);
+  return result.data as ContentRefRow;
 }
 
 export async function findProjectContentRef(input: { projectId: string; sourceSystem: string; sourceRef: string }) {

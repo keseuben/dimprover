@@ -12,8 +12,11 @@ import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
 import PersonalDriveDetailsPanel, { type PersonalDriveDetailsItem } from "./PersonalDriveDetailsPanel";
+import PersonalDrivePreviewDrawer from "./PersonalDrivePreviewDrawer";
+import PersonalDriveTrashPanel from "./PersonalDriveTrashPanel";
 import TableFullscreenBar from "./TableFullscreenBar";
-import type { DriveBox, DriveBoxLifecycleStatus, DriveCompareSeed, DriveDocument, DriveFolder, DriveLayoutMode, DriveViewMode, DriveVersion } from "./driveTypes";
+import type { DriveBox, DriveBoxLifecycleStatus, DriveCompareSeed, DriveDocument, DriveFolder, DriveLayoutMode, DriveStorageQuota, DriveViewMode, DriveVersion } from "./driveTypes";
+import type { DriveNavigationRequest } from "./driveBuildInfo";
 import type { DriveWorkspaceOption } from "./driveWorkspaceTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -36,6 +39,7 @@ type ContentPayload = { ok?: boolean; error?: string; items?: PersonalDriveItem[
 type FolderPayload = { ok?: boolean; ready?: boolean; error?: string; folders?: PersonalDriveFolder[] };
 type ProjectLinksPayload = { ok?: boolean; error?: string; linkedProjects?: DriveLinkedProjectItem[]; availableProjects?: DriveLinkedProjectItem[] };
 type BoxesPayload = { ok?: boolean; error?: string; boxes?: DriveBox[]; folderFeatureReady?: boolean; lifecycleFeatureReady?: boolean };
+type StoragePayload = { ok?: boolean; error?: string; storage?: DriveStorageQuota };
 
 type PersonalFolderRenameDialog = {
   folderId: string;
@@ -52,6 +56,9 @@ type Props = {
   selectedWorkspaceId: string;
   onWorkspaceChange: (workspaceId: string) => void;
   onManageIdentities?: () => void;
+  navigationRequest?: DriveNavigationRequest;
+  storageQuota?: DriveStorageQuota | null;
+  onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
 };
 
 function formatBytes(value: number) {
@@ -133,7 +140,7 @@ function itemToDocument(item: PersonalDriveItem): DriveDocument {
   };
 }
 
-export default function PersonalDriveWorkspace({ workspaceName, userEmail, workspaceOptions, selectedWorkspaceId, onWorkspaceChange, onManageIdentities }: Props) {
+export default function PersonalDriveWorkspace({ workspaceName, userEmail, workspaceOptions, selectedWorkspaceId, onWorkspaceChange, onManageIdentities, navigationRequest, storageQuota = null, onStorageQuotaChange }: Props) {
   const [items, setItems] = useState<PersonalDriveItem[]>([]);
   const [folders, setFolders] = useState<PersonalDriveFolder[]>([]);
   const [folderCoreReady, setFolderCoreReady] = useState(false);
@@ -145,7 +152,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [allFilesMode, setAllFilesMode] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [previewDocumentId, setPreviewDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [trashMode, setTrashMode] = useState(false);
   const [tableZoom, setTableZoom] = useState(90);
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
@@ -196,20 +205,23 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const load = useCallback(async () => {
     setError("");
     try {
-      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse] = await Promise.all([
+      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse, storageResponse] = await Promise.all([
         fetch("/api/drive/personal/content", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/folders", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/boxes", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/drive/personal/storage", { credentials: "same-origin", cache: "no-store" }),
       ]);
       const contentPayload = await contentResponse.json() as ContentPayload;
       const folderPayload = await folderResponse.json() as FolderPayload;
       const projectLinksPayload = await projectLinksResponse.json() as ProjectLinksPayload;
       const boxesPayload = await boxesResponse.json() as BoxesPayload;
+      const storagePayload = await storageResponse.json() as StoragePayload;
       if (!contentResponse.ok || !contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
       if (!folderResponse.ok || !folderPayload.ok) throw new Error(folderPayload.error || "A Saját Drive mappái nem tölthetők be.");
       if (!projectLinksResponse.ok || !projectLinksPayload.ok) throw new Error(projectLinksPayload.error || "A kapcsolt projektek nem tölthetők be.");
       if (!boxesResponse.ok || !boxesPayload.ok) throw new Error(boxesPayload.error || "A Saját Drive CsomagBOX nem tölthető be.");
+      if (!storageResponse.ok || !storagePayload.ok || !storagePayload.storage) throw new Error(storagePayload.error || "A Saját Drive tárhelyadata nem tölthető be.");
       const nextItems = contentPayload.items || [];
       const nextFolders = folderPayload.folders || [];
       setItems(nextItems);
@@ -219,6 +231,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       setAvailableProjects(projectLinksPayload.availableProjects || []);
       setBoxes(boxesPayload.boxes || []);
       setBoxCoreReady(true);
+      onStorageQuotaChange?.(storagePayload.storage);
       setSelectedFolderId((current) => current !== "all" && !nextFolders.some((folder) => folder.id === current) ? "all" : current);
       setSelectedDocumentId((current) => nextItems.some((item) => item.id === current) ? current : "");
       setSelectedDocumentIds((current) => current.filter((id) => nextItems.some((item) => item.id === id)));
@@ -239,7 +252,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         setBootLoaderComplete(false);
       }
     }
-  }, []);
+  }, [onStorageQuotaChange]);
 
   useEffect(() => {
     try {
@@ -289,6 +302,12 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     };
   }, [closeTableFullscreen, tableFullscreen]);
 
+  useEffect(() => {
+    if (!navigationRequest) return;
+    if (navigationRequest.target === "trash") { setTrashMode(true); setPreviewDocumentId(""); }
+    if (navigationRequest.target === "documents") setTrashMode(false);
+  }, [navigationRequest]);
+
   const driveFolders = useMemo(() => buildDriveFolders(folders), [folders]);
   const commanderFolders = useMemo<DriveFolder[]>(() => [
     { id: "all", parentId: null, name: "Saját Drive", displayName: "Saját Drive", path: "/", displayPath: "/", sortOrder: -1, securityState: "NORMAL" },
@@ -299,7 +318,18 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const folderById = useMemo(() => new Map(driveFolders.map((folder) => [folder.id, folder])), [driveFolders]);
   const selectedFolder = selectedFolderId === "all" ? null : folderById.get(selectedFolderId) || null;
   const selectedDocument = documents.find((document) => document.id === selectedDocumentId) || null;
+  const previewDocument = documents.find((document) => document.id === previewDocumentId) || null;
   const selectedItem = selectedDocumentId ? itemById.get(selectedDocumentId) || null : null;
+  const boxColorsByDocument = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const box of boxes) {
+      for (const item of box.items || []) {
+        const current = map[item.documentId] || [];
+        map[item.documentId] = [...current, "blue"];
+      }
+    }
+    return map;
+  }, [boxes]);
 
   const descendantFolderIds = useMemo(() => {
     if (selectedFolderId === "all") return new Set<string>();
@@ -555,6 +585,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       setItems((current) => current.filter((item) => !removed.has(item.id)));
       setSelectedDocumentIds((current) => current.filter((id) => !removed.has(id)));
       setSelectedDocumentId((current) => removed.has(current) ? "" : current);
+      setPreviewDocumentId((current) => removed.has(current) ? "" : current);
       setNotice(`${payload.removedCount || removed.size} fájl eltávolítva a Saját Drive-ból.`);
       await refreshBoxes();
     } catch (caught) {
@@ -616,16 +647,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     const link = document.createElement("a"); link.href = payload.download.url; link.rel = "noopener"; link.click();
   }, []);
 
-  const openDocument = useCallback(async (document: DriveDocument) => {
+  const openDocument = useCallback((document: DriveDocument) => {
     setSelectedDocumentId(document.id);
-    const previewWindow = window.open("", "_blank");
-    if (previewWindow) previewWindow.opener = null;
-    try {
-      const response = await fetch(`/api/drive/personal/content/${encodeURIComponent(document.id)}/preview`, { credentials: "same-origin", cache: "no-store" });
-      const payload = await response.json() as { ok?: boolean; error?: string; preview?: { url?: string } };
-      if (!response.ok || !payload.ok || !payload.preview?.url) throw new Error(payload.error || "Az előnézet nem nyitható meg.");
-      if (previewWindow) previewWindow.location.href = payload.preview.url; else window.open(payload.preview.url, "_blank", "noopener,noreferrer");
-    } catch (caught) { previewWindow?.close(); setError(caught instanceof Error ? caught.message : "Az előnézet nem nyitható meg."); }
+    setPreviewDocumentId(document.id);
   }, []);
 
   const browserClass = [styles.browser, layoutMode === "folders" ? styles.layoutFolders : "", layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
@@ -643,6 +667,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     onSelectDocument={(document) => setSelectedDocumentId(document.id)}
     onOpenDocument={(document) => void openDocument(document)}
     onRefresh={() => void load()}
+    boxColorsByDocument={boxColorsByDocument}
     metadataByDocument={{}}
     folders={driveFolders}
     selectedFolderId={selectedFolderId}
@@ -677,16 +702,30 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
 
   if (bootLoaderVisible) return <DrivePremiumLoader complete={bootLoaderComplete} workspaceType="PERSONAL" />;
 
+  if (trashMode) return (
+    <div className={styles.workspaceWrap}>
+      <header className={styles.projectHeader}>
+        <div className={styles.projectIdentity}><div className={styles.projectIcon}><HardDrive size={18} /></div><div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span>{storageQuota ? <span className={styles.projectStorageMeter} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"} title={`Foglalt: ${formatBytes(storageQuota.occupiedBytes)} · Keret: ${formatBytes(storageQuota.quotaBytes)}`}><span className={styles.projectStorageLabel}>Tárhely {formatBytes(storageQuota.occupiedBytes)} / {formatBytes(storageQuota.quotaBytes)}</span><i><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i></span> : null}</div></div></div>
+        {workspaceOptions.length > 0 && selectedWorkspaceId ? <div className={styles.workspaceSelectorWrap}><label className={styles.workspaceSelectorLabel} htmlFor="drive-personal-trash-workspace-selector">Munkatér</label><select id="drive-personal-trash-workspace-selector" className={styles.workspaceSelector} value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)}>{workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}{option.code ? " · " + option.code : ""}</option>)}</select></div> : null}
+        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>E-mail-címek és munkahelyek</span></div></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
+      </header>
+      <div className={styles.breadcrumb}><span>Saját Drive</span><span>› <strong>Lomtár</strong></span></div>
+      <PersonalDriveTrashPanel onChanged={load} />
+    </div>
+  );
+
   return (
     <div className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""}`}>
       <header className={styles.projectHeader}>
         <div className={styles.projectIdentity}>
           <div className={styles.projectIcon}><HardDrive size={18} /></div>
-          <div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span><span>{items.length} fájl · {formatBytes(totalBytes)}</span></div></div>
+          <div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span><span>{items.length} fájl</span>{storageQuota ? <span className={styles.projectStorageMeter} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"} title={`Foglalt: ${formatBytes(storageQuota.occupiedBytes)} · Keret: ${formatBytes(storageQuota.quotaBytes)}`}><span className={styles.projectStorageLabel}>Tárhely {formatBytes(storageQuota.occupiedBytes)} / {formatBytes(storageQuota.quotaBytes)}</span><i><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i></span> : <span>{formatBytes(totalBytes)}</span>}</div></div>
         </div>
         {workspaceOptions.length > 0 && selectedWorkspaceId ? <div className={styles.workspaceSelectorWrap}><label className={styles.workspaceSelectorLabel} htmlFor="drive-personal-workspace-selector">Munkatér</label><select id="drive-personal-workspace-selector" className={styles.workspaceSelector} value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)}>{workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}{option.code ? " · " + option.code : ""}</option>)}</select></div> : null}
         <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>E-mail-címek és munkahelyek</span></div></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
       </header>
+
+      <PersonalDrivePreviewDrawer document={previewDocument} open={Boolean(previewDocumentId && previewDocument)} onClose={() => setPreviewDocumentId("")} />
 
       {folderRenameDialog && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Mappa átnevezése">

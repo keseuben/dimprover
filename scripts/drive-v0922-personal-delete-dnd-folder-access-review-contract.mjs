@@ -15,7 +15,7 @@ const migration=read("supabase/migrations/20261007_drive_folder_move_v094.sql");
 const schema=read("app/lib/drive-core/schema.ts");
 const build=read("components/drive/driveBuildInfo.ts");
 let pass=0;const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive UI version is 0.9.22",()=>assert.match(build,/"0\.9\.22"/));
+check("Drive UI remains 0.9.22 or successor",()=>assert.match(build,/"0\.9\.(?:22|23)"/));
 check("Personal Drive grid enables owner delete",()=>{assert.match(personal,/canDelete\s*\n/);assert.match(personal,/onDeleteSelected=\{deletePersonalDocuments\}/)});
 check("Personal delete uses same-origin guarded bulk endpoint",()=>{assert.match(personalDeleteApi,/validateSameOriginMutation/);assert.match(personalDeleteApi,/resolvePersonalDriveContentActor/)});
 check("Personal delete verifies exact USER owner scope",()=>{assert.match(contentRepo,/owner_type", "USER"/);assert.match(contentRepo,/owner_user_id", input\.userId/)});

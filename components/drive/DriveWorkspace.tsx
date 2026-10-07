@@ -3193,7 +3193,7 @@ export default function DriveWorkspace({
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
-              onOpenDocument={(document) => { closeTableFullscreen(); setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
+              onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}

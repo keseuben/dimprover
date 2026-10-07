@@ -3921,3 +3921,20 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Publikus smoke: `/drive` 307 → központi AUTH start; `X-DIMPRO-Drive-Candidate` V0.9.22; `X-DIMPRO-Production-Access: DENY`; személyes bulk-delete auth nélkül 401; migration verify PASS.
 - A repository teljes lint baseline továbbra is 25 error / 107 warning más, korábban is hibás modulokban. A V0.9.22 által módosított fájlok célzott ESLintje 0 error, TypeScript PASS.
 - A felhasználói, bejelentkezett böngészős E2E még szükséges a Saját Drive törlés, single/double click preview, mappamegosztás, drag&drop és tervellenőrzési pipaszínek végleges UX-ellenőrzéséhez. PROD DENY.
+
+### Drive V0.9.23 – Saját Drive Lomtár + 50 GB kvóta + CsomagBOX-jelölés + fullscreen preview – 2026-10-07
+
+- A Saját Drive fájlsor letiltott Kedvencek csillagjánál megszűnt a téves `cursor: wait` állapot. Letiltott műveletnél normál `not-allowed` kurzor jelenik meg; nincs olyan háttérfolyamat, amely a korábbi sikertelen CsomagBOX-védett törlés után beragadna.
+- A Saját Drive CsomagBOX-tagság most átadásra kerül a közös FileGridPanelnek. A CsomagBOX-ban lévő személyes fájlok a fájlikon mellett kék pontjelölést kapnak; több CsomagBOX-tagság esetén a közös marker többes kapcsolatot is tud jelezni.
+- A Saját Drive Lomtár navigáció aktív. A személyes `REMOVED` fájlhivatkozások külön Lomtár nézetben listázhatók, és visszaállíthatók. A visszaállítás identity scope + same-origin védelem alatt, atomikus DB RPC-vel történik.
+- A személyes Lomtár első verziójában nincs végleges fizikai törlés. Ez szándékos: a későbbi purge külön retention/object-reference/S3 takarítási biztonsági folyamathoz kerül. A Lomtárban lévő fájlok addig beleszámítanak a tárhelykeretbe.
+- A Saját Drive alapértelmezett hard tárhelykerete `50 GiB`. A foglaltság minden egyedi személyes content objectet egyszer számol, az `ACTIVE` és `REMOVED` referenciákat egyaránt figyelembe véve.
+- Új `dimpro_personal_drive_storage_limits` tábla készül a későbbi csomag-/előfizetésalapú felülíráshoz. Forrás: `DEFAULT`, `PLAN` vagy `OVERRIDE`; felhasználói felületen az alapforrás `PERSONAL_DEFAULT`.
+- Az új személyes content-ref létrehozás atomikus `dimpro_personal_drive_ensure_ref_atomic` RPC-be kerül. Felhasználónként advisory lock mellett számolja a foglaltságot, hard limitnél `PERSONAL_DRIVE_QUOTA_EXCEEDED` hibával blokkol, és meglévő, azonos forrású `REMOVED` referencia esetén ugyanazt a sort állítja vissza új referencia helyett.
+- A személyes Lomtár visszaállítás atomikus `dimpro_personal_drive_restore_refs_atomic` RPC-t használ; csak a bejelentkezett tulajdonos `REMOVED` referenciái állíthatók vissza, részleges visszaállítás nem megengedett.
+- A Saját Drive fejlécében és a navigációs board Saját Drive kártyáján megjelenik a foglalt / teljes tárhely és a kihasználtsági sáv. A mappafa státusza a boardon már `Aktív`.
+- Saját Drive-ban a dupla kattintás most külön böngészőlap helyett ugyanazt a nagy, jobbról beúszó preview drawert használja. PDF és kép a meglévő rövid életű signed personal preview URL-en jelenik meg.
+- Projekt Drive teljesképernyős táblájában a dupla kattintás többé nem hívja meg a `closeTableFullscreen()` műveletet. A preview drawer `z-index: 2590`, a fullscreen tábla `2500`, ezért a fájlmegjelenítő a fullscreen nézeten belül, jobbról jelenik meg.
+- Drive UI target: `0.9.23`. Personal Drive Storage schema target: `0.1.0`, bootstrap `personal-drive-storage-v010-20261007`.
+- V0.9.23 contract: 30/30 PASS. V0.9.22: 41/41 PASS; V0.9.21: 42/42 PASS; V0.9.20: 24/24 PASS; V0.9.19: 15/15 PASS; V0.9.18: 26/26 PASS; ProjectGate rich view: 15/15 PASS. TypeScript PASS, érintett fájlok célzott ESLintje 0 error.
+- Personal Drive Storage V0.1.0 read-only DEV preflight PASS, migráció SHA-256 `2c4884b3b8ad0c216295777bbecba07880e70a80138c9e211a24edb11b75b943`. APPLY csak sikeres build után. PROD DENY.
