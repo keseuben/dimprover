@@ -14,11 +14,11 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log(`PASS ${name}`); };
 
-check("full table special button is between Split and Commander", () => {
+check("full table special button is the rightmost layout control", () => {
   const split = switcher.indexOf('value: "split"');
-  const table = switcher.indexOf("onToggleTableFullscreen &&");
-  const commander = switcher.indexOf("onChange(commanderMode.value)", table);
-  assert.ok(split >= 0 && table > split && commander > table);
+  const commander = switcher.indexOf("onChange(commanderMode.value)");
+  const table = switcher.indexOf("onToggleTableFullscreen &&", commander);
+  assert.ok(split >= 0 && commander > split && table > commander);
 });
 
 check("full table button has a dedicated visual class", () => assert.match(switcher, /layoutTableSpecial/));
@@ -33,10 +33,10 @@ check("fullscreen table has 70-150 percent zoom limits", () => {
   assert.match(zoomControls, /zoom <= 70/);
   assert.match(zoomControls, /zoom >= 150/);
 });
-check("zoom value resets to 100 percent", () => assert.match(zoomControls, /onZoomChange\(100\)/));
+check("zoom value resets to 90 percent", () => assert.match(zoomControls, /onZoomChange\(90\)/));
 check("zoom is applied to engineering and review tables", () => {
-  assert.match(grid, /reviewTable} style=\{\{ zoom: tableZoom \/ 100 \}\}/);
-  assert.match(grid, /fileTable} style=\{\{ zoom: tableZoom \/ 100 \}\}/);
+  assert.match(grid, /reviewTable} style=\{\{ zoom: tableZoom \/ 100,/);
+  assert.match(grid, /fileTable} style=\{\{ zoom: tableZoom \/ 100,/);
 });
 check("long-press drag pan waits before activation", () => assert.match(grid, /}, 180\)/));
 check("drag pan moves table horizontally", () => assert.match(grid, /scrollLeft = state\.startLeft - dx/));

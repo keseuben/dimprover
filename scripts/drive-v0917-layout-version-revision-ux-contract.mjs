@@ -16,13 +16,13 @@ check("folders mode appears before three panel mode",()=>assert.match(switcher,/
 check("folders mode label is explicit",()=>assert.match(switcher,/Mappák \+ dokumentumtár/));
 check("fullscreen table control is last in layout switcher",()=>{const commander=switcher.lastIndexOf("commanderMode.value");const table=switcher.lastIndexOf("layoutTableSpecial");assert.ok(table>commander)});
 check("fullscreen table button has stronger inactive styling",()=>{assert.match(css,/\.layoutTableSpecial \{[\s\S]*?background: linear-gradient/);assert.match(css,/box-shadow:[^;]*rgba\(87,48,159/)});
-check("folders layout is left tree plus document table",()=>assert.match(css,/\.layoutFolders \{ grid-template-columns: 260px minmax\(500px, 1fr\); \}/));
+check("folders layout keeps left tree plus document table columns",()=>assert.match(css,/\.layoutFolders \{[^}]*grid-template-columns: 260px minmax\(500px, 1fr\);/));
 check("main Drive shows folder tree in folders mode",()=>assert.match(drive,/folderHidden = layoutMode !== "three" && layoutMode !== "folders"/));
-check("main Drive hides details in folders mode",()=>assert.match(drive,/detailsHidden = layoutMode === "one" \|\| layoutMode === "folders"/));
+check("main Drive keeps folders details available",()=>assert.match(drive,/detailsHidden = layoutMode === "one"/));
 check("personal Drive persists folders layout mode",()=>assert.match(personal,/\["folders", "three", "two", "one", "split", "commander"\]/));
-check("personal Drive applies folders panel rules",()=>{assert.match(personal,/layoutMode === "folders" \? styles\.layoutFolders/);assert.match(personal,/detailsHidden = layoutMode === "one" \|\| layoutMode === "folders"/)});
-check("Project Gate applies folders panel rules",()=>{assert.match(gate,/engineeringLayoutMode === "folders" \? richStyles\.layoutFolders/);assert.match(gate,/engineeringDetailsHidden = engineeringLayoutMode === "one" \|\| engineeringLayoutMode === "folders"/)});
-check("detail actions escape folders-only view",()=>{assert.match(drive,/layoutMode === "folders"\) setLayoutMode\("three"\)/);assert.match(gate,/engineeringLayoutMode === "folders"\) setEngineeringLayoutMode\("three"\)/)});
+check("personal Drive applies folders panel rules",()=>{assert.match(personal,/layoutMode === "folders" \? styles\.layoutFolders/);assert.match(personal,/detailsHidden = layoutMode === "one"/)});
+check("Project Gate applies folders panel rules",()=>{assert.match(gate,/engineeringLayoutMode === "folders" \? richStyles\.layoutFolders/);assert.match(gate,/engineeringDetailsHidden = engineeringLayoutMode === "one"/)});
+check("detail actions stay inside folders view",()=>{assert.doesNotMatch(drive,/layoutMode === "folders"\) setLayoutMode\("three"\)/);assert.doesNotMatch(gate,/engineeringLayoutMode === "folders"\) setEngineeringLayoutMode\("three"\)/)});
 check("new version uses modal confirmation flow",()=>{assert.match(drive,/versionDialogOpen/);assert.match(drive,/aria-label="Új dokumentumverzió"/);assert.doesNotMatch(drive,/versionFileInputRef/)});
 check("version modal names selected target prominently",()=>assert.match(drive,/ezt a kijelölt fájlt fogjuk verziózni[\s\S]*?<strong>\{selectedDocument\.name\}<\/strong>/));
 check("revision modal names selected target prominently",()=>assert.match(drive,/ezt a kijelölt fájlt fogjuk revíziózni[\s\S]*?<strong>\{selectedDocument\.name\}<\/strong>/));

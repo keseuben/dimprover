@@ -382,11 +382,13 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [folderDiscipline, setFolderDiscipline] = useState("");
   const [folderTopic, setFolderTopic] = useState("");
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
-  const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
+  const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("folders");
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
   const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
-  const [tableZoom, setTableZoom] = useState(100);
+  const [tableZoom, setTableZoom] = useState(90);
+  const [engineeringFoldersDetailsHeight, setEngineeringFoldersDetailsHeight] = useState(280);
+  const engineeringBrowserRef = useRef<HTMLDivElement>(null);
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
@@ -613,7 +615,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     engineeringLayoutMode === "commander" ? richStyles.layoutCommander : "",
   ].filter(Boolean).join(" ");
   const engineeringFolderHidden = engineeringLayoutMode !== "three" && engineeringLayoutMode !== "folders";
-  const engineeringDetailsHidden = engineeringLayoutMode === "one" || engineeringLayoutMode === "folders";
+  const engineeringDetailsHidden = engineeringLayoutMode === "one";
   const engineeringTitle = selectedFolder?.name || "Teljes dokumentumtár";
 
   const businessFilterCounts = useMemo(() => {
@@ -664,7 +666,6 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setDetailsFocus({ documentId, field });
       setReviewFocus("");
       if (engineeringLayoutMode === "one") setEngineeringLayoutMode("two");
-      else if (engineeringLayoutMode === "folders") setEngineeringLayoutMode("three");
       return;
     }
     setDetailsFocus(null);
@@ -2282,7 +2283,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={toggleTableFullscreen} />
               </div>
             </header>
-            <div className={engineeringBrowserClass}>
+            <div ref={engineeringBrowserRef} className={engineeringBrowserClass} style={engineeringLayoutMode === "folders" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${engineeringFoldersDetailsHeight}px` } : undefined}>
               {engineeringLayoutMode === "commander" ? (
                 <CommanderPanel
                   folders={tree?.folders || []}
@@ -2342,6 +2343,26 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     canDelete={canDelete}
                     onDeleteSelected={deleteDocuments}
                   />
+                  {engineeringLayoutMode === "folders" ? <div
+                    className={`${richStyles.splitResizeHandle} ${richStyles.foldersDetailsResizeHandle}`}
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Részletező panel magasságának módosítása"
+                    title="Húzd fel vagy le · dupla kattintás: 50%"
+                    onDoubleClick={() => { const height = engineeringBrowserRef.current?.getBoundingClientRect().height || 660; setEngineeringFoldersDetailsHeight(Math.max(150, Math.floor((height - 10) / 2))); }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      const startY = event.clientY;
+                      const startHeight = engineeringFoldersDetailsHeight;
+                      const onMove = (moveEvent: PointerEvent) => {
+                        const height = engineeringBrowserRef.current?.getBoundingClientRect().height || 660;
+                        const max = Math.max(150, Math.floor((height - 10) / 2));
+                        setEngineeringFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + startY - moveEvent.clientY)));
+                      };
+                      const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+                      document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true });
+                    }}
+                  ><span /></div> : null}
                   <DetailsPanel
                     projectId={projectId}
                     document={selectedDocument}
@@ -2366,7 +2387,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onEnsureQr={ensureSelectedQr}
                     onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
                     onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
-                    responsiveClassName={`${richStyles.detailsResponsive} ${engineeringDetailsHidden ? richStyles.hiddenPanel : ""}`}
+                    responsiveClassName={`${richStyles.detailsResponsive} ${engineeringLayoutMode === "folders" ? `${richStyles.detailsSplitCard} ${richStyles.foldersDetailsCard}` : ""} ${engineeringDetailsHidden ? richStyles.hiddenPanel : ""}`}
                     focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : engineeringViewMode === "review" ? "review" : undefined}
                     reviewFocus={reviewFocus}
                     detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}

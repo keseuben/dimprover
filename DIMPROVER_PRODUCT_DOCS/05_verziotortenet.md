@@ -3775,3 +3775,23 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Aktív DEV runtime `dimpro-drive-v0917-layout-version-6c6ed5b98-p3395`; előző V0.9.16 / 3394 online rollback.
 - Public smoke PASS; AUTH migrationCount 10; runtime restart 0; error log 0 byte.
 - PROD DENY.
+
+### Drive V0.9.18 – 90% alapzoom + összecsukható oszlopok + alsó részletező – 2026-10-07
+
+- A projekt Drive, Saját Drive és Projektkapu mérnöki táblázat alapnagyítása 90%.
+- A zoomérték gombra kattintva a visszaállítási érték is 90%.
+- A `Mappák + dokumentumtár` lett az alapértelmezett Drive layout.
+- Saját Drive layout persistence új kulcsa `dimpro-drive-personal-layout-v2`; az új alapértelmezett egyszer érvényesül, ezután a felhasználó saját layout-választása megmarad.
+- A `Mappák + dokumentumtár` felső sora továbbra is 260 px széles mappafa + rugalmas dokumentumtár.
+- A két felső panel alatt megjelenik ugyanaz a részletező tartalom, amely a meglévő Details panelben elérhető.
+- Az alsó részletező előtt vízszintes resize-handle van. Húzással 150 px minimum és a rendelkezésre álló munkaterület legfeljebb kb. 50%-a között méretezhető; dupla kattintás 50%-ra állítja.
+- A részletező a `folders` nézetben teljes szélességű alsó panel; részletmező megnyitása már nem vált automatikusan 3 paneles nézetre.
+- A viselkedés projekt Drive, Saját Drive és Projektkapu mérnöki nézetben egységes.
+- Ideiglenesen összecsukható oszlopok: Fájlnév, Feltöltő, Típus, Tervszám – azokban a nézetekben, ahol az adott oszlop létezik.
+- Összecsukás: dupla kattintás az oszlopfejlécen.
+- Az összecsukott oszlop helyén 28 px széles, sötétebb fejlécjelölő marad `+` visszaállító ikonnal és tooltipben az oszlop nevével.
+- Az elrejtési állapot nézetenként böngésző `localStorage`-ban megmarad (`dimpro-drive-table-hidden-columns-v1`), így új belépéskor sem áll automatikusan vissza.
+- Az oszlopszélességek továbbra is session-only állapotúak; csak az összecsukott/kinyitott preferencia perzisztens.
+- V0.9.18 contract 26/26 PASS; V0.7.6 sort/resize 36/36 PASS; full-table V0.4.6 18/18 PASS; V0.4.7 28/28 PASS; V0.9.17 regresszió 18/18 PASS; TypeScript + célzott ESLint PASS.
+- PROD DENY.
+- Teljes repository lint: a korábban ismert 25 error változatlanul csak az `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban van; a V0.9.18 által módosított fájlok között nincs lint error.

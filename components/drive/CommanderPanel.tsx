@@ -219,7 +219,7 @@ export default function CommanderPanel({
   onSelectDocument,
   onOpenDocument,
   onMoveDocument,
-  tableZoom = 100,
+  tableZoom = 90,
   selectedDocumentIds = [],
   onSelectionChange,
   canDelete = false,

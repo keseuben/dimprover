@@ -67,7 +67,7 @@ export default function DriveToolbar({
   onLayoutModeChange,
   tableFullscreen = false,
   onToggleTableFullscreen,
-  tableZoom = 100,
+  tableZoom = 90,
   onTableZoomChange,
   canWrite,
   canUpload = canWrite,

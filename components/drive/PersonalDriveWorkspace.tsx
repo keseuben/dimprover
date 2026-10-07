@@ -140,17 +140,18 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [viewMode, setViewMode] = useState<DriveViewMode>("simple");
-  const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("three");
+  const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("folders");
   const [query, setQuery] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [allFilesMode, setAllFilesMode] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [tableZoom, setTableZoom] = useState(100);
+  const [tableZoom, setTableZoom] = useState(90);
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
   const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(330);
+  const [foldersDetailsHeight, setFoldersDetailsHeight] = useState(280);
   const [newFolderEditorOpen, setNewFolderEditorOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderSaving, setNewFolderSaving] = useState(false);
@@ -243,7 +244,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   useEffect(() => {
     try {
       const storedView = window.localStorage.getItem("dimpro-drive-personal-view");
-      const storedLayout = window.localStorage.getItem("dimpro-drive-personal-layout");
+      const storedLayout = window.localStorage.getItem("dimpro-drive-personal-layout-v2");
       const storedBoxOpen = window.localStorage.getItem("dimpro-drive-personal-box-open");
       const storedBoxHeight = Number(window.localStorage.getItem("dimpro-drive-personal-box-height") || "");
       if (storedView === "simple" || storedView === "engineering") setViewMode(storedView);
@@ -254,7 +255,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   }, []);
 
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-view", viewMode); } catch {} }, [viewMode]);
-  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout", layoutMode); } catch {} }, [layoutMode]);
+  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout-v2", layoutMode); } catch {} }, [layoutMode]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-open", boxShelfOpen ? "1" : "0"); } catch {} }, [boxShelfOpen]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-height", String(Math.round(boxShelfHeight))); } catch {} }, [boxShelfHeight]);
 
@@ -540,7 +541,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
 
   const browserClass = [styles.browser, layoutMode === "folders" ? styles.layoutFolders : "", layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
   const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
-  const detailsHidden = layoutMode === "one" || layoutMode === "folders";
+  const detailsHidden = layoutMode === "one";
 
   const grid = () => <FileGridPanel
     title={title}
@@ -704,14 +705,14 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
       </section> : null}
 
-      <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}>
+      <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : layoutMode === "folders" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` } : undefined}>
         {compareActive ? (
           <CompareWorkspace projectId="personal" workspaceType="PERSONAL" documents={documents} boxes={boxes} seedItems={compareSeedItems} onClose={() => setCompareActive(false)} />
         ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete={false} /> : <>
           <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
-          {layoutMode === "split" ? <div className={styles.splitResizeHandle} role="separator" aria-orientation="horizontal" onDoubleClick={() => setSplitDetailsHeight(Math.max(250, Math.round((browserRef.current?.getBoundingClientRect().height || 660) / 2)))} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + startY - moveEvent.clientY))); const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
-          <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
+          {layoutMode === "split" || layoutMode === "folders" ? <div className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`} role="separator" aria-orientation="horizontal" onDoubleClick={() => { const height = browserRef.current?.getBoundingClientRect().height || 660; const half = Math.max(150, Math.floor((height - 10) / 2)); if (layoutMode === "folders") setFoldersDetailsHeight(half); else setSplitDetailsHeight(Math.max(250, half)); }} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => { const delta = startY - moveEvent.clientY; if (layoutMode === "folders") { const height = browserRef.current?.getBoundingClientRect().height || 660; const max = Math.max(150, Math.floor((height - 10) / 2)); setFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + delta))); } else setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + delta))); }; const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
+          <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
         </>}
       </div>
 

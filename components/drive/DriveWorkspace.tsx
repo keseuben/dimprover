@@ -227,12 +227,13 @@ export default function DriveWorkspace({
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
+  const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("folders");
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
   const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
-  const [tableZoom, setTableZoom] = useState(100);
+  const [tableZoom, setTableZoom] = useState(90);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
+  const [foldersDetailsHeight, setFoldersDetailsHeight] = useState(280);
   const [boxShelfHeight, setBoxShelfHeight] = useState(154);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
@@ -273,6 +274,7 @@ export default function DriveWorkspace({
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
+  const foldersDetailsInitializedRef = useRef(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
   const dragDepthRef = useRef(0);
 
@@ -327,6 +329,18 @@ export default function DriveWorkspace({
       const halfDetailsHeight = Math.round((workspaceHeight - resizeHandleHeight) / 2);
       setSplitDetailsHeight(Math.max(minDetailsHeight, Math.min(maxDetailsHeight, halfDetailsHeight)));
       splitDetailsInitializedRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [layoutMode]);
+
+  useEffect(() => {
+    if (layoutMode !== "folders" || foldersDetailsInitializedRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const measuredHeight = browserRef.current?.getBoundingClientRect().height || 0;
+      const workspaceHeight = measuredHeight > 0 ? measuredHeight : Math.max(500, window.innerHeight - 260);
+      const maxDetailsHeight = Math.max(180, Math.floor((workspaceHeight - 10) / 2));
+      setFoldersDetailsHeight(Math.max(180, Math.min(maxDetailsHeight, 280)));
+      foldersDetailsInitializedRef.current = true;
     });
     return () => window.cancelAnimationFrame(frame);
   }, [layoutMode]);
@@ -1711,7 +1725,6 @@ export default function DriveWorkspace({
       setDetailsFocus({ documentId: document.id, field });
       setReviewFocus("");
       if (layoutMode === "one") setLayoutMode("two");
-      else if (layoutMode === "folders") setLayoutMode("three");
       return;
     }
     setDetailsFocus(null);
@@ -2225,7 +2238,7 @@ export default function DriveWorkspace({
   ].filter(Boolean).join(" ");
 
   const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
-  const detailsHidden = layoutMode === "one" || layoutMode === "folders";
+  const detailsHidden = layoutMode === "one";
   const titleBase = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
   const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
@@ -2233,7 +2246,7 @@ export default function DriveWorkspace({
   return (
 
 <div
-  className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}
+  className={`${styles.workspaceWrap} ${layoutMode === "split" || layoutMode === "folders" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}
       style={boxShelfOpen ? { paddingBottom: `${boxShelfHeight + 36}px` } : undefined}
   onDragEnter={handleExternalDragEnter}
   onDragOver={handleExternalDragOver}
@@ -2996,7 +3009,11 @@ export default function DriveWorkspace({
       <div
         ref={browserRef}
         className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}
-        style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}
+        style={layoutMode === "split"
+          ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` }
+          : layoutMode === "folders"
+            ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` }
+            : undefined}
       >
         {compareActive ? (
           <CompareWorkspace
@@ -3084,9 +3101,9 @@ export default function DriveWorkspace({
               onSaveNewFolder={() => void saveNewFolder()}
               onCancelNewFolder={cancelNewFolderEditor}
             />
-            {layoutMode === "split" && (
+            {(layoutMode === "split" || layoutMode === "folders") && (
               <div
-                className={styles.splitResizeHandle}
+                className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`}
                 role="separator"
                 aria-orientation="horizontal"
                 aria-label="Részletező panel magasságának módosítása"
@@ -3099,16 +3116,27 @@ export default function DriveWorkspace({
                   const resizeHandleHeight = 10;
                   const maxDetailsHeight = Math.max(minDetailsHeight, workspaceHeight - minMainHeight - resizeHandleHeight);
                   const halfDetailsHeight = Math.round((workspaceHeight - resizeHandleHeight) / 2);
-                  setSplitDetailsHeight(Math.max(minDetailsHeight, Math.min(maxDetailsHeight, halfDetailsHeight)));
+                  if (layoutMode === "folders") {
+                    setFoldersDetailsHeight(Math.max(180, halfDetailsHeight));
+                  } else {
+                    setSplitDetailsHeight(Math.max(minDetailsHeight, Math.min(maxDetailsHeight, halfDetailsHeight)));
+                  }
                 }}
                 onPointerDown={(event) => {
                   event.preventDefault();
                   const startY = event.clientY;
-                  const startHeight = splitDetailsHeight;
+                  const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight;
                   const onMove = (moveEvent: PointerEvent) => {
                     const delta = startY - moveEvent.clientY;
-                    const maxHeight = Math.max(300, window.innerHeight - 300);
-                    setSplitDetailsHeight(Math.max(250, Math.min(maxHeight, startHeight + delta)));
+                    if (layoutMode === "folders") {
+                      const measuredHeight = browserRef.current?.getBoundingClientRect().height || 0;
+                      const workspaceHeight = measuredHeight > 0 ? measuredHeight : Math.max(500, window.innerHeight - 260);
+                      const maxHeight = Math.max(180, Math.floor((workspaceHeight - 10) / 2));
+                      setFoldersDetailsHeight(Math.max(150, Math.min(maxHeight, startHeight + delta)));
+                    } else {
+                      const maxHeight = Math.max(300, window.innerHeight - 300);
+                      setSplitDetailsHeight(Math.max(250, Math.min(maxHeight, startHeight + delta)));
+                    }
                   };
                   const onUp = () => {
                     document.body.style.cursor = "";
@@ -3151,7 +3179,7 @@ export default function DriveWorkspace({
               onEnsureQr={ensureQr}
               onDownload={downloadSelected}
               onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
-              responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
+              responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
               focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}
               detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}

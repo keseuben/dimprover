@@ -256,7 +256,7 @@
 .breadcrumb strong { color: #1167ee; }
 
 .browser { min-height: 430px; flex: 1 1 auto; display: grid; grid-template-columns: 260px minmax(500px, 1fr) 360px; background: white; border-bottom: 1px solid var(--line); }
-.layoutFolders { grid-template-columns: 260px minmax(500px, 1fr); }
+.layoutFolders { grid-template-columns: 260px minmax(500px, 1fr); grid-template-rows: minmax(220px, 1fr) 10px 280px; min-height: 0; overflow: hidden; }
 .layoutTwo { grid-template-columns: minmax(520px, 1fr) 380px; }
 .layoutOne { grid-template-columns: minmax(0, 1fr); }
 .layoutSplit { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(280px,1fr) 280px; }
@@ -384,6 +384,38 @@
 }
 .columnResizeHandle:hover::after,
 .columnResizeHandle:active::after { background: #4f8fd1; }
+
+.collapsedColumnHeader {
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  padding: 0 !important;
+  background: #dbe4ec !important;
+  border-left: 1px solid #c7d3de;
+  border-right: 1px solid #c7d3de;
+  text-align: center !important;
+}
+.collapsedColumnRestore {
+  width: 100%;
+  height: 100%;
+  min-height: 31px;
+  border: 0;
+  background: transparent;
+  color: #40566c;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+.collapsedColumnRestore:hover { background: #cbd8e3; color: #1765c7; }
+.collapsedColumnRestore:focus-visible { outline: 2px solid #6da2de; outline-offset: -2px; }
+.collapsedColumnCell {
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  padding: 0 !important;
+  background-image: linear-gradient(90deg, transparent 0, transparent 48%, rgba(108,128,148,.10) 49%, rgba(108,128,148,.10) 51%, transparent 52%, transparent 100%);
+}
 .fileTable td { height: 34px; border-bottom: 1px solid #eef2f6; padding: 0 7px; color: #33465d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fileRow { cursor: pointer; }
 .fileRow:hover td { background: #f8fbfe; }
@@ -2248,6 +2280,11 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.layoutFolders .folderPanelResponsive { grid-column: 1; grid-row: 1; min-height: 0; }
+.layoutFolders .filePanel { grid-column: 2; grid-row: 1; min-height: 0; overflow: hidden; }
+.foldersDetailsResizeHandle { grid-column: 1 / -1; grid-row: 2; }
+.foldersDetailsCard { grid-column: 1 / -1; grid-row: 3; min-height: 0; overflow: hidden; border-top: 0; }
 .splitResizeHandle {
   position: relative;
   min-height: 10px;
@@ -5685,3 +5722,12 @@
 :global([data-theme="dark"]) .versionTargetWarning span { color: #f1b969; }
 :global(html[data-drive-theme="dark"]) .versionTargetWarning strong,
 :global([data-theme="dark"]) .versionTargetWarning strong { color: #ffd69e; }
+
+:global(html[data-drive-theme="dark"]) .collapsedColumnHeader,
+:global([data-theme="dark"]) .collapsedColumnHeader { background: #26394a !important; border-color: #344c60; }
+:global(html[data-drive-theme="dark"]) .collapsedColumnRestore,
+:global([data-theme="dark"]) .collapsedColumnRestore { color: #a9bed0; }
+:global(html[data-drive-theme="dark"]) .collapsedColumnRestore:hover,
+:global([data-theme="dark"]) .collapsedColumnRestore:hover { background: #31495e; color: #8fc1ff; }
+:global(html[data-drive-theme="dark"]) .collapsedColumnCell,
+:global([data-theme="dark"]) .collapsedColumnCell { background-image: linear-gradient(90deg, transparent 0, transparent 48%, rgba(154,178,198,.12) 49%, rgba(154,178,198,.12) 51%, transparent 52%, transparent 100%); }

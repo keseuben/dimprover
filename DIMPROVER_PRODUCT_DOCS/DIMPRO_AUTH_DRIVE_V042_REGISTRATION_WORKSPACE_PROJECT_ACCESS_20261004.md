@@ -689,3 +689,13 @@ Statikus ellenőrzések: V0.8.1 contract 26/26 PASS; V0.9.17 contract 18/18 PASS
 - public smoke: `/drive` 307 central SSO; AUTH readiness migrationCount 10; új runtime restart 0; error log 0 byte;
 - publikus header: `6c6ed5b98 DRIVE V0.9.17 AUTH V0.6.11 FOLDER+TABLE LAYOUT + VERSION/REVISION CONFIRMATION ... DEV`;
 - `X-DIMPRO-Production-Access: DENY`.
+
+### Drive V0.9.18 – alaplayout, alsó részletező és oszloppreferenciák – 2026-10-07
+
+A Drive alapértelmezett munkanézete `Mappák + dokumentumtár`. A felső munkatérben bal oldalon a mappafa, középen a dokumentumtár látható; a kiválasztott dokumentum részletezője ugyanazon Details komponenssel a két panel alatt, teljes szélességben jelenik meg.
+
+Az alsó részletező vízszintes resize-handle-lel méretezhető. Minimum 150 px, maximum a rendelkezésre álló munkaterület kb. fele; dupla kattintás a fogantyún 50%-ra állítja. A részletműveletek nem kényszerítik át a felhasználót 3 paneles layoutba.
+
+A táblázatok alapzoomja 90%. A nézetenként összecsukható oszlopok – ahol rendelkezésre állnak –: `Tervszám`, `Fájlnév`, `Feltöltő`, `Típus`. Dupla kattintás a fejlécen 28 px-es jelölőre csukja az oszlopot; a jelölő `+` gombbal és tooltipből visszanyitható. A preference browser-local és nézetenként perzisztens; oszlopszélesség persistence nem került bevezetésre.
+
+Statikus ellenőrzések: V0.9.18 26/26 PASS; sort/resize 36/36 PASS; full-table 18/18 + 28/28 PASS; V0.9.17 regresszió 18/18 PASS; TypeScript és célzott ESLint PASS. PROD DENY.

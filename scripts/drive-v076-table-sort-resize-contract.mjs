@@ -71,9 +71,9 @@ check("independent simple engineering review width state exists", () => {
   assert.match(grid, /engineering: createColumnWidthMap\(ENGINEERING_COLUMNS\)/);
   assert.match(grid, /review: createColumnWidthMap\(REVIEW_COLUMNS\)/);
 });
-check("Simple colgroup uses width state", () => assert.match(grid, /columnWidths\.simple\[column\.id\]/));
-check("Engineering colgroup uses width state", () => assert.match(grid, /columnWidths\.engineering\[column\.id\]/));
-check("Review colgroup uses width state", () => assert.match(grid, /columnWidths\.review\[column\.id\]/));
+check("Simple colgroup uses effective width state", () => assert.match(grid, /columnDisplayWidth\("simple", column\)/));
+check("Engineering colgroup uses effective width state", () => assert.match(grid, /columnDisplayWidth\("engineering", column\)/));
+check("Review colgroup uses effective width state", () => assert.match(grid, /columnDisplayWidth\("review", column\)/));
 check("resize handler prevents default", () => {
   const start = grid.indexOf("const startColumnResize");
   const end = grid.indexOf("const clearPanTimer", start);
@@ -110,13 +110,14 @@ check("Review grouped header colSpans stay unchanged", () => {
   assert.match(grid, /<th colSpan=\{3\} className=\{styles\.reviewGroupCustomer\}>/);
 });
 check("Review inline folder colSpan stays 22", () => assert.match(grid, /<InlineNewFolderRow[\s\S]*?colSpan=\{22\}/));
-check("Simple inline folder colSpan stays 11", () => assert.match(grid, /<InlineNewFolderRow[\s\S]*?colSpan=\{11\}/));
+check("Simple inline folder colSpan stays 12", () => assert.match(grid, /<InlineNewFolderRow[\s\S]*?colSpan=\{12\}/));
 check("Engineering inline folder colSpan stays 15", () => assert.match(grid, /<InlineNewFolderRow[\s\S]*?colSpan=\{15\}/));
 check("no column reorder implementation exists", () => {
   assert.doesNotMatch(grid, /columnReorder|reorderColumn|draggableColumn|onColumnDrop/);
 });
-check("no width persistence is introduced", () => {
-  assert.doesNotMatch(grid, /localStorage|sessionStorage|columnWidths.*fetch|fetch.*columnWidths/);
+check("column widths remain session-only while hidden-column preference may persist", () => {
+  assert.doesNotMatch(grid, /localStorage[^\n]*columnWidths|sessionStorage[^\n]*columnWidths|columnWidths.*fetch|fetch.*columnWidths/);
+  assert.match(grid, /HIDDEN_COLUMNS_STORAGE_KEY/);
 });
 check("V0.7.6 UI has no Projectkapu implementation dependency", () => {
   assert.doesNotMatch(grid, /from ["'][^"']*project-gate|components\/project-gate/);
