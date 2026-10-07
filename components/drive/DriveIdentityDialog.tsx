@@ -20,6 +20,7 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
   const [identityType, setIdentityType] = useState<DriveUserIdentityType>("WORK");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [profileDisplayName, setProfileDisplayName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [codes, setCodes] = useState<Record<string, string>>({});
   const onChangedRef = useRef(onChanged);
@@ -37,8 +38,10 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
       const payload = await response.json().catch(() => ({})) as DriveUserIdentitiesPayload;
       if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "Az e-mail-identitások nem tölthetők be.");
       const next = payload.identities || [];
+      const primaryIdentity = next.find((item) => item.isPrimary) || null;
       setIdentities(next);
-      setDisplayName((current) => current || next.find((item) => item.isPrimary)?.displayName || "");
+      setProfileDisplayName(primaryIdentity?.displayName || "");
+      setDisplayName((current) => current || primaryIdentity?.displayName || "");
       onChangedRef.current?.(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Az e-mail-identitások nem tölthetők be.");
@@ -48,6 +51,34 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
   }, [open]);
 
   useEffect(() => { void load(); }, [load]);
+
+  async function saveProfileDisplayName() {
+    const nextName = profileDisplayName.trim();
+    if (nextName.length < 2 || nextName.length > 160) {
+      setError("A név legalább 2, legfeljebb 160 karakter lehet.");
+      return;
+    }
+    setBusy("profile-name");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/dimpro-auth/profile", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ displayName: nextName }),
+      });
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "A név módosítása nem sikerült.");
+      setNotice("A DIMPRO-fiók neve frissítve.");
+      setDisplayName(nextName);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A név módosítása nem sikerült.");
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function addIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,6 +201,30 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
         </header>
 
         <div className={styles.body}>
+          <section className={styles.profileSection}>
+            <div className={styles.sectionHeading}>
+              <div><strong>Saját DIMPRO-fiók</strong><span>Ez a név jelenik meg a Saját Drive fejlécében és a projekt-tagságokban.</span></div>
+              <UserRound size={17} />
+            </div>
+            <div className={styles.profileNameRow}>
+              <label>
+                Megjelenítési név
+                <input
+                  value={profileDisplayName}
+                  minLength={2}
+                  maxLength={160}
+                  disabled={busy !== ""}
+                  onChange={(event) => setProfileDisplayName(event.target.value)}
+                  placeholder="Teljes név"
+                  autoComplete="name"
+                />
+              </label>
+              <button type="button" disabled={busy !== "" || profileDisplayName.trim().length < 2} onClick={() => void saveProfileDisplayName()}>
+                {busy === "profile-name" ? <Loader2 size={13} className={styles.spin} /> : <BadgeCheck size={13} />} Mentés
+              </button>
+            </div>
+          </section>
+
           <section className={styles.listSection}>
             <div className={styles.sectionHeading}><div><strong>Kapcsolt identitások</strong><span>{identities.filter((item) => item.status === "VERIFIED").length} hitelesített</span></div><button type="button" onClick={() => void load()} disabled={loading || busy !== ""}><RefreshCw size={13} className={loading ? styles.spin : ""} /> Frissítés</button></div>
             {loading && !identities.length ? <div className={styles.empty}><Loader2 size={18} className={styles.spin} /> Betöltés…</div> : null}

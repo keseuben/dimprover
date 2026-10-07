@@ -3969,3 +3969,34 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Regresszió: V0.9.22 41/41 PASS, V0.9.21 42/42 PASS, V0.9.20 24/24 PASS, V0.9.19 15/15 PASS, V0.9.18 26/26 PASS. A V0.9.23 korábbi tárhelypozíció-assertje szándékosan elavult a board-áthelyezés miatt.
 - TypeScript PASS, targeted ESLint 0 error (2 korábbi hook-warning), `git diff --check` PASS.
 - PROD DENY.
+
+### V0.9.24 DEV aktiválás
+
+- Runtime source: `4b7f57ab9135a153f088ba14097b132462de85d5`.
+- BUILD-02 run: `drive-v0924-4b7f57ab9-20261007-manual-b1`.
+- Build ID: `1KeJWDL6v9Do2PB8Rvo5-`.
+- Artifact SHA-256: `260f9f5fc6a4aac00f95502dc07f5e87a4409325d4762e14f9938c58a4c34e13`.
+- BUILD-02 `result.json`: PASS; actual artifact SHA = metadata SHA = result SHA.
+- DEV candidate runtime: `dimpro-drive-v0924-workspace-details-4b7f57ab9-p3403`, port `3403`, online, restart `0`.
+- Rollback runtime: `dimpro-drive-v0923-desktop-v019-ec7d58d8a-p3402`, port `3402`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0924/dimpro-dev.conf.before-v0924-20261007T204137Z`.
+- Public smoke: `/drive` -> 307 központi AUTH start; candidate header `4b7f57ab9 DRIVE V0.9.24 ...`; `X-DIMPRO-Production-Access: DENY`.
+- AUTH ready: database ready, migration count `10`.
+- Új runtime error log: `0 byte` a post-cutover ellenőrzéskor.
+- DEV tárhely a release aktiválása után: kb. `118G total / 114G used / 3.0G free`, `98%`; új cleanup csak külön inventory + DIMPRO safe-delete jóváhagyással.
+
+## 2026-10-07 – DIMPRO Drive V0.9.25 – fióknév, részletpanel, Commander, toolbar és fullscreen UX
+
+- A `DIMPRO-fiók / E-mail-címek és munkahelyek` ablak új `Saját DIMPRO-fiók / Megjelenítési név` szerkesztőt kapott. A mentés a meglévő same-origin, session-bound `/api/dimpro-auth/profile` PATCH útvonalat használja, majd újratölti az identitáslistát. Így a Saját Drive fejlécében név + e-mail jelenhet meg az e-mail kétszeri ismétlése helyett.
+- A tervellenőrzési folyamatjelző kompakt, csak ikon + tooltip megjelenítésre váltott. A hat lépés továbbra is közös állapotsávot, köztes nyilat és zöld/kék/narancs állapotjelzést használ, de keskeny jobb oldali panelben is elfér.
+- A Részletek panel további bontást kapott: `Tervadatok`, `Mappa`, `Biztonság` alfülek. A tervszám–tervlépték szerkesztők a Tervadatok alatt maradnak; öröklött mappabesorolás és fájlnév-audit a Mappa alá került; karantén/QR/biztonsági állapot a Biztonság alá került.
+- A verzió/revízió számozás szerkesztő a külön `Verziók` fülre került a verzióelőzmények elé. A számozásra fókuszáló művelet automatikusan a Verziók fület nyitja.
+- A jobb oldali részletpanel görgetése egyetlen külső scroll-rétegre egyszerűsült; `overflow-y:auto`, `overscroll-behavior:contain`, a belső mezőpanel nem hoz létre külön egérgörgős scroll-csapdát.
+- Commander nézetben a szövegek kontrasztosabb/sötétebbek. A mappák biztonsági állapota is megjelenik: jelszavas mappa lakat + sötétvörös jelölés; korlátozott mappa csoportikon + vöröses jelölés; egyedi jogosultság pajzs + lila jelölés; tooltip minden esetben leírja az állapotot.
+- A projekt Drive felső ikonsora vizuálisan elkülönített műveletcsoportokra váltott: (1) Feltöltés / Új verzió / Új revízió, (2) Megnyitás / Megnyitás Windowsban / Letöltés, (3) Mappa ZIP / CsomagBOX / Drop, (4) további dokumentumműveletek. A csoportok függőleges szín-accentust és enyhe csoporthátteret kaptak.
+- Projekt és Saját Drive teljes ablakos táblázati nézetében egy fájlsor egyszeri kattintása automatikusan megnyitja a dokumentumadat-panelt; a korábban választott oldalsó/alsó panelmód megmarad. Dupla kattintáskor a részletpanel bezár és a fájlelőnézet nyílik meg.
+- A fullscreen részletpanel mögött kattintható backdrop van: a panelen kívüli táblázati területre kattintva csak a részletpanel záródik be, maga a teljes ablakos nézet megmarad.
+- Esc prioritás teljes ablakos módban: 1) nyitott fájlelőnézet bezárása, 2) nyitott részletpanel bezárása, 3) csak ezután a teljes ablakos táblázat bezárása. A kiszámítható prioritás érdekében ez a Drive-mód alkalmazáson belüli fixed overlay, nem a böngésző natív Fullscreen API-jára támaszkodik.
+- Új contract: `scripts/drive-v0925-ux-details-fullscreen-contract.mjs` – 26/26 PASS.
+- Regresszió: V0.9.22 41/41 PASS; V0.9.21 42/42 PASS; V0.9.20 24/24 PASS; V0.9.19 15/15 PASS; V0.9.18 26/26 PASS. A V0.9.24 contract 16/17, egyetlen szándékosan elavult assert: a `Metaadatok mentése` felirat V0.9.25-ben `Tervadatok mentése`, továbbra is a felső műveletsávban.
+- TypeScript PASS, `git diff --check` PASS, PROD DENY.

@@ -11,7 +11,10 @@ import {
   Image as ImageIcon,
   FolderUp,
   GripVertical,
+  LockKeyhole,
+  ShieldCheck,
   Trash2,
+  UsersRound,
 } from "lucide-react";
 import type { DriveDocument, DriveFolder } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
@@ -82,6 +85,19 @@ function folderLabel(folder: DriveFolder) {
   return path.length > 1 ? path.join(" / ") : folder.displayName || folder.name;
 }
 
+function commanderFolderSecurity(folder: DriveFolder) {
+  switch (folder.securityState) {
+    case "PASSWORD":
+      return { Icon: LockKeyhole, rowClassName: styles.commanderFolderPassword, iconClassName: styles.commanderFolderSecurityPassword, title: folder.passwordUnlocked ? "Jelszóval védett mappa · feloldva ebben a munkamenetben" : "Jelszóval védett mappa · feloldás szükséges" };
+    case "CUSTOM":
+      return { Icon: ShieldCheck, rowClassName: styles.commanderFolderCustom, iconClassName: styles.commanderFolderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
+    case "RESTRICTED":
+      return { Icon: UsersRound, rowClassName: styles.commanderFolderRestricted, iconClassName: styles.commanderFolderSecurityRestricted, title: "Korlátozott mappajogosultság" };
+    default:
+      return { Icon: Folder, rowClassName: "", iconClassName: styles.commanderFolderSecurityNormal, title: "Normál mappa – projektjogosultság öröklése" };
+  }
+}
+
 function CommanderPane({
   side,
   folders,
@@ -150,11 +166,17 @@ function CommanderPane({
             <FolderUp size={13} /><strong>[..] Szülőmappa</strong><span>Vissza</span>
           </button>
         )}
-        {childFolders.map((child) => (
-          <button key={child.id} type="button" className={styles.commanderFolderRow} onDoubleClick={() => onFolderChange(child.id)} onClick={() => onFolderChange(child.id)}>
-            <Folder size={13} /><OverflowTooltipText text={child.displayName || child.name} className={styles.commanderFolderNameText} /><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
-          </button>
-        ))}
+        {childFolders.map((child) => {
+          const security = commanderFolderSecurity(child);
+          const SecurityIcon = security.Icon;
+          return (
+            <button key={child.id} type="button" className={`${styles.commanderFolderRow} ${security.rowClassName}`} title={security.title} onDoubleClick={() => onFolderChange(child.id)} onClick={() => onFolderChange(child.id)}>
+              <span className={`${styles.commanderFolderSecurityIcon} ${security.iconClassName}`}><SecurityIcon size={13} /></span>
+              <OverflowTooltipText text={child.displayName || child.name} className={styles.commanderFolderNameText} />
+              <span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
+            </button>
+          );
+        })}
         {paneDocuments.map((document) => {
           const selected = selectedDocumentId === document.id;
           const canMoveAcross = Boolean(oppositeFolderId && oppositeFolderId !== folderId && canWrite && moveReady && !busy);
@@ -249,7 +271,10 @@ export default function CommanderPanel({
     if (!onSelectionChange) return;
     const next = new Set(selectedDocumentIds);
     const select = !allVisibleSelected;
-    for (const id of visibleIds) select ? next.add(id) : next.delete(id);
+    for (const id of visibleIds) {
+      if (select) next.add(id);
+      else next.delete(id);
+    }
     onSelectionChange([...next]);
   };
 
