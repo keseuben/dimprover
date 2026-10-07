@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DriveCoreRepositoryError } from "@/app/lib/drive-core/errors";
 
-const OPEN_TICKET_SCHEMA_VERSION = 1;
+const OPEN_TICKET_SCHEMA_VERSION = 2;
 const DEFAULT_TTL_MS = 90_000;
 const MAX_TTL_MS = 180_000;
 const CLEANUP_INTERVAL_MS = 5 * 60_000;
@@ -12,13 +12,14 @@ const CONSUMED_RETENTION_MS = 15 * 60_000;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
 export type DriveOpenTicketRecord = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   projectId: string;
   projectCode: string;
   projectName: string;
   documentId: string;
   versionId: string;
   actorUserId: string;
+  actorUserAliases: string[];
   mode: "WORKFILE";
   issuedAt: string;
   expiresAt: string;
@@ -83,6 +84,7 @@ export async function issueDriveOpenTicket(input: {
   documentId: string;
   versionId: string;
   actorUserId: string;
+  actorUserAliases: string[];
   ttlMs?: number;
 }) {
   await cleanupIfDue();
@@ -92,7 +94,13 @@ export async function issueDriveOpenTicket(input: {
   const documentId = normalizeText(input.documentId, 160);
   const versionId = normalizeText(input.versionId, 160);
   const actorUserId = normalizeText(input.actorUserId, 240);
-  if (!projectId || !documentId || !versionId || !actorUserId) {
+  const actorUserAliases = Array.from(new Set(
+    (Array.isArray(input.actorUserAliases) ? input.actorUserAliases : [])
+      .map((value) => normalizeText(value, 320))
+      .filter(Boolean),
+  )).slice(0, 24);
+  if (!actorUserAliases.includes(actorUserId)) actorUserAliases.unshift(actorUserId);
+  if (!projectId || !documentId || !versionId || !actorUserId || actorUserAliases.length < 1) {
     throw new DriveCoreRepositoryError("A Windows megnyitási jegy adatai hiányosak.", "DRIVE_OPEN_TICKET_INPUT_INVALID", 400);
   }
 
@@ -108,6 +116,7 @@ export async function issueDriveOpenTicket(input: {
     documentId,
     versionId,
     actorUserId,
+    actorUserAliases,
     mode: "WORKFILE",
     issuedAt: new Date(issuedAtMs).toISOString(),
     expiresAt: new Date(issuedAtMs + ttlMs).toISOString(),
@@ -153,7 +162,14 @@ export async function consumeDriveOpenTicket(rawToken: unknown): Promise<DriveOp
   if (record.schemaVersion !== OPEN_TICKET_SCHEMA_VERSION || record.mode !== "WORKFILE") {
     throw new DriveCoreRepositoryError("A Windows megnyitási jegy verziója nem támogatott.", "DRIVE_OPEN_TICKET_SCHEMA_UNSUPPORTED", 410);
   }
-  if (!record.projectId || !record.documentId || !record.versionId || !record.actorUserId) {
+  if (
+    !record.projectId
+    || !record.documentId
+    || !record.versionId
+    || !record.actorUserId
+    || !Array.isArray(record.actorUserAliases)
+    || record.actorUserAliases.length < 1
+  ) {
     throw new DriveCoreRepositoryError("A Windows megnyitási jegy hiányos.", "DRIVE_OPEN_TICKET_CORRUPT", 410);
   }
   if (!Number.isFinite(Date.parse(record.expiresAt)) || Date.parse(record.expiresAt) <= Date.now()) {

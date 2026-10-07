@@ -540,3 +540,154 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 - Existing V0.1.7 restart-safe Download Apply acceptance contract: **16/16 PASS**.
 
 Physical Windows installation/open acceptance is still required before V0.1.8 may be closed.
+
+## V0.1.9 – általános Windows-megnyitás + első használati telepítési UX
+
+Dátum: 2026-10-07
+Környezet: **DEV PILOT · PROD DENY**
+
+### Cél
+
+A V0.1.8 Windows Open Handler fizikai E2E bizonyította a dimpro-drive:// protokollos megnyitást, a workfile SHA-256 ellenőrzést, a SERVER_CURRENT, SERVER_UPDATED, LOCAL_MODIFIED állapotlogikát és a helyi módosítás felülírás elleni védelmét.
+
+A V0.1.9 célja, hogy a webes DIMPRO Drive Windows-megnyitása ne csak a fejlesztői gépen, BENJADMIN Windows Bridge token mellett működjön, hanem normál meghívott/pilot Windows-felhasználó számára is telepíthető legyen.
+
+### Open-ticket authorization változás
+
+A V0.1.9-ben az egyszer használatos Windows-open ticket továbbra is:
+
+- randomBytes(32) alapú, 256 bites opaque capability;
+- SHA-256 hash alapján tárolt, a nyers token nem kerül fájlnévbe;
+- alapból 90 másodpercig érvényes;
+- maximum 180 másodperces TTL-lel rendelkezik;
+- atomikusan, rename művelettel egyszer használható.
+
+A ticket schema V2 lett, és szerveroldalon tárolja az actorUserId és actorUserAliases adatokat.
+
+A ticketet továbbra is kizárólag hitelesített web-session és document.read jogosultság mellett lehet kiadni.
+
+Redeemkor a backend a tickethez kötött canonical aliasokkal újra lekéri az aktuális projekt-hozzáférést, és ismét megköveteli a document.read jogosultságot. Ha a jogosultság a ticket kiadása és redeem között megszűnik, a megnyitás fail-closed.
+
+Ezért az egyszeri Windows-open flow már nem igényel BENJADMIN Developer Grid Windows Bridge device tokent. Ez a könnyítés kizárólag az egyszeri, web által kezdeményezett open-ticket flow-ra vonatkozik; teljes Drive Desktop sync, háttérszinkron vagy tartós Desktop API-hozzáférés továbbra is külön jövőbeli Desktop-auth capability.
+
+### V0.1.9 Windows Handler
+
+Új források:
+
+- scripts/dimpro-drive-desktop-open-handler-v019.ps1
+- scripts/dimpro-drive-desktop-open-handler-manager-v019.ps1
+
+Fő szabályok:
+
+- nincs BENJADMIN Bridge token / DPAPI token függés;
+- a dimpro-drive://open-file?ticket=... URI nem adhat meg szerver override-ot;
+- csak az exact https://drive.dev.dimpro.hu DEV host engedélyezett;
+- a letöltött fájl SHA-256 és méret ellenőrzése megmaradt;
+- helyileg módosított workfile továbbra sem írható felül;
+- workfile automatikus törlés nincs;
+- teljes Drive tree mirror/sync nincs;
+- Windows fájltársítás szerinti Start-Process megnyitás megmaradt.
+
+### Telepítőcsomag
+
+Webes letöltési artifact:
+
+/downloads/DIMPRO_Drive_Desktop_V019_WINDOWS_DEV.zip
+
+A ZIP tartalma:
+
+- DIMPRO_Drive_Desktop_Install.cmd
+- DIMPRO_Drive_Desktop_Uninstall.cmd
+- dimpro-drive-desktop-open-handler-v019.ps1
+- dimpro-drive-desktop-open-handler-manager-v019.ps1
+- README.txt
+
+A telepítés nem igényel HKLM módosítást; a protokollregisztráció per-user HKCU:\Software\Classes\dimpro-drive alatt történik. A telepítő nem törli és nem szinkronizálja automatikusan a felhasználói Drive tartalmat.
+
+DEV artifact SHA-256:
+
+bff6556c6a033307c66e5f5d060a2ecb576b152472caea903077aaefc88f64d7
+
+### Web UX
+
+A Drive webes felületen:
+
+1. a Műveletek menüben külön Drive Desktop letöltése művelet érhető el;
+2. az első Megnyitás Windowsban kattintáskor a web még nem kér open-ticketet;
+3. első használati panel jelenik meg: Drive Desktop letöltése / Telepítve van – megnyitás / Mégsem;
+4. a panel röviden leírja a ZIP kicsomagolását és a DIMPRO_Drive_Desktop_Install.cmd futtatását;
+5. a felhasználó Telepítve van visszajelzését a böngésző localStorage-ban jegyzi meg;
+6. későbbi Windows-megnyitáskor közvetlenül az open-ticket flow indul.
+
+A localStorage csak UX-jelzés, nem authorization. A szerveroldali hozzáférés minden open-ticket kiadáskor és redeemkor külön ellenőrzött.
+
+### Acceptance
+
+Új contract:
+
+scripts/drive-desktop-open-v019-contract.mjs
+
+DEV static eredmény:
+
+- V0.1.9 Windows Open contract: **24/24 PASS**;
+- git diff --check: PASS;
+- PROD: **DENY**.
+
+A következő fizikai acceptance:
+
+1. V0.1.9 ZIP letöltése a Drive webes felületről;
+2. telepítés olyan Windows felhasználói környezetben, ahol nincs BENJADMIN Windows Bridge token;
+3. dimpro-drive:// protokollregisztráció ellenőrzése;
+4. webes első-use panel ellenőrzése;
+5. Excel/PDF/JPG Windows-megnyitás;
+6. SERVER_CURRENT + LOCAL_MODIFIED regresszió;
+7. külön SERVER_UPDATED és local+remote conflict acceptance.
+
+### V0.1.9 validációs lezárás
+
+2026-10-07 DEV validáció:
+
+- V0.1.9 Windows Open contract: **24/24 PASS**;
+- git diff --check: **PASS**;
+- teljes TypeScript ellenőrzés: **PASS** kompatibilis, package.json/package-lock szinten azonos dependency worktree használatával, 3072 MB Node heap mellett;
+- V0.1.9 által érintett TypeScript/TSX fájlok célzott ESLint ellenőrzése: **PASS / 0 error**;
+- repository teljes ESLint futás: **25 error / 107 warning**, kizárólag korábban meglévő, V0.1.9 által nem módosított fájlokban; ezért ez baseline lint debt, nem V0.1.9 regresszió;
+- Next.js 16.2.6 Webpack production compile: **PASS**, 24.5 perc;
+- build saját TypeScript fázisa: **PASS**, 9.5 perc;
+- statikus oldal generálás: **103/103 PASS**;
+- standalone server.js: létrejött;
+- BUILD_ID: hs0ohxzH5Ga4p7x6XXz5A;
+- local Turbopack build nem kódhibán, hanem a validációhoz használt külső node_modules symlink fájlrendszer-root korlátozásán állt meg; Webpack builddel a production buildképesség igazolt;
+- standalone asset-copy helyben nem lett futtatva, mert a helper destruktív cleanup műveleteket is tartalmaz, amelyet a DEV safe-delete policy külön kapuval véd;
+- PROD továbbra is **DENY**.
+
+### V0.1.9 integration checkpoint – active Drive V0.9.22 base
+
+A publikus Drive DEV host 2026-10-07-én már a 8e08ebec9aca89b1b9d10362604e7909e6daba66 (Drive V0.9.22) forráson futott, amely a V0.1.9 eredeti fejlesztési ágával a 9a0a4b513ea66bb742527af2028407d27303d42c közös alap után szétvált. Emiatt az eredeti V0.1.9 commit közvetlen deployja tiltott lett volna, mert frissebb Drive UI/funkciókat írhatott volna vissza.
+
+A V0.1.9 ezért külön integration worktree-ben az aktív 8e08ebec9... commitra lett ráemelve. A konfliktusfeloldás megőrizte a V0.9.22 folder access, drag/move, deterministic compare és kapcsolódó UI/CSS rétegeit; ezek mellé került a V0.1.9 Desktop first-use/download UX.
+
+Integration pre-commit validáció:
+
+- V0.1.9 contract: **24/24 PASS**;
+- git diff --check: **PASS**;
+- teljes TypeScript: **PASS**;
+- érintett V0.1.9 TypeScript/TSX/MJS célzott ESLint: **PASS / 0 error**;
+- package.json és package-lock.json hash egyezik a jelenlegi V0.9.22 kompatibilis dependency worktree állapotával;
+- PROD: **DENY**.
+
+### V0.1.9 final integration checkpoint – Drive V0.9.23 candidate base
+
+A párhuzamos Drive/AUTH fejlesztés közben a dc3eec69e2f97ced5b2ca44b53f443073c1537ba V0.9.23 candidate elkészült a 3401-es DEV porton. Ez az aktív V0.9.22 8e08ebec9... leszármazottja, ezért a V0.1.9 végleges forrása erre a frissebb candidate-alapra lett ráemelve.
+
+A V0.9.23 personal trash/quota/fullscreen preview CSS és Workspace változásai megmaradtak; a V0.1.9 Desktop first-use/download UX ezek mellé került.
+
+Final integration pre-build validáció:
+
+- V0.1.9 contract: **24/24 PASS**;
+- TypeScript: **PASS**;
+- célzott ESLint: **PASS / 0 error**;
+- git diff --check: **PASS**;
+- PROD: **DENY**.
+
+A korábbi 31de645e2... V0.9.22-alapú BUILD01 artifact superseded; deployra nem használható.

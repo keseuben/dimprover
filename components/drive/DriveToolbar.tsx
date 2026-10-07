@@ -48,6 +48,7 @@ type Props = {
   canDownloadFolder: boolean;
   onOpenSelected: () => void;
   onOpenWindowsSelected?: () => void;
+  onDownloadDriveDesktop?: () => void;
   onDownloadSelected: () => void;
   onDownloadFolder: () => void;
   boxCount: number;
@@ -85,6 +86,7 @@ export default function DriveToolbar({
   canDownloadFolder,
   onOpenSelected,
   onOpenWindowsSelected,
+  onDownloadDriveDesktop,
   onDownloadSelected,
   onDownloadFolder,
   boxCount,
@@ -157,6 +159,11 @@ export default function DriveToolbar({
             {onOpenWindowsSelected && (
               <button type="button" role="menuitem" disabled={!canOpenWindowsSelected} onClick={() => runMenuAction(onOpenWindowsSelected)}>
                 <MonitorUp size={15} /><span>Megnyitás Windowsban</span>
+              </button>
+            )}
+            {onDownloadDriveDesktop && (
+              <button type="button" role="menuitem" onClick={() => runMenuAction(onDownloadDriveDesktop)}>
+                <Download size={15} /><span>Drive Desktop letöltése</span>
               </button>
             )}
             <button type="button" role="menuitem" disabled={!canDownloadSelected} onClick={() => runMenuAction(onDownloadSelected)}>

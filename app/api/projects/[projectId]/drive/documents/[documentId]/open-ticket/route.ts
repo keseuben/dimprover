@@ -44,6 +44,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       documentId,
       versionId: record.version.id,
       actorUserId: access.actor.userId,
+      actorUserAliases: access.actor.userAliases,
     });
     return NextResponse.json({
       ok: true,

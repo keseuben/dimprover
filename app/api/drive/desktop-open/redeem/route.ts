@@ -1,36 +1,41 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
 import { initDriveObjectDownload } from "@/app/lib/drive-core/store";
-import { isDriveApiAuthorized } from "@/app/lib/drive/driveApi";
 import { consumeDriveOpenTicket } from "@/app/lib/drive/openTicketStore";
-import { requireProjectPermission } from "@/app/lib/project-core/auth";
+import { getProjectAccess } from "@/app/lib/project-core/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const driveAuth = await isDriveApiAuthorized(request.headers);
-  if (!driveAuth.ok || driveAuth.mode !== "desktop-access") {
-    return NextResponse.json({ ok: false, error: "Érvényes DIMPRO Drive Desktop hozzáférési token szükséges.", code: "DRIVE_DESKTOP_OPEN_AUTH_REQUIRED" }, { status: 401, headers: { "cache-control": "no-store" } });
-  }
-
   const body = await request.json().catch(() => ({})) as { ticket?: string };
   try {
     const ticket = await consumeDriveOpenTicket(body.ticket);
-    const access = await requireProjectPermission(request, ticket.projectId, "document.read");
-    if (!access.ok) {
-      return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { "cache-control": "no-store" } });
+    const access = await getProjectAccess(ticket.projectId, ticket.actorUserAliases);
+    if (!access) {
+      return NextResponse.json(
+        { ok: false, error: "A projekt nem található vagy a Windows-megnyitási jogosultság időközben megszűnt.", code: "DRIVE_DESKTOP_OPEN_ACCESS_REVOKED" },
+        { status: 404, headers: { "cache-control": "no-store" } },
+      );
     }
-    // A V0.1.8 DEV Desktop token device/agent/client identity-t hordoz, canonical DIMPRO user claimet még nem.
-    // A ticket kiadóját a szerver írja bele a ticketbe; a Desktop redeem külön újraellenőrzi a projekt document.read jogot.
-    // PROD/multi-user rollout előtt kötelező a Bridge device ↔ canonical DIMPRO user binding.
+    if (!access.permissions.includes("document.read")) {
+      return NextResponse.json(
+        { ok: false, error: "A dokumentum Windowsban történő megnyitásához már nincs olvasási jogosultság.", code: "DRIVE_DESKTOP_OPEN_PERMISSION_REVOKED" },
+        { status: 403, headers: { "cache-control": "no-store" } },
+      );
+    }
+
+    // V0.1.9: az egyszer használható, rövid életű open-ticket maga a capability.
+    // A ticketet kizárólag hitelesített web-session kaphatja meg, és redeemkor a canonical
+    // projektjogosultságot a szerver a ticketben tárolt felhasználói aliasokkal újraellenőrzi.
+    // Tartós Desktop sync/auth ettől külön, későbbi capability.
     const result = await initDriveObjectDownload({
       projectId: ticket.projectId,
       documentId: ticket.documentId,
       versionId: ticket.versionId,
       actorUserId: ticket.actorUserId,
-      clientId: driveAuth.clientId || null,
-      access: access.access,
+      clientId: "drive-desktop-open-v019",
+      access,
     });
 
     return NextResponse.json({

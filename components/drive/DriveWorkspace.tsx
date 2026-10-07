@@ -216,6 +216,8 @@ function parseExternalIssueRecipients(value: string) {
 }
 
 const browserPreviewExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
+const DRIVE_DESKTOP_INSTALLER_URL = "/downloads/DIMPRO_Drive_Desktop_V019_WINDOWS_DEV.zip";
+const DRIVE_DESKTOP_FIRST_USE_ACK_KEY = "dimpro-drive-desktop-v019-windows-open-ack";
 
 function nativeOfficeProtocol(extension: string) {
   const ext = extension.toLowerCase();
@@ -315,6 +317,7 @@ export default function DriveWorkspace({
   const [trashDialog, setTrashDialog] = useState<TrashDialogState | null>(null);
   const [folderPasswordDialog, setFolderPasswordDialog] = useState<FolderPasswordDialogState | null>(null);
   const [folderAccessDialog, setFolderAccessDialog] = useState<FolderAccessDialogState | null>(null);
+  const [desktopOpenPromptDocument, setDesktopOpenPromptDocument] = useState<DriveDocument | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
@@ -1629,7 +1632,34 @@ export default function DriveWorkspace({
     }
   }
 
-  async function openDocumentInWindows(document: DriveDocument) {
+  function downloadDriveDesktopInstaller() {
+    const anchor = window.document.createElement("a");
+    anchor.href = DRIVE_DESKTOP_INSTALLER_URL;
+    anchor.download = "DIMPRO_Drive_Desktop_V019_WINDOWS_DEV.zip";
+    anchor.rel = "noopener";
+    window.document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setNotice("DIMPRO Drive Desktop V0.1.9 Windows telepítőcsomag letöltése elindult.");
+  }
+
+  function desktopOpenAcknowledged() {
+    try {
+      return window.localStorage.getItem(DRIVE_DESKTOP_FIRST_USE_ACK_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberDesktopOpenAcknowledgement() {
+    try {
+      window.localStorage.setItem(DRIVE_DESKTOP_FIRST_USE_ACK_KEY, "1");
+    } catch {
+      // A böngésző localStorage tiltása nem akadályozhatja a Windows-megnyitást.
+    }
+  }
+
+  async function launchDocumentInWindows(document: DriveDocument) {
     if (!document.currentVersion) return;
     setBusy(true);
     setError("");
@@ -1663,6 +1693,23 @@ export default function DriveWorkspace({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function openDocumentInWindows(document: DriveDocument) {
+    if (!document.currentVersion) return;
+    if (!desktopOpenAcknowledged()) {
+      setDesktopOpenPromptDocument(document);
+      return;
+    }
+    await launchDocumentInWindows(document);
+  }
+
+  async function confirmDesktopInstalledAndOpen() {
+    const targetDocument = desktopOpenPromptDocument;
+    if (!targetDocument) return;
+    rememberDesktopOpenAcknowledgement();
+    setDesktopOpenPromptDocument(null);
+    await launchDocumentInWindows(targetDocument);
   }
 
   async function downloadDocument(document: DriveDocument) {
@@ -2536,6 +2583,7 @@ export default function DriveWorkspace({
         canDownloadFolder={Boolean(selectedFolder)}
         onOpenSelected={() => void openDocument()}
         onOpenWindowsSelected={() => { if (selectedDocument) void openDocumentInWindows(selectedDocument); }}
+        onDownloadDriveDesktop={downloadDriveDesktopInstaller}
         onDownloadSelected={() => void downloadSelected()}
         onDownloadFolder={downloadSelectedFolder}
         boxCount={boxes.length}
@@ -2548,6 +2596,38 @@ export default function DriveWorkspace({
         onIssueSelected={() => void openIssueDialog()}
       />
       <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
+
+      {desktopOpenPromptDocument && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="DIMPRO Drive Desktop szükséges">
+          <div className={`${styles.projectCreatePanel} ${styles.desktopOpenPromptPanel}`}>
+            <header>
+              <div>
+                <small>DIMPRO Drive · Windows megnyitás</small>
+                <strong>DIMPRO Drive Desktop szükséges</strong>
+                <span>{desktopOpenPromptDocument.name}</span>
+              </div>
+              <button type="button" onClick={() => setDesktopOpenPromptDocument(null)} aria-label="Bezárás">×</button>
+            </header>
+            <div className={styles.revisionIssueHint}>
+              <strong>Első használat ezen a gépen</strong>
+              <span>
+                A fájl Windows alkalmazásban történő megnyitásához telepíteni kell a DIMPRO Drive Desktopot.
+                A telepítő regisztrálja a dimpro-drive:// protokollt; a Drive teljes tartalma nem szinkronizálódik a gépre.
+              </span>
+            </div>
+            <div className={styles.desktopOpenPromptSteps}>
+              <span><strong>1.</strong> Töltsd le és csomagold ki a Windows csomagot.</span>
+              <span><strong>2.</strong> Indítsd el a <code>DIMPRO_Drive_Desktop_Install.cmd</code> fájlt.</span>
+              <span><strong>3.</strong> Ezután kattints a „Telepítve van – megnyitás” gombra.</span>
+            </div>
+            <footer>
+              <button type="button" onClick={() => setDesktopOpenPromptDocument(null)}>Mégsem</button>
+              <button type="button" className={styles.desktopOpenDownloadButton} onClick={downloadDriveDesktopInstaller}>Drive Desktop letöltése</button>
+              <button type="button" className={styles.desktopOpenPrimaryButton} onClick={() => void confirmDesktopInstalledAndOpen()}>Telepítve van – megnyitás</button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {folderRenameDialog && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Mappa átnevezése">
