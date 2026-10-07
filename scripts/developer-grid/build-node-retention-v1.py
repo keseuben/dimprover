@@ -695,15 +695,41 @@ def main() -> int:
                 finally:
                     fcntl.flock(build_fd, fcntl.LOCK_UN)
 
+            apply_failure = None
             if args.apply:
+                # Phase 1: every target must pass a complete non-destructive validation
+                # before the first destructive operation is attempted.
                 for item in candidates:
-                    path = Path(item["path"])
+                    path = ensure_within(Path(item["path"]), root)
+                    kind = item["kind"]
                     if not path.exists() and not path.is_symlink():
                         raise Deny(f"TARGET_CHANGED_MISSING:{path}")
                     if process_refs(path):
                         raise Deny(f"TARGET_GAINED_PROCESS_REFERENCE:{path}")
+                    if kind == "manual-source":
+                        expected = (root / "manual-runs" / item["runId"] / "source").resolve(strict=False)
+                    elif kind == "worktree":
+                        expected = (root / "worktrees" / item["runId"]).resolve(strict=False)
+                    elif kind == "temp-bundle":
+                        expected = (root / "temp" / f"{item['runId']}.bundle").resolve(strict=False)
+                    elif kind == "artifact-tarball":
+                        expected = (root / "artifacts" / item["runId"] / "build-artifact.tar.gz").resolve(strict=False)
+                    elif kind == "log":
+                        expected = (root / "logs" / f"{item['runId']}.log").resolve(strict=False)
+                    else:
+                        raise Deny(f"UNKNOWN_KIND:{kind}")
+                    if path != expected:
+                        raise Deny(f"TARGET_PATH_MISMATCH:{kind}:{item['runId']}")
+
+                # Phase 2: destructive actions begin only after full-set prevalidation.
+                for item in candidates:
+                    path = Path(item["path"])
                     pre_bytes = allocated_bytes(path)
-                    delete_candidate(item, root, repo)
+                    try:
+                        delete_candidate(item, root, repo)
+                    except Exception as exc:
+                        apply_failure = f"{type(exc).__name__}:{exc}"
+                        break
                     actions.append({
                         "kind": item["kind"],
                         "runId": item["runId"],
@@ -748,6 +774,8 @@ def main() -> int:
                     "sha256": approved_report_sha if args.apply else None,
                     "exactCandidateSetRequired": bool(args.apply),
                 },
+                "applyFailure": apply_failure,
+                "applyCompleted": bool(args.apply and apply_failure is None and len(actions) == len(candidates)),
             }
             report_path = Path(args.report_file)
             report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -756,6 +784,8 @@ def main() -> int:
             os.chmod(tmp, 0o600)
             os.replace(tmp, report_path)
             print(json.dumps(report, indent=2))
+            if args.apply and apply_failure is not None:
+                return 3
             return 0
         finally:
             try:
