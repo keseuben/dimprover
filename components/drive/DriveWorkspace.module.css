@@ -6237,6 +6237,7 @@
 @media (max-width: 980px) {
   .userIdentityText { max-width: 138px; }
   .userRoleBadge { width: 31px; }
+}
 
 /* Drive Desktop V0.1.9 – first-use Windows open gate */
 .desktopOpenPromptPanel { max-width: 690px; }
