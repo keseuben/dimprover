@@ -483,3 +483,21 @@ Az aktív taglista authoritative megjelenítési sorrendje most jogosultsági hi
 5. `VIEWER` – Megtekintő.
 
 Azonos szerepkörön belül a rendezés a megjelenített név szerint, magyar locale használatával történik. A saját felhasználó türkizzöld kiemelése ettől független; nem írja felül a jogosultsági sorrendet.
+
+### Project Access UX V0.3.2 DEV aktiválás – 2026-10-07
+
+- runtime source: `15ab8d6f7ed30f7cdb25a1558ddc0745b6fb45f4`;
+- build runner: BUILD-02 manual safe fallback;
+- build run: `drive-project-access-v032-15ab8d6f7-20261007-b1`;
+- build ID: `bLdefYPCfqOI0CRHJALUz`;
+- artifact SHA-256: `f8ffb282aad51ed4f6928bdd8a2e66c4f57ff8459ae7a9c710a2c9050e4fc618`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/15ab8d6f7ed3`;
+- DEV runtime: `dimpro-drive-v0914-projectaccess-v032-15ab8d6f7-p3392`;
+- publikus upstream: `127.0.0.1:3392`;
+- rollback runtime: `dimpro-drive-v0914-auth068-profile-5fd99bab2-p3391`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-project-access/dimpro-dev.conf.before-15ab8d6f-20261007T101709`;
+- backup SHA-256: `68a9dc659af6974c49bdd57670ec28fdfe53873d3b7e46e126ce5f898c588446`;
+- cutover: 2026-10-07 10:17:18 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO, profile unauth 401 `AUTH_REQUIRED`, AUTH readiness PASS, migrationCount 8, új runtime restart 0, error log 0 byte;
+- Project Access contract: `14/14 PASS`;
+- `X-DIMPRO-Production-Access: DENY`.

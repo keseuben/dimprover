@@ -3672,3 +3672,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Azonos szerepkörön belül magyar névsorrend érvényesül.
 - A saját kártya türkizzöld kiemelése megmarad, de nem módosítja a szerepkör-alapú rendezést.
 - DEV ONLY · PROD DENY.
+
+#### Drive Project Access UX V0.3.2 DEV aktiválás
+
+- Source `15ab8d6f7ed30f7cdb25a1558ddc0745b6fb45f4`; BUILD-02 PASS.
+- Build `bLdefYPCfqOI0CRHJALUz`; artifact SHA-256 `f8ffb282aad51ed4f6928bdd8a2e66c4f57ff8459ae7a9c710a2c9050e4fc618`.
+- Aktív DEV runtime `dimpro-drive-v0914-projectaccess-v032-15ab8d6f7-p3392`; előző V0.6.8 `5fd99bab...` / 3391 online rollback.
+- Projekt-hozzáférések: nagyobb tipográfia + jogosultsági sorrend Beruházási projektvezető → Projektvezető → Közreműködő → Ellenőrző → Megtekintő.
+- Project Access contract 14/14 PASS; public smoke PASS; PROD DENY.
