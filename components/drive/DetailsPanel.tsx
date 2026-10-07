@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
+import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, RefreshCw, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails, DriveMetadataOptionKey, DriveMetadataOptions, DriveProjectSettings } from "./driveTypes";
 import { DEFAULT_DRIVE_METADATA_OPTIONS } from "@/app/lib/drive-core/metadataOptions";
 import OverflowTooltipText from "./OverflowTooltipText";
@@ -626,6 +626,39 @@ export default function DetailsPanel({
   const investorDone = isApprovedDecision(review.investorProjectManager);
   const lifecycleDone = review.lifecycle === "Aktuális";
 
+  const saveMetadata = () => onSaveMetadata({
+    ...metadata,
+    extra: {
+      ...(details?.metadata?.extra || {}),
+      topic: metadata.topic,
+      displayName: metadata.planTitle,
+      planTitle: metadata.planTitle,
+      scales: scalesForSave(metadata.scales),
+    },
+  });
+
+  const saveReview = () => onSaveReview({
+    ...(canTechnicalReview ? {
+      reviewChecked: review.checked,
+      reviewResult: review.result,
+      reviewObservationItems: review.observationItems,
+      workflowStatus: review.workflow,
+      internalNote: review.internal,
+      revisionChange: review.revisionChange,
+    } : {}),
+    ...(canCustomerApproval ? { customerApproval: review.customer, customerObservationItems: review.customerObservationItems, customerNote: review.customerNote } : {}),
+    ...(canProjectManagerApproval ? { projectManagerApproval: review.projectManager } : {}),
+    ...(canInvestorProjectManagerApproval ? { investorProjectManagerApproval: review.investorProjectManager } : {}),
+    ...(canLifecycleEdit ? { lifecycleStatus: review.lifecycle } : {}),
+  });
+
+  const saveNumbering = () => onSaveNumbering({
+    mode: numberingMode === "NONE" ? "CORRECT" : numberingMode,
+    versionNumber: numberingVersion,
+    revisionNumber: numberingRevision,
+    reason: numberingReason.trim(),
+  }).then(() => setNumberingMode("NONE")).catch(() => undefined);
+
   if (!document) {
     return (
       <aside className={`${styles.detailsPanel} ${responsiveClassName}`}>
@@ -656,6 +689,40 @@ export default function DetailsPanel({
         <button type="button" className={tab === "notes" ? styles.detailsTabActive : ""} onClick={() => setTab("notes")}>Megjegyzések</button>
         <button type="button" className={tab === "settings" ? styles.detailsTabActive : ""} onClick={() => setTab("settings")}>Listák</button>
       </div>
+
+      {tab !== "versions" && (
+        <div className={styles.detailsTopActions} aria-label="Dokumentumműveletek">
+          {tab === "details" && (
+            <>
+              {numberingMode !== "NONE" && (
+                <>
+                  <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={busy || (numberingMode === "CORRECT" && !numberingReason.trim())} onClick={() => void saveNumbering()} title="Számozás mentése" aria-label="Számozás mentése"><Save size={14} /></button>
+                  <button type="button" className={styles.detailsActionIcon} disabled={busy} onClick={() => setNumberingMode("NONE")} title="Számozás szerkesztésének megszakítása" aria-label="Számozás szerkesztésének megszakítása"><X size={14} /></button>
+                </>
+              )}
+              {canApprove && document.currentVersion?.status === "QUARANTINED" && (
+                <>
+                  <button type="button" className={styles.detailsActionIcon} disabled={busy || !securityReady} onClick={() => void onScan()} title="Biztonsági ellenőrzés" aria-label="Biztonsági ellenőrzés"><ShieldCheck size={14} /></button>
+                  <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionSuccess}`} disabled={busy || !securityReady} onClick={() => void onReview("APPROVE")} title="Jóváhagyás" aria-label="Jóváhagyás"><Check size={14} /></button>
+                  <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionDanger}`} disabled={busy} onClick={() => void onReview("REJECT")} title="Elutasítás" aria-label="Elutasítás"><X size={14} /></button>
+                </>
+              )}
+              <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canWrite || busy} onClick={() => void saveMetadata()} title="Metaadatok mentése" aria-label="Metaadatok mentése"><Save size={14} /></button>
+              <button type="button" className={styles.detailsActionIcon} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()} title="Letöltés" aria-label="Letöltés"><Download size={14} /></button>
+              <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionQr}`} disabled={!canWrite || busy} onClick={() => void onEnsureQr()} title={activeQr ? "QR azonosító aktív" : "QR létrehozása"} aria-label={activeQr ? "QR azonosító aktív" : "QR létrehozása"}><QrCode size={14} /></button>
+              {canDelete && onDelete && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionDanger}`} disabled={busy} onClick={() => void onDelete()} title="Lomtárba helyezés" aria-label="Lomtárba helyezés"><Trash2 size={14} /></button>}
+            </>
+          )}
+          {tab === "review" && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canAnyReviewEdit || busy} onClick={() => void saveReview()} title="Jogosult szakaszok mentése" aria-label="Jogosult szakaszok mentése"><Save size={14} /></button>}
+          {tab === "notes" && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canComment || busy} onClick={() => void onSaveNote(note)} title="Megjegyzés mentése" aria-label="Megjegyzés mentése"><StickyNote size={14} /></button>}
+          {tab === "settings" && (
+            <>
+              <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canConfigureDataLists || busy} onClick={() => void onSaveProjectSettings(settingsDraft)} title="Listák mentése" aria-label="Listák mentése"><Save size={14} /></button>
+              <button type="button" className={styles.detailsActionIcon} disabled={!canConfigureDataLists || busy} onClick={() => setSettingsDraft(DEFAULT_DRIVE_METADATA_OPTIONS)} title="Alaplista visszaállítása" aria-label="Alaplista visszaállítása"><RefreshCw size={14} /></button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className={`${styles.detailsBody} ${tab === "details" ? styles.detailsBodyStructured : ""}`}>
         {loading ? (
@@ -719,22 +786,6 @@ export default function DetailsPanel({
                     {numberingMode === "CORRECT" ? "Korrekció indoka *" : "Import megjegyzés"}
                     <input value={numberingReason} disabled={busy} maxLength={1000} onChange={(event) => setNumberingReason(event.target.value)} placeholder={numberingMode === "CORRECT" ? "Miért szükséges a számozás javítása?" : "Opcionális megjegyzés"} />
                   </label>
-                  <div className={styles.numberingActions}>
-                    <button
-                      type="button"
-                      className={`${styles.smallButton} ${styles.smallPrimary}`}
-                      disabled={busy || (numberingMode === "CORRECT" && !numberingReason.trim())}
-                      onClick={() => void onSaveNumbering({
-                        mode: numberingMode,
-                        versionNumber: numberingVersion,
-                        revisionNumber: numberingRevision,
-                        reason: numberingReason.trim(),
-                      }).then(() => setNumberingMode("NONE")).catch(() => undefined)}
-                    >
-                      <Save size={12} /> Számozás mentése
-                    </button>
-                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => setNumberingMode("NONE")}>Mégsem</button>
-                  </div>
                 </div>
               )}
             </section>
@@ -827,36 +878,6 @@ export default function DetailsPanel({
                 {securityReady ? `${securityLabel} aktív. Sikeres ellenőrzés után a fájl megnyitható és letölthető; a végleges kiadáshoz továbbra is a dokumentumfolyamat szabályai érvényesek.` : `Biztonsági ellenőrzés nem elérhető (${securityLabel}). Az előnézet, letöltés és kiadás biztonsági okból tiltva.`}
               </div>
             )}
-            {canApprove && document.currentVersion?.status === "QUARANTINED" && (
-              <div className={styles.detailsActions}>
-                <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={busy || !securityReady} onClick={() => void onScan()}>
-                  <ShieldCheck size={12} /> Biztonsági ellenőrzés
-                </button>
-                <button type="button" className={styles.smallButton} disabled={busy || !securityReady} onClick={() => void onReview("APPROVE")}>
-                  <Check size={12} /> Jóváhagyás
-                </button>
-                <button type="button" className={styles.smallButton} disabled={busy} onClick={() => void onReview("REJECT")}>
-                  <X size={12} /> Elutasítás
-                </button>
-              </div>
-            )}
-
-            <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, displayName: metadata.planTitle, planTitle: metadata.planTitle, scales: scalesForSave(metadata.scales) } })}>
-                <Save size={12} /> Metaadat mentése
-              </button>
-              <button type="button" className={styles.smallButton} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()}>
-                <Download size={12} /> Letöltés
-              </button>
-              {canDelete && onDelete && (
-                <button type="button" className={`${styles.smallButton} ${styles.smallDanger}`} disabled={busy} onClick={() => void onDelete()} title="Dokumentum lomtárba helyezése">
-                  <Trash2 size={12} /> Lomtárba
-                </button>
-              )}
-              <button type="button" className={styles.smallButton} disabled={!canWrite || busy} onClick={() => void onEnsureQr()}>
-                <QrCode size={12} /> {activeQr ? "QR elérhető" : "QR létrehozása"}
-              </button>
-            </div>
             {activeQr && <div className={styles.infoBox}>QR azonosító aktív. A publikus QR feloldó oldal és vizuális QR-kép későbbi vertikális szeletben kapcsolódik hozzá.</div>}
             </section>
           </div>
@@ -866,20 +887,22 @@ export default function DetailsPanel({
 
             <div className={styles.reviewProgress} aria-label="Tervellenőrzési folyamat">
               {([
-                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false, target: "" },
-                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone, target: "technical" },
-                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone, target: "customer" },
-                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone, target: "manager" },
-                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone, target: "investor" },
-                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle" },
-              ] as const).map((step, index, steps) => (
-                <div className={styles.reviewProgressStepWrap} key={step.key}>
-                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={step.label} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
-                    <step.Icon size={15} /><span>{step.label}</span>
-                  </button>
-                  {index < steps.length - 1 && <span className={styles.reviewProgressLine} data-done={step.done ? "true" : undefined} />}
-                </div>
-              ))}
+                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false },
+                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone },
+                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone },
+                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone },
+                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone },
+                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone },
+              ] as const).map((step, index, steps) => {
+                const stateClass = step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending;
+                return (
+                  <div className={`${styles.reviewProgressStepWrap} ${stateClass}`} key={step.key} aria-current={step.active ? "step" : undefined}>
+                    <div className={styles.reviewProgressStep} title={step.label}><step.Icon size={14} /><span>{step.label}</span></div>
+                    <span className={styles.reviewProgressBar} aria-hidden="true" />
+                    {index < steps.length - 1 && <ChevronRight className={styles.reviewProgressArrow} size={13} aria-hidden="true" />}
+                  </div>
+                );
+              })}
             </div>
 
             <div className={styles.reviewTimeline}>
@@ -1044,29 +1067,6 @@ export default function DetailsPanel({
             </section>
             )}
 
-            <div className={styles.detailsActions}>
-              <button
-                type="button"
-                className={styles.smallButton + " " + styles.smallPrimary}
-                disabled={!canAnyReviewEdit || busy}
-                onClick={() => void onSaveReview({
-                  ...(canTechnicalReview ? {
-                    reviewChecked: review.checked,
-                    reviewResult: review.result,
-                    reviewObservationItems: review.observationItems,
-                    workflowStatus: review.workflow,
-                    internalNote: review.internal,
-                    revisionChange: review.revisionChange,
-                  } : {}),
-                  ...(canCustomerApproval ? { customerApproval: review.customer, customerObservationItems: review.customerObservationItems, customerNote: review.customerNote } : {}),
-                  ...(canProjectManagerApproval ? { projectManagerApproval: review.projectManager } : {}),
-                  ...(canInvestorProjectManagerApproval ? { investorProjectManagerApproval: review.investorProjectManager } : {}),
-                  ...(canLifecycleEdit ? { lifecycleStatus: review.lifecycle } : {}),
-                })}
-              >
-                <Save size={12} /> Jogosult szakaszok mentése
-              </button>
-            </div>
           </div>
         ) : tab === "versions" ? (
           <div className={styles.versionList}>
@@ -1101,25 +1101,12 @@ export default function DetailsPanel({
                 </label>
               ))}
             </div>
-            <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canConfigureDataLists || busy} onClick={() => void onSaveProjectSettings(settingsDraft)}>
-                <Save size={12} /> Listák mentése
-              </button>
-              <button type="button" className={styles.smallButton} disabled={!canConfigureDataLists || busy} onClick={() => setSettingsDraft(DEFAULT_DRIVE_METADATA_OPTIONS)}>
-                Alaplista visszaállítása
-              </button>
-            </div>
           </div>
         ) : (
           <>
             <div className={`${styles.metaItem} ${styles.metaFull}`}>
               <label htmlFor="drive-file-note">Fájlhoz kapcsolt megjegyzés</label>
               <textarea id="drive-file-note" rows={8} value={note} readOnly={!canComment} onChange={(event) => setNote(event.target.value)} />
-            </div>
-            <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canComment || busy} onClick={() => void onSaveNote(note)}>
-                <StickyNote size={12} /> Megjegyzés mentése
-              </button>
             </div>
             {(details?.notes || []).slice(1, 6).map((item) => (
               <div key={item.id} className={styles.infoBox}>{item.note}</div>

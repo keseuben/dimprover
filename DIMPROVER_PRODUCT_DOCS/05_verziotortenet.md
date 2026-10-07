@@ -3954,3 +3954,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - AUTH health a záráskor: database `true`, migration count `10`.
 - DEV tárhely a záráskor kritikus: kb. `118G total / 113G used / 4.1G free`, 97%. A V0.9.23 release még biztonságosan elfért, de új cleanup kör szükséges a következő fejlesztések előtt. Törlés csak friss inventory + DIMPRO safe-delete eljárás + külön jóváhagyás után történhet.
 - PROD DENY változatlan.
+
+## 2026-10-07 – DIMPRO Drive V0.9.24 – workspace persistence + details actions + review workline + identity badge
+
+- Aktív Drive munkatér böngésző-frissítés után megmarad; projektből refresh nem vált vissza automatikusan Saját Drive-ra.
+- A board Saját Drive tárhelyjelzője a munkatérkártyából a `Rendszer / Beállítások` alatti tárhelykártyába került, egységesen a projekt tárhely kijelzésével.
+- Saját Drive teljesképernyős táblázatában egy fájlsor egyszeri kijelölése automatikusan megnyitja a részlet-inspektort.
+- Projekt Részletek panel műveletei kompakt, ikonos felső műveletsávba kerültek: metaadat-mentés, letöltés, QR, lomtár, biztonsági ellenőrzés/jóváhagyás/elutasítás; a Tervellenőrzés, Megjegyzések és Listák mentési műveletei is felül érhetők el.
+- Jóváhagyó és elutasító műveletek külön zöld/piros vizuális tónust kaptak.
+- A tervellenőrzési sorrendmutató már nem gombszerű: státusznév + ikon fölött, alacsony vastag állapotsávval és köztes nyilakkal jelenik meg; az aktuális szint kék, visszaadott állapot narancs, kész állapot zöld.
+- A fejléc felhasználói blokkja két soros: név + projekt-specifikus e-mail. A szerepkör külön színezett négyzetes jelvény: `BPV`, `PV`, `ELL`, `KM`, `NÉZ`; Saját Drive-ban `TUL`.
+- A projekt tree API most a tagsághoz tartozó e-mailt is visszaadja (`membershipEmail`), így több identitás esetén a projekthez ténylegesen használt e-mail jelenik meg.
+- Új contract: `scripts/drive-v0924-workspace-details-header-contract.mjs` – 17/17 PASS.
+- Regresszió: V0.9.22 41/41 PASS, V0.9.21 42/42 PASS, V0.9.20 24/24 PASS, V0.9.19 15/15 PASS, V0.9.18 26/26 PASS. A V0.9.23 korábbi tárhelypozíció-assertje szándékosan elavult a board-áthelyezés miatt.
+- TypeScript PASS, targeted ESLint 0 error (2 korábbi hook-warning), `git diff --check` PASS.
+- PROD DENY.

@@ -817,3 +817,9 @@ A V0.9.23 aktív DEV runtime forrása `dc3eec69e2f97ced5b2ca44b53f443073c1537ba`
 A BUILD-02 artifact SHA-256 `5770a8512a3055c0e4178b5dbe33088be12da26883055f6bae0b5109e1ff8ee2`, build ID `B49exoYyl_PxCST_uXk0b`. A runner `result.json` nélkül zárt, ezért az artifact külön release-meta/SHA/standalone ellenőrzéssel lett validálva. Public smoke PASS, PROD DENY.
 
 A DEV VPS tárhelyhasználata az aktiválás után 97% körüli; következő fejlesztési kör előtt friss storage inventory és jóváhagyott safe-delete cleanup szükséges.
+
+## Drive V0.9.24 – fejléc identitás és munkatér-megőrzés
+
+A Drive fejlécben a felhasználó neve és alatta az aktuális projekttagsághoz tartozó e-mail jelenik meg. A szerepkör külön, színezett rövid jelvény, így nem foglal harmadik szövegsort. Több hitelesített e-mail esetén a projektmunkatér a projekt létrehozásakor/meghívásakor használt tagsági e-mailt mutatja; a Saját Drive a központi elsődleges személyes identitást mutatja.
+
+A kiválasztott Drive munkatér böngésző-localStorage állapotban megmarad. Újratöltéskor a rendszer először ezt próbálja visszaállítani, és csak akkor esik vissza az első elérhető munkatérre, ha a korábbi munkatér már nem hozzáférhető.

@@ -231,10 +231,6 @@ export default function FloatingProjectBoard({
               <div><span>Tárolási kör</span><strong>USER_ROOT</strong></div>
               <div><span>Mappafa</span><strong>Aktív</strong></div>
             </div>
-            <div className={styles.projectStorageMeter} data-level={storageQuota && storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota && storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}>
-              <span className={styles.projectStorageLabel}>Tárhely {storageValue}</span>
-              <i><b style={{ width: `${storagePercent}%` }} /></i>
-            </div>
           </section>
         )}
 
@@ -294,8 +290,7 @@ export default function FloatingProjectBoard({
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>
 
-        {projectMode ? (
-          <div className={styles.storageCard}>
+        <div className={styles.storageCard} data-workspace-storage={projectMode ? "project" : "personal"}>
             <div className={styles.storageRow}><span>Tárhely</span><strong>{storageValue}</strong></div>
             <div className={styles.storageBar} role="progressbar" aria-label="Drive tárhelyhasználat" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(storagePercent)}>
               <div className={styles.storageBarFill} style={{ width: `${storagePercent}%` }} />
@@ -303,7 +298,6 @@ export default function FloatingProjectBoard({
             {storageError ? <div className={styles.storageError}>{storageError}</div> : null}
             <button type="button" className={styles.storageButton}>Tárhely bővítése</button>
           </div>
-        ) : null}
       </div>
     </aside>
   );

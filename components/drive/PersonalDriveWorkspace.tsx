@@ -52,6 +52,7 @@ type PersonalFolderRenameDialog = {
 type Props = {
   workspaceName: string;
   userEmail?: string | null;
+  userDisplayName?: string | null;
   workspaceOptions: DriveWorkspaceOption[];
   selectedWorkspaceId: string;
   onWorkspaceChange: (workspaceId: string) => void;
@@ -140,7 +141,7 @@ function itemToDocument(item: PersonalDriveItem): DriveDocument {
   };
 }
 
-export default function PersonalDriveWorkspace({ workspaceName, userEmail, workspaceOptions, selectedWorkspaceId, onWorkspaceChange, onManageIdentities, navigationRequest, storageQuota = null, onStorageQuotaChange }: Props) {
+export default function PersonalDriveWorkspace({ workspaceName, userEmail, userDisplayName, workspaceOptions, selectedWorkspaceId, onWorkspaceChange, onManageIdentities, navigationRequest, storageQuota = null, onStorageQuotaChange }: Props) {
   const [items, setItems] = useState<PersonalDriveItem[]>([]);
   const [folders, setFolders] = useState<PersonalDriveFolder[]>([]);
   const [folderCoreReady, setFolderCoreReady] = useState(false);
@@ -664,7 +665,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     viewMode={viewMode}
     onViewModeChange={setViewMode}
     allowedViewModes={["simple", "engineering"]}
-    onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+    onSelectDocument={(document) => { setSelectedDocumentId(document.id); if (tableFullscreen) setFullTableInspectorOpen(true); }}
     onOpenDocument={(document) => void openDocument(document)}
     onRefresh={() => void load()}
     boxColorsByDocument={boxColorsByDocument}
@@ -707,7 +708,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       <header className={styles.projectHeader}>
         <div className={styles.projectIdentity}><div className={styles.projectIcon}><HardDrive size={18} /></div><div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span>{storageQuota ? <span className={styles.projectStorageMeter} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"} title={`Foglalt: ${formatBytes(storageQuota.occupiedBytes)} · Keret: ${formatBytes(storageQuota.quotaBytes)}`}><span className={styles.projectStorageLabel}>Tárhely {formatBytes(storageQuota.occupiedBytes)} / {formatBytes(storageQuota.quotaBytes)}</span><i><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i></span> : null}</div></div></div>
         {workspaceOptions.length > 0 && selectedWorkspaceId ? <div className={styles.workspaceSelectorWrap}><label className={styles.workspaceSelectorLabel} htmlFor="drive-personal-trash-workspace-selector">Munkatér</label><select id="drive-personal-trash-workspace-selector" className={styles.workspaceSelector} value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)}>{workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}{option.code ? " · " + option.code : ""}</option>)}</select></div> : null}
-        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>E-mail-címek és munkahelyek</span></div></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
+        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userDisplayName || userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div className={styles.userIdentityText}><strong>{userDisplayName || "DIMPRO felhasználó"}</strong><span title={userEmail || ""}>{userEmail || "—"}</span></div><span className={styles.userRoleBadge} data-role-tone="personal" title="Saját Drive tulajdonos" aria-label="Saját Drive tulajdonos">TUL</span></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
       </header>
       <div className={styles.breadcrumb}><span>Saját Drive</span><span>› <strong>Lomtár</strong></span></div>
       <PersonalDriveTrashPanel onChanged={load} />
@@ -722,7 +723,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
           <div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span><span>{items.length} fájl</span>{storageQuota ? <span className={styles.projectStorageMeter} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"} title={`Foglalt: ${formatBytes(storageQuota.occupiedBytes)} · Keret: ${formatBytes(storageQuota.quotaBytes)}`}><span className={styles.projectStorageLabel}>Tárhely {formatBytes(storageQuota.occupiedBytes)} / {formatBytes(storageQuota.quotaBytes)}</span><i><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i></span> : <span>{formatBytes(totalBytes)}</span>}</div></div>
         </div>
         {workspaceOptions.length > 0 && selectedWorkspaceId ? <div className={styles.workspaceSelectorWrap}><label className={styles.workspaceSelectorLabel} htmlFor="drive-personal-workspace-selector">Munkatér</label><select id="drive-personal-workspace-selector" className={styles.workspaceSelector} value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)}>{workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}{option.code ? " · " + option.code : ""}</option>)}</select></div> : null}
-        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>E-mail-címek és munkahelyek</span></div></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
+        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userDisplayName || userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div className={styles.userIdentityText}><strong>{userDisplayName || "DIMPRO felhasználó"}</strong><span title={userEmail || ""}>{userEmail || "—"}</span></div><span className={styles.userRoleBadge} data-role-tone="personal" title="Saját Drive tulajdonos" aria-label="Saját Drive tulajdonos">TUL</span></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
       </header>
 
       <PersonalDrivePreviewDrawer document={previewDocument} open={Boolean(previewDocumentId && previewDocument)} onClose={() => setPreviewDocumentId("")} />

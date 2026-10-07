@@ -63,10 +63,20 @@ type Props = {
   selectedWorkspaceId?: string;
   onWorkspaceChange?: (workspaceId: string) => void;
   navigationRequest?: DriveNavigationRequest;
+  userEmail?: string | null;
   onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
 };
 
 type ProjectMembershipRole = "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
+
+function projectRoleBadge(role: ProjectMembershipRole | "") {
+  if (role === "OWNER") return { short: "BPV", label: "Beruházási projektvezető", tone: "owner" };
+  if (role === "PROJECT_MANAGER") return { short: "PV", label: "Projektvezető", tone: "manager" };
+  if (role === "REVIEWER") return { short: "ELL", label: "Ellenőrző", tone: "reviewer" };
+  if (role === "CONTRIBUTOR") return { short: "KM", label: "Közreműködő", tone: "contributor" };
+  if (role === "VIEWER") return { short: "NÉZ", label: "Megtekintő", tone: "viewer" };
+  return { short: "TAG", label: "Projekt résztvevő", tone: "member" };
+}
 
 type TreePayload = {
   ok?: boolean;
@@ -75,6 +85,7 @@ type TreePayload = {
   permissions?: DrivePermission[];
   membershipRole?: ProjectMembershipRole;
   membershipDisplayName?: string;
+  membershipEmail?: string | null;
 };
 
 type FolderPasswordGateStatus = {
@@ -229,6 +240,7 @@ export default function DriveWorkspace({
   selectedWorkspaceId = "",
   onWorkspaceChange,
   navigationRequest,
+  userEmail = null,
   onStorageQuotaChange,
 }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
@@ -238,6 +250,7 @@ export default function DriveWorkspace({
   const [apiPermissions, setApiPermissions] = useState<DrivePermission[]>([]);
   const [membershipRole, setMembershipRole] = useState<ProjectMembershipRole | "">("");
   const [membershipDisplayName, setMembershipDisplayName] = useState("");
+  const [membershipEmail, setMembershipEmail] = useState("");
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
   const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
   const bootLoaderVisibleRef = useRef(true);
@@ -443,6 +456,7 @@ export default function DriveWorkspace({
       setApiPermissions(treePayload.permissions || []);
       setMembershipRole(treePayload.membershipRole || "");
       setMembershipDisplayName(treePayload.membershipDisplayName || "");
+      setMembershipEmail(treePayload.membershipEmail || "");
       setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
       setProjectSettings(settingsResponse.ok && settingsPayload.ok && settingsPayload.settings ? settingsPayload.settings : null);
       setFavoriteDocumentIds(favoritesResponse.ok && favoritesPayload.ok ? favoritesPayload.documentIds || [] : []);
@@ -495,6 +509,7 @@ export default function DriveWorkspace({
     setFavoriteOnly(false);
     setMembershipRole("");
     setMembershipDisplayName("");
+    setMembershipEmail("");
     setReviewFocus("");
     setSelectedFolderId("all");
     setAllFilesInFolderMode(false);
@@ -2430,6 +2445,8 @@ export default function DriveWorkspace({
   const titleBase = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
   const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
+  const headerRole = projectRoleBadge(membershipRole);
+  const headerEmail = membershipEmail || userEmail || "—";
 
   return (
 
@@ -2486,11 +2503,12 @@ export default function DriveWorkspace({
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
           <ProjectAccessMenu projectId={projectId} compact />
           <div className={styles.userPill}>
-            <span className={styles.avatar}>{(membershipDisplayName || "D").trim().charAt(0).toUpperCase() || "D"}</span>
-            <div>
+            <span className={styles.avatar}>{(membershipDisplayName || headerEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span>
+            <div className={styles.userIdentityText}>
               <strong>{membershipDisplayName || "DIMPRO felhasználó"}</strong>
-              <span>{projectRoleLabel(membershipRole)}</span>
+              <span title={headerEmail}>{headerEmail}</span>
             </div>
+            <span className={styles.userRoleBadge} data-role-tone={headerRole.tone} title={headerRole.label} aria-label={headerRole.label}>{headerRole.short}</span>
           </div>
           <HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} />
         </div>

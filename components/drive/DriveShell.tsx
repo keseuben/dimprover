@@ -14,6 +14,8 @@ import { type DriveNavigationRequest, type DriveNavigationTarget } from "./drive
 import { DRIVE_THEME_STORAGE_KEY, normalizeDriveTheme, type DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
 
+const DRIVE_ACTIVE_WORKSPACE_STORAGE_KEY = "dimpro-drive-active-workspace-v1";
+
 type DriveProvisioningInfo = {
   version: string;
   projectId: string;
@@ -107,9 +109,15 @@ export default function DriveShell({
       const payload = await response.json() as DriveWorkspacesPayload;
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A Drive munkaterek nem tölthetők be.");
       const normalized = (payload.workspaces || []).filter((workspace) => workspace?.id && (workspace.type === "PERSONAL" || workspace.type === "PROJECT"));
+      let persistedWorkspaceId = "";
+      try { persistedWorkspaceId = window.localStorage.getItem(DRIVE_ACTIVE_WORKSPACE_STORAGE_KEY) || ""; } catch {}
       setWorkspaces(normalized);
       setWorkspaceUserEmail(payload.user?.email || null);
-      setSelectedWorkspaceId((current) => normalized.some((workspace) => workspace.id === current) ? current : normalized[0]?.id || "");
+      setSelectedWorkspaceId((current) => {
+        if (normalized.some((workspace) => workspace.id === current)) return current;
+        if (persistedWorkspaceId && normalized.some((workspace) => workspace.id === persistedWorkspaceId)) return persistedWorkspaceId;
+        return normalized[0]?.id || "";
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A Drive munkaterek nem tölthetők be.");
     } finally {
@@ -173,6 +181,10 @@ export default function DriveShell({
 
   useEffect(() => { void loadWorkspaces(); }, [loadWorkspaces]);
   useEffect(() => { void loadUserIdentities(); }, [loadUserIdentities]);
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
+    try { window.localStorage.setItem(DRIVE_ACTIVE_WORKSPACE_STORAGE_KEY, selectedWorkspaceId); } catch {}
+  }, [selectedWorkspaceId]);
 
   useEffect(() => () => {
     if (boardOpenTimer.current) clearTimeout(boardOpenTimer.current);
@@ -297,6 +309,8 @@ export default function DriveShell({
   );
 
   const verifiedUserIdentities = userIdentities.filter((identity) => identity.status === "VERIFIED");
+  const primaryUserIdentity = verifiedUserIdentities.find((identity) => identity.isPrimary) || verifiedUserIdentities.find((identity) => identity.email.toLowerCase() === (workspaceUserEmail || "").toLowerCase()) || verifiedUserIdentities[0] || null;
+  const workspaceUserDisplayName = primaryUserIdentity?.displayName?.trim() || workspaceUserEmail || "DIMPRO felhasználó";
   const canCreateProject = workspaces.some((workspace) => workspace.type === "PERSONAL");
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
 
@@ -537,6 +551,7 @@ export default function DriveShell({
             key={selectedWorkspace.id + ":" + workspaceRevision}
             workspaceName={selectedWorkspace.name}
             userEmail={workspaceUserEmail}
+            userDisplayName={workspaceUserDisplayName}
             workspaceOptions={workspaceOptions}
             selectedWorkspaceId={selectedWorkspace.id}
             onWorkspaceChange={handleWorkspaceChange}
@@ -557,6 +572,7 @@ export default function DriveShell({
             selectedWorkspaceId={selectedWorkspace.id}
             onWorkspaceChange={handleWorkspaceChange}
             navigationRequest={navigationRequest}
+            userEmail={workspaceUserEmail}
             onStorageQuotaChange={handleStorageQuotaChange}
           />
         ) : (

@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       permissions: access.access.permissions,
       membershipRole: access.access.membership.role,
       membershipDisplayName: access.access.membership.displayName,
+      membershipEmail: access.access.membership.email || null,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
