@@ -55,6 +55,21 @@ function copyToDev(runId, files) {
   }
 }
 
+function verifyDevArtifact(runId, artifactSha256) {
+  const devPath = `${DEV_ARTIFACT_ROOT}/${runId}/build-artifact.tar.gz`;
+  const stdout = execFileSync(SSH_BIN, sshArgs(DEV_ALIAS, `sha256sum ${q(devPath)}`), { encoding:"utf8", timeout:60_000, maxBuffer:64*1024, stdio:["ignore","pipe","ignore"] });
+  const remoteSha = String(stdout||"").trim().split(/\s+/)[0] || "";
+  if (remoteSha !== artifactSha256) throw Object.assign(new Error("A DEV artifact SHA-256 ellenőrzése sikertelen."), { code:"DEV_ARTIFACT_SHA256_MISMATCH" });
+  return devPath;
+}
+function markRunnerDevCopy(def, runId, artifactSha256, devPath) {
+  const marker = JSON.stringify({ schemaVersion:1, environment:"DEV", productionAccess:"DENY", runId, artifactSha256, devPath, verifiedAt:new Date().toISOString(), source:"DIMPRO_BUILD_TRANSPORT_GATEWAY_V1" });
+  const markerPath = `/srv/dimpro-build/artifacts/${runId}/DEV_COPY_VERIFIED.json`;
+  const tempPath = `${markerPath}.${process.pid}.tmp`;
+  const command = `umask 027; printf '%s\n' ${q(marker)} > ${q(tempPath)} && chmod 640 ${q(tempPath)} && mv -f ${q(tempPath)} ${q(markerPath)}`;
+  execFileSync(SSH_BIN, sshArgs(def.sshAlias, command), { stdio:["ignore","ignore","ignore"], timeout:30_000 });
+}
+
 const runId = safeId(process.argv[2], "runId", /^[A-Za-z0-9][A-Za-z0-9._:-]{2,159}$/);
 const runDir = path.join(RUN_ROOT, runId);
 const statusFile = path.join(runDir, "status.json");
@@ -94,6 +109,8 @@ try {
   const devResult = path.join(runDir,"result.json");
   atomic(devResult, { schemaVersion:1,environment:"DEV",productionAccess:"DENY",runId,nodeId:runnerId,status:"PASS",code:null,buildId:metadata.buildId,artifactSha256,outputSha256,sourceCommit:record.sourceCommit,sourceBranch:record.sourceBranch,startedAt:record.startedAt,finishedAt:new Date().toISOString() });
   copyToDev(runId, [[artifact,"build-artifact.tar.gz"],[metadataFile,"metadata.json"],[devResult,"result.json"]]);
+  const verifiedDevArtifactPath = verifyDevArtifact(runId, artifactSha256);
+  markRunnerDevCopy(def, runId, artifactSha256, verifiedDevArtifactPath);
   record = { ...record, status:"PASS", code:null, buildId:metadata.buildId, artifactSha256, outputSha256, finishedAt:new Date().toISOString() };
   atomic(statusFile, record);
   writeLog(`PASS ${runnerId} ${metadata.buildId} ${artifactSha256}`);

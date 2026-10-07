@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "environment": "DEV",
+  "productionAccess": "DENY",
+  "buildRoot": "/srv/dimpro-build",
+  "manualRuns": {
+    "enabled": true,
+    "passSourceMinAgeHours": 2,
+    "failSourceMinAgeHours": 24
+  },
+  "worktrees": {
+    "enabled": true,
+    "minAgeHours": 2,
+    "requireArtifact": true
+  },
+  "temp": {
+    "enabled": true,
+    "minAgeHours": 2
+  },
+  "artifacts": {
+    "enabled": true,
+    "autoDelete": true,
+    "minAgeHours": 24,
+    "keepNewestVerified": 10,
+    "requireDevCopyMarker": true
+  },
+  "logs": {
+    "enabled": true,
+    "minAgeHours": 336
+  },
+  "npmCache": {
+    "maxBytes": 5368709120,
+    "autoPrune": false
+  },
+  "storageGovernor": {
+    "safeBelowPercent": 35,
+    "watchBelowPercent": 45,
+    "autoCleanBelowPercent": 55,
+    "cachePruneBelowPercent": 65,
+    "waitBelowPercent": 75,
+    "denyBelowPercent": 85
+  }
+}

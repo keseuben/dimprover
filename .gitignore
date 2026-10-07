@@ -54,3 +54,7 @@ next-env.d.ts
 
 # BENJADMIN Developer Grid Task Bridge runtime artifacts
 /.devgrid/tasks/
+
+# Python generated caches
+__pycache__/
+*.py[cod]

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run DIMPRO Build Node Retention V1 hourly
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=dimpro-build-retention.service
+
+[Install]
+WantedBy=timers.target
