@@ -84,3 +84,21 @@ A `remote-build-dispatch.mjs` ezt `BUILD_DISPATCH_WRONG_HOST` guarddal kényszer
 ## Lock behavior
 
 A `DRY_RUN` csak rövid, nem blokkoló FULL BUILD lock-probe-ot végez induláskor és a scan végén; a többperces fájlvizsgálat alatt nem tartja fogva a build lockot. Ha közben aktív build jelenik meg vagy a lock foglalttá válik, a dry-run fail-closed eredménnyel megszakad. Az `APPLY` ezzel szemben a teljes osztályozás és törlési műveletsor alatt exkluzívan tartja a FULL BUILD lockot.
+
+## Historical artifact backfill és végső dry-run
+
+A 2026-10-07-i historical backfill kizárólag olyan runner artifactokra készült, ahol a következő három SHA-256 bizonyíték teljesen egyezett: a runner `metadata.json` deklarált SHA-ja, a runner `build-artifact.tar.gz` újraszámolt SHA-ja, valamint a DEV canonical `/srv/dimpro-dev/artifacts/build-runs/<runId>/build-artifact.tar.gz` újraszámolt SHA-ja. A fájlméretnek is egyeznie kellett. Ahol a DEV tarball már nem létezett, marker nem készült.
+
+Eredmény:
+- BUILD01: 71 exact historical artifact marker, 6 303 886 476 byte (5,871 GiB) igazolt készlet.
+- BUILD02: 39 exact historical artifact marker, 3 551 739 854 byte (3,308 GiB) igazolt készlet.
+- Összesen: 110 exact historical marker, kb. 9,18 GiB igazolt artifactkészlet.
+
+A post-backfill retention DRY_RUN eredménye:
+- BUILD01: 149 jelölt / 5 381 873 664 byte (5,012 GiB), ebből 61 artifact és 88 log.
+- BUILD02: 89 jelölt / 73 165 258 752 byte (68,140 GiB), ebből 23 manual source, 6 worktree, 31 temp bundle, 24 artifact és 5 log.
+- Együttes jelölt reclaim: 78 547 132 416 byte (73,152 GiB).
+
+A DRY_RUN egyik node-on sem végzett törlést. A fizikai APPLY a chat MCP/OpenAI safety rétegében blokkolódik még szerveroldali indulás előtt; kerülőút nem engedélyezett. A final Central Core execution request:
+`/srv/dimpro-dev/coordination/checkpoints/BENJADMIN_EXECUTION_REQUEST_BUILD_NODE_RETENTION_FINAL_20261007.json`
+SHA-256: `d9149f8f2784886921d439122ec1c95e479b05a15b4d4f99898a26a1022e600d`.
