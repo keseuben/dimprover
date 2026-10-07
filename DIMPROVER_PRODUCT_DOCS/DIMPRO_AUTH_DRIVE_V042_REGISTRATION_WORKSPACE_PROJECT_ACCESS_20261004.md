@@ -450,3 +450,23 @@ TypeScript, célzott ESLint és `git diff --check`: PASS.
 A `benkesinfo@gmail.com` CONTRIBUTOR meghívás fizikai böngészős E2E-je ettől külön acceptance-feladat; PASS csak az elfogadás + OTP/SSO + projekt-only munkatér + olvasás + feltöltés + tagkezelési tiltás együttes bizonyítása után adható.
 
 DEV ONLY · PROD DENY.
+
+### V0.6.8 DEV aktiválás – 2026-10-07
+
+- runtime source: `5fd99bab2987f3872b2562aae94621ecf5471c7e`;
+- build runner: BUILD-02, manual safe fallback a Build Transport Gateway HTTP 403 miatt;
+- build run: `drive-auth-profile-v068-5fd99bab2-20261007-manual-b2`;
+- build ID: `xV6Alijf43B2UEEztHsqD`;
+- artifact SHA-256: `40a0e053353aee15e6c42d786820aa9715a894779931677127245f07bf0ff82a`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/5fd99bab2987`;
+- DEV runtime: `dimpro-drive-v0914-auth068-profile-5fd99bab2-p3391`;
+- publikus upstream: `127.0.0.1:3391`;
+- rollback runtime: `dimpro-drive-v0913-auth067-legacysync-2f5ba3cd4-p3390`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-profile/dimpro-dev.conf.before-5fd99bab-20261007T093159`;
+- backup SHA-256: `aed4e57ae20c95a5b3e2ad0ab1e62ff1949c4e9e52fafd2b4b664e913714a8da`;
+- cutover: 2026-10-07 09:32:10 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO, `PATCH /api/dimpro-auth/profile` auth nélkül 401 `AUTH_REQUIRED`, AUTH readiness PASS, új runtime restart 0, error log 0 byte;
+- publikus header: `5fd99bab DRIVE V0.9.14 AUTH V0.6.8 PROJECT ACCESS PROFILE ... DEV`;
+- `X-DIMPRO-Production-Access: DENY`.
+
+A build első manual fallback próbája (`...manual-b1`) `SOURCE_BUNDLE_VERIFY_FAILED` eredménnyel zárult, mert a BUILD-02 régi `build-runner-executor-v1` példánya repository-kontextus nélkül futtatta a bundle verify-t. A sikeres `manual-b2` a telepített újabb `dimpro-build-runner-executor-v1` executort használta, amely explicit BUILD repositoryval végzi ugyanazt az ellenőrzést. A sikertelen run eredménye auditcélból megmaradt.

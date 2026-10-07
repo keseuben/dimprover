@@ -3655,3 +3655,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új profile/access contract `12/12 PASS`; TypeScript, célzott ESLint és `git diff --check` PASS.
 - A CONTRIBUTOR meghívás teljes böngészős E2E-je továbbra is külön, felhasználói elfogadást igénylő acceptance-pont; még nem jelölhető PASS-nak.
 - DEV ONLY · PROD DENY.
+
+#### AUTH/Drive V0.6.8 DEV aktiválás
+
+- Source `5fd99bab2987f3872b2562aae94621ecf5471c7e`; BUILD-02 manual safe fallback PASS.
+- Build `xV6Alijf43B2UEEztHsqD`; artifact SHA-256 `40a0e053353aee15e6c42d786820aa9715a894779931677127245f07bf0ff82a`.
+- DEV runtime `dimpro-drive-v0914-auth068-profile-5fd99bab2-p3391`, publikus upstream 3391; korábbi V0.6.7 `2f5ba3cd...` / 3390 online rollback.
+- Nginx configtest/reload PASS; public `/drive` central SSO 307, profile unauth 401, AUTH ready migrationCount 8, runtime restart 0, error log 0 byte.
+- Nginx backup SHA-256 `aed4e57ae20c95a5b3e2ad0ab1e62ff1949c4e9e52fafd2b4b664e913714a8da`.
+- PROD DENY.
