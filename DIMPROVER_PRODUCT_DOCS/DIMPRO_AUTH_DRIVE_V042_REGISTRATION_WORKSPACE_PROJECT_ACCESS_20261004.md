@@ -809,3 +809,11 @@ A személyes új tartalomreferencia kvótaellenőrzése DB-szinten sorosított, 
 A személyes és projekt Drive fájlelőnézet egységesedik: dupla kattintás a jobb oldali nagy preview drawert nyitja. Böngésző fullscreen alatt a preview nem lépteti ki a felhasználót teljes képernyőből.
 
 Drive UI target `0.9.23`; Personal Drive Storage target `0.1.0`. DEV preflight PASS, PROD DENY.
+
+#### Drive V0.9.23 DEV runtime állapot – 2026-10-07
+
+A V0.9.23 aktív DEV runtime forrása `dc3eec69e2f97ced5b2ca44b53f443073c1537ba`, port `3401`. A V0.9.22 port `3400` online rollbackként megmaradt. A Personal Drive Storage V0.1.0 migráció backup után, koordinált migration lock alatt sikeresen aktiválódott; a 50 GiB alapkvóta és a későbbi `PLAN`/`OVERRIDE` felülírás backend szerződése aktív.
+
+A BUILD-02 artifact SHA-256 `5770a8512a3055c0e4178b5dbe33088be12da26883055f6bae0b5109e1ff8ee2`, build ID `B49exoYyl_PxCST_uXk0b`. A runner `result.json` nélkül zárt, ezért az artifact külön release-meta/SHA/standalone ellenőrzéssel lett validálva. Public smoke PASS, PROD DENY.
+
+A DEV VPS tárhelyhasználata az aktiválás után 97% körüli; következő fejlesztési kör előtt friss storage inventory és jóváhagyott safe-delete cleanup szükséges.

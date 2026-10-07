@@ -3938,3 +3938,19 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Drive UI target: `0.9.23`. Personal Drive Storage schema target: `0.1.0`, bootstrap `personal-drive-storage-v010-20261007`.
 - V0.9.23 contract: 30/30 PASS. V0.9.22: 41/41 PASS; V0.9.21: 42/42 PASS; V0.9.20: 24/24 PASS; V0.9.19: 15/15 PASS; V0.9.18: 26/26 PASS; ProjectGate rich view: 15/15 PASS. TypeScript PASS, érintett fájlok célzott ESLintje 0 error.
 - Personal Drive Storage V0.1.0 read-only DEV preflight PASS, migráció SHA-256 `2c4884b3b8ad0c216295777bbecba07880e70a80138c9e211a24edb11b75b943`. APPLY csak sikeres build után. PROD DENY.
+
+#### Drive V0.9.23 DEV aktiválás – 2026-10-07 este
+
+- Runtime source commit: `dc3eec69e2f97ced5b2ca44b53f443073c1537ba`.
+- BUILD-02 run: `drive-v0923-dc3eec69e-20261007-manual-b1`; build ID `B49exoYyl_PxCST_uXk0b`; artifact SHA-256 `5770a8512a3055c0e4178b5dbe33088be12da26883055f6bae0b5109e1ff8ee2`.
+- A BUILD-02 runner létrehozta a konzisztens artifactot és metadata fájlt, de `result.json` nem keletkezett. Emiatt az aktiválás dokumentált fallback build-ellenőrzéssel történt: artifact SHA = metadata SHA; `.dimpro-release.json` commit/branch/build ID egyezik; standalone server/public/static jelen van. Nem lett hamisan official result PASS-nak minősítve.
+- Personal Drive Storage V0.1.0 migráció APPLY PASS a központi DIMPRO migration lock alatt. Migráció SHA-256 `2c4884b3b8ad0c216295777bbecba07880e70a80138c9e211a24edb11b75b943`.
+- Migráció előtti backup: `/srv/dimpro-dev/backups/personal-drive-storage-v010/20261007T195348Z`. Meglévő content object/ref/CsomagBOX sorszámok változatlanok maradtak; csak az új schema marker került be.
+- A direct Supabase host egy futásnál IPv6 `No route to host` hibát adott. A migration gate a korábbi DIMPRO Content Core migrációkkal azonos canonical `aws-0-eu-central-1.pooler.supabase.com` DEV pooler modellre lett igazítva; a project ref változatlanul `pbgyuznivqvestuksvif`, PROD DENY.
+- Candidate runtime: `dimpro-drive-v0923-personalstorage-dc3eec69e-p3401`, port `3401`, PM2 online, restart 0, error log 0 byte.
+- Nginx cutover backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0923/dimpro-dev.conf.before-dc3eec69-v3-20261007T195839Z`, SHA-256 `6325dff17223821785a1dc2464e776762db7bb3a1a1247d03d7665e6dfc948c6`.
+- Public DEV smoke: `/drive` HTTP 307 a központi AUTH start route-ra; `X-DIMPRO-Drive-Candidate` = `dc3eec69e DRIVE V0.9.23 ...`; `X-DIMPRO-Production-Access: DENY`; personal storage és trash API auth nélkül 401.
+- Rollback runtime változatlanul online: V0.9.22 `8e08ebec9aca...`, port `3400`, PM2 restart 0.
+- AUTH health a záráskor: database `true`, migration count `10`.
+- DEV tárhely a záráskor kritikus: kb. `118G total / 113G used / 4.1G free`, 97%. A V0.9.23 release még biztonságosan elfért, de új cleanup kör szükséges a következő fejlesztések előtt. Törlés csak friss inventory + DIMPRO safe-delete eljárás + külön jóváhagyás után történhet.
+- PROD DENY változatlan.

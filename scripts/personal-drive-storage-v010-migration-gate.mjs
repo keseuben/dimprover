@@ -1,24 +1,46 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 const root=process.cwd(), mode=(process.argv[2]||"preflight").trim().toLowerCase();
 const migrationRel="supabase/migrations/20261007_personal_drive_storage_v010.sql", migration=join(root,migrationRel);
-const expectedSha="2c4884b3b8ad0c216295777bbecba07880e70a80138c9e211a24edb11b75b943", expectedRef="pbgyuznivqvestuksvif", expectedHost="db."+expectedRef+".supabase.co";
+const expectedSha="2c4884b3b8ad0c216295777bbecba07880e70a80138c9e211a24edb11b75b943", expectedRef="pbgyuznivqvestuksvif";
+const directHost="db."+expectedRef+".supabase.co";
+const db={host:"aws-0-eu-central-1.pooler.supabase.com",port:"5432",database:"postgres",user:"postgres."+expectedRef,mode:"POOLER"};
 const approval="DEV_ONLY_PERSONAL_DRIVE_STORAGE_V010_APPLY_APPROVED";
 const backupRoot=process.env.PERSONAL_DRIVE_STORAGE_BACKUP_ROOT||"/srv/dimpro-dev/backups/personal-drive-storage-v010";
-const pgpass=process.env.PERSONAL_DRIVE_STORAGE_PGPASS_FILE||"/home/dimproadmin/.pgpass";
 function fail(code,message,details={}){console.error(JSON.stringify({ok:false,mode,code,message,...details},null,2));process.exit(2)}
 function sha(file){return createHash("sha256").update(readFileSync(file)).digest("hex")}
-function parse(line){const f=[];let c="",e=false;for(const ch of line){if(e){c+=ch;e=false;continue}if(ch==="\\"){e=true;continue}if(ch===":"&&f.length<4){f.push(c);c="";continue}c+=ch}f.push(c);return f.length===5?f:null}
-if(!existsSync(pgpass))fail("DB_CREDENTIAL_REQUIRED","DEV .pgpass unavailable");let db=null;for(const line of readFileSync(pgpass,"utf8").split(/\r?\n/)){const p=parse(line.trim());if(p&&p[0]===expectedHost&&p[1]==="5432"&&p[2]==="postgres"&&p[3]==="postgres"&&p[4]){db={host:p[0],port:p[1],database:p[2],user:p[3],password:p[4]};break}}if(!db)fail("DEV_DB_CREDENTIAL_MISMATCH","Canonical DEV DB credential missing");
-function run(cmd,args){const r=spawnSync(cmd,args,{cwd:root,encoding:"utf8",env:{...process.env,PGPASSWORD:db.password},maxBuffer:32*1024*1024});return{ok:!r.error&&r.status===0,stdout:String(r.stdout||"").trim(),stderr:String(r.stderr||"").trim()}}
+function run(cmd,args){const r=spawnSync(cmd,args,{cwd:root,encoding:"utf8",env:{...process.env},maxBuffer:32*1024*1024});return{ok:!r.error&&r.status===0,stdout:String(r.stdout||"").trim(),stderr:String(r.stderr||"").trim()}}
 function args(extra=[]){return["-w","-h",db.host,"-p",db.port,"-U",db.user,"-d",db.database,"-X","-v","ON_ERROR_STOP=1",...extra]}
+function credentialReady(){
+  const explicit=String(process.env.PERSONAL_DRIVE_STORAGE_DB_PASSWORD||process.env.SUPABASE_DB_PASSWORD||process.env.PGPASSWORD||"").trim();
+  if(explicit){process.env.PGPASSWORD=explicit;delete process.env.PGPASSFILE;return "ENV";}
+  const candidates=[process.env.PGPASSFILE,process.env.PERSONAL_DRIVE_STORAGE_PGPASS_FILE,"/home/dimproadmin/.pgpass","/root/.pgpass"].filter(Boolean);
+  for(const file of candidates){
+    if(!existsSync(file))continue;
+    let st;try{st=statSync(file)}catch{continue}
+    if((st.mode&0o077)!==0)continue;
+    const direct=readFileSync(file,"utf8").split(/\r?\n/).find((line)=>line.startsWith(`${directHost}:5432:postgres:postgres:`));
+    if(!direct)continue;
+    const password=direct.split(":").slice(4).join(":");
+    if(!password)continue;
+    process.env.PGPASSWORD=password;delete process.env.PGPASSFILE;
+    const test=run("psql",args(["-Atc","select 1;"]));
+    if(test.ok&&test.stdout==="1")return file;
+  }
+  fail("DB_CREDENTIAL_REQUIRED","No working canonical DEV PostgreSQL credential. Migration not executed.",{host:db.host,projectRef:expectedRef});
+}
 function query(sql){const r=run("psql",args(["-Atc",sql]));if(!r.ok)fail("DB_QUERY_FAILED","DEV query failed",{stderr:r.stderr.slice(-2200)});return r.stdout}
 function json(sql,code){try{return JSON.parse(query(sql))}catch{fail(code,"Invalid JSON probe")}}
 if(!["preflight","apply","verify"].includes(mode))fail("MODE_INVALID","Usage: preflight | apply | verify");
-if(!existsSync(migration))fail("MIGRATION_MISSING","Personal Drive storage migration missing");const actualSha=sha(migration);if(actualSha!==expectedSha)fail("MIGRATION_SHA_MISMATCH","Migration SHA mismatch",{expectedSha,actualSha});
+if(!existsSync(migration))fail("MIGRATION_MISSING","Personal Drive storage migration missing");
+credentialReady();
+const actualSha=sha(migration);if(actualSha!==expectedSha)fail("MIGRATION_SHA_MISMATCH","Migration SHA mismatch",{expectedSha,actualSha});
+const identity=json("select json_build_object('database',current_database(),'user',current_user,'port',inet_server_port())::text;","DB_IDENTITY_INVALID");
+if(identity.database!==db.database||identity.user!=="postgres"||Number(identity.port)!==5432)fail("DEV_TARGET_MISMATCH","Canonical DEV PostgreSQL target mismatch",{identity,host:db.host,projectRef:expectedRef});
+if(process.env.PROD_SUPABASE_PROJECT_REF===expectedRef)fail("PROD_TARGET_BLOCKED","DEV and PROD Supabase refs must differ");
 function probe(){return json("select json_build_object("+
 "'contentCore',(select json_build_object('version',schema_version,'count',migration_count,'bootstrap',bootstrap_id) from public.dimpro_content_schema_meta where component='content-core'),"+
 "'storageMeta',(select json_build_object('version',schema_version,'count',migration_count,'bootstrap',bootstrap_id) from public.dimpro_content_schema_meta where component='personal-drive-storage'),"+
@@ -47,7 +69,7 @@ function integrity(){return json("select json_build_object("+
 "'restoreScope',position('PERSONAL_DRIVE_RESTORE_SCOPE_MISMATCH' in pg_get_functiondef(to_regprocedure('public.dimpro_personal_drive_restore_refs_atomic(uuid,uuid[])')))>0"+")::text;","INTEGRITY_INVALID")}
 function assertIntegrity(i){if(!i.rls||!i.ensureSecurityDefiner||!i.restoreSecurityDefiner||!i.ensureService||!i.restoreService||i.ensureAuth||i.restoreAnon||!i.quotaLock||!i.quotaGuard||!i.trashCounts||!i.restoreScope)fail("TARGET_INTEGRITY_FAILED","Personal Drive storage integrity failed",{integrity:i})}
 const before=probe(), beforeCounts=counts();
-if(mode==="preflight"){if(!baseline(before))fail("CONTENT_CORE_BASELINE_REQUIRED","Content Core V0.1.0 baseline required",{schema:before});if(before.storageMeta&&!target(before))fail("PARTIAL_TARGET_DETECTED","Personal Drive storage target is partially applied",{schema:before});console.log(JSON.stringify({ok:true,mode,databaseHost:db.host,projectRef:expectedRef,productionAccess:"DENY",migration:migrationRel,migrationSha256:actualSha,alreadyApplied:target(before),schema:before,rowCounts:beforeCounts,requiredApproval:approval,destructiveActionsPerformed:false},null,2));process.exit(0)}
+if(mode==="preflight"){if(!baseline(before))fail("CONTENT_CORE_BASELINE_REQUIRED","Content Core V0.1.0 baseline required",{schema:before});if(before.storageMeta&&!target(before))fail("PARTIAL_TARGET_DETECTED","Personal Drive storage target is partially applied",{schema:before});console.log(JSON.stringify({ok:true,mode,databaseHost:db.host,databaseMode:db.mode,projectRef:expectedRef,productionAccess:"DENY",migration:migrationRel,migrationSha256:actualSha,alreadyApplied:target(before),schema:before,rowCounts:beforeCounts,requiredApproval:approval,destructiveActionsPerformed:false},null,2));process.exit(0)}
 if(mode==="verify"){if(!target(before))fail("TARGET_NOT_READY","Personal Drive storage V0.1.0 not active",{schema:before});const i=integrity();assertIntegrity(i);console.log(JSON.stringify({ok:true,mode,productionAccess:"DENY",schema:before,rowCounts:beforeCounts,integrity:i,destructiveActionsPerformed:false},null,2));process.exit(0)}
 if(String(process.env.PERSONAL_DRIVE_STORAGE_MIGRATION_APPROVED||"")!==approval)fail("APPROVAL_REQUIRED","Explicit DEV approval required",{requiredApproval:approval});if(process.env.OPERATION!=="migration")fail("COORDINATED_LOCK_REQUIRED","Must run through migration operation lock");
 if(target(before)){const i=integrity();assertIntegrity(i);console.log(JSON.stringify({ok:true,mode,alreadyApplied:true,schema:before,rowCounts:beforeCounts,integrity:i,productionAccess:"DENY"},null,2));process.exit(0)}
