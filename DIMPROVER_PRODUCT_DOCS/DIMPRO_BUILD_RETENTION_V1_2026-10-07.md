@@ -74,3 +74,9 @@ BUILD02:
 - artifact tarball auto-delete: 0, marker hiány miatt.
 
 A fizikai apply csak jóváhagyott, auditált maintenance executoron keresztül végezhető.
+
+## Build dispatch origin rule
+
+A remote FULL BUILD dispatch authoritative originja kizárólag a `dimpro-dev` host. A 2026-10-07 audit bizonyította, hogy a `mcp.dimprover.hu/build-gateway/v1` 403 válaszai a gateway host saját `213.160.68.24` publikus címéről érkeztek, miközben a DEV `213.160.68.32` kérései 200 OK választ kaptak. Ezért `GATEWAY 401/403` esetén automatikus manual build fallback tilos. A művelet fail-closed állapotba kerül, és a dispatchot a DEV authoritative hostról kell újraindítani.
+
+A `remote-build-dispatch.mjs` ezt `BUILD_DISPATCH_WRONG_HOST` guarddal kényszeríti ki. A default expected host `dimpro-dev`; teszt/fixture célra külön környezeti override létezik (`DIMPRO_BUILD_DISPATCH_EXPECTED_HOST`).

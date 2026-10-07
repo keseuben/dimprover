@@ -44,3 +44,9 @@ The staged APPLY service uses an exact config SHA confirmation token, so configu
 ## Safety
 
 The engine never touches repositories, toolchains, state results, metadata, user/project data, DEV runtime, PROD content, or an active build. Worktrees are removed only using `git worktree remove --force`; no raw recursive deletion is used for Git worktrees.
+
+## Build dispatch origin rule
+
+A remote FULL BUILD dispatch authoritative originja kizárólag a `dimpro-dev` host. A 2026-10-07 audit bizonyította, hogy a `mcp.dimprover.hu/build-gateway/v1` 403 válaszai a gateway host saját `213.160.68.24` publikus címéről érkeztek, miközben a DEV `213.160.68.32` kérései 200 OK választ kaptak. Ezért `GATEWAY 401/403` esetén automatikus manual build fallback tilos. A művelet fail-closed állapotba kerül, és a dispatchot a DEV authoritative hostról kell újraindítani.
+
+A `remote-build-dispatch.mjs` ezt `BUILD_DISPATCH_WRONG_HOST` guarddal kényszeríti ki. A default expected host `dimpro-dev`; teszt/fixture célra külön környezeti override létezik (`DIMPRO_BUILD_DISPATCH_EXPECTED_HOST`).

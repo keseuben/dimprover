@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,16 @@ function safeRunner(value) {
   if (value === undefined || value === null || value === "") return null;
   if (!RUNNER_PRIORITY.includes(value)) fail("RUNNER_ID_INVALID", "runnerId érvénytelen.");
   return value;
+}
+function assertDispatchHost() {
+  const expected = process.env.DIMPRO_BUILD_DISPATCH_EXPECTED_HOST?.trim() || "dimpro-dev";
+  const actual = os.hostname().split(".")[0];
+  if (actual !== expected) {
+    fail(
+      "BUILD_DISPATCH_WRONG_HOST",
+      `Remote build dispatch kizárólag az authoritative ${expected} hostról indítható; actual=${actual}. GATEWAY 401/403 esetén automatikus manual fallback TILOS.`,
+    );
+  }
 }
 function safeCommit(value) {
   if (!/^[0-9a-f]{40}$/i.test(value || "")) fail("SOURCE_COMMIT_INVALID", "sourceCommit nem teljes Git SHA.");
@@ -106,6 +117,8 @@ async function waitForFile(file, timeoutMs=30_000) {
   while(Date.now()-started<timeoutMs) { if(fs.existsSync(file)) return; await sleep(500); }
   fail("BUILD_GATEWAY_ARTIFACT_SYNC_TIMEOUT",`A gateway által visszaszinkronizált fájl nem érkezett meg: ${path.basename(file)}.`);
 }
+
+assertDispatchHost();
 
 const args=parseArgs(process.argv.slice(2));
 const runId=safeId(args["run-id"],"runId");
