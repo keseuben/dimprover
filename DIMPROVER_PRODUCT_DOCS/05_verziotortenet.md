@@ -3720,3 +3720,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Multi-identity/lifecycle contract `35/35 PASS`; TypeScript és célzott ESLint PASS.
 - Új DB migráció nem szükséges; AUTH migrationCount változatlanul 9.
 - PROD DENY.
+
+#### AUTH V0.6.10 / Drive V0.9.16 DEV aktiválás
+
+- Source `d167992bc848eb3a2a6d2a52a5242f5c68ad5efc`; BUILD-02 PASS.
+- Build ID `SiEsYj13JNTbSquTZedtH`; artifact SHA-256 `bacd90ec8187dfac795f7b4649f90d579536130386d17ef204f9bea6764cd61c`.
+- Aktív DEV runtime `dimpro-drive-v0916-auth0610-lifecycle-d167992bc-p3394`; V0.9.15 / 3393 online rollback.
+- Nginx backup SHA-256 `85690f5193dcb4f808321c478d2018f08ad6af959c679126251900c8ef68222f`.
+- Public smoke PASS: central SSO 307, identitáslista és lifecycle endpoint unauth 401, AUTH migrationCount 9, restart 0, error log 0 byte.
+- Valódi másodlagos e-mailes OTP/lifecycle E2E még függő.
+- PROD DENY.

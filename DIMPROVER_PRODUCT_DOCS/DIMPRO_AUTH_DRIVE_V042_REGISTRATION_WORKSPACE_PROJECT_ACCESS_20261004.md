@@ -631,3 +631,22 @@ Egy másodlagos e-mail leválasztása nem törli és nem módosítja a korábban
 
 Contract: `auth-v046-user-identities-contract.mjs` → `35/35 PASS`.
 TypeScript PASS, lifecycle + identity célzott ESLint PASS. PROD DENY.
+
+### AUTH V0.6.10 / Drive V0.9.16 DEV aktiválás – 2026-10-07
+
+- runtime source: `d167992bc848eb3a2a6d2a52a5242f5c68ad5efc`;
+- BUILD-02 run: `drive-auth-v0610-lifecycle-d167992bc-20261007-b1`;
+- build ID: `SiEsYj13JNTbSquTZedtH`;
+- artifact SHA-256: `bacd90ec8187dfac795f7b4649f90d579536130386d17ef204f9bea6764cd61c`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/d167992bc848`;
+- aktív DEV runtime: `dimpro-drive-v0916-auth0610-lifecycle-d167992bc-p3394`;
+- publikus upstream: `127.0.0.1:3394`;
+- rollback runtime: `dimpro-drive-v0915-auth069-identities-86d97054b-p3393`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-identity-lifecycle/dimpro-dev.conf.before-d167992bc-20261007T114523`;
+- Nginx backup SHA-256: `85690f5193dcb4f808321c478d2018f08ad6af959c679126251900c8ef68222f`;
+- cutover: 2026-10-07 11:45:30 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO; identitáslista session nélkül 401; lifecycle DELETE session nélkül 401; AUTH readiness `migrationCount=9`; új runtime restart 0; error log 0 byte;
+- publikus header: `d167992bc DRIVE V0.9.16 AUTH V0.6.10 IDENTITY LIFECYCLE + MULTI-IDENTITY ... DEV`;
+- `X-DIMPRO-Production-Access: DENY`.
+
+A következő fizikai acceptance továbbra is valódi másodlagos e-mailt igényel: hozzáadás → OTP → szükség esetén újraküldés → hitelesítés → projektindítás → leválasztás → projekt-hozzáférés változatlanságának ellenőrzése.
