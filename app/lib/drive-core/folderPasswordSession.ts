@@ -12,7 +12,7 @@ export const DRIVE_FOLDER_UNLOCK_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/api/projects",
-  maxAge: 24 * 60 * 60,
+  maxAge: 370 * 24 * 60 * 60,
 };
 
 export async function getCurrentDriveFolderUnlockGrants(projectId: string): Promise<Map<string, DriveFolderUnlockGrant>> {

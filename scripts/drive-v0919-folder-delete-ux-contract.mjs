@@ -22,5 +22,5 @@ check("tree menu exposes trash action",()=>{assert.match(tree,/Lomtárba helyez�
 check("tree delete action respects permission and busy state",()=>assert.match(tree,/disabled=\{!canDeleteFolder \|\| busy \|\| !onDeleteFolder\}/));
 check("tree menu has accessible escape/click-away close",()=>{assert.match(tree,/event\.key === "Escape"/);assert.match(tree,/window\.addEventListener\("pointerdown", close\)/)});
 check("tree action menu is anchored to relative folder row",()=>{assert.match(css,/\.folderTreeItem \{[^}]*position: relative/);assert.match(css,/\.folderTreeActionMenu \{ position: absolute/)});
-check("folder delete still opens audited trash dialog instead of physical client delete",()=>{assert.match(drive,/title: "Mappa Lomtárba helyezése"/);assert.match(drive,/fetch\(`\/api\/projects\/\$\{encodeURIComponent\(projectId\)\}\/drive\/folders\/\$\{encodeURIComponent\(dialog\.folderId\)\}`/)});
+check("folder delete still opens audited trash dialog instead of physical client delete",()=>{assert.match(drive,/"Mappa Lomtárba helyezése"/);assert.match(drive,/fetch\(`\/api\/projects\/\$\{encodeURIComponent\(projectId\)\}\/drive\/folders\/\$\{encodeURIComponent\(dialog\.folderId\)\}`/)});
 console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.19 folder delete UX",pass,fail:0,productionAccess:"DENY"},null,2));

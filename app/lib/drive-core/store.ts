@@ -124,3 +124,9 @@ export {
   restoreDriveTrashItem,
   type DriveTrashItem,
 } from "./trashRepository";
+
+export {
+  listDriveDocumentDeleteDependencies,
+  listDriveFolderDocumentIds,
+  type DriveDeleteDependency,
+} from "./documentDependencyRepository";

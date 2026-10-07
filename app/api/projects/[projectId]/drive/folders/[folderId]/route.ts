@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
-import { requireDriveFolderAccess, softDeleteDriveFolderTree } from "@/app/lib/drive-core/store";
+import { listDriveDocumentDeleteDependencies, listDriveFolderDocumentIds, requireDriveFolderAccess, softDeleteDriveFolderTree } from "@/app/lib/drive-core/store";
 
 type RouteContext = { params: Promise<{ projectId: string; folderId: string }> };
 export const dynamic = "force-dynamic";
@@ -14,6 +14,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     await requireDriveFolderAccess(projectId, folderId, access.access);
+    const documentIds = await listDriveFolderDocumentIds(projectId, folderId);
+    const dependencies = await listDriveDocumentDeleteDependencies(projectId, documentIds);
+    if (dependencies.length) {
+      return NextResponse.json({
+        ok: false,
+        code: "DRIVE_FOLDER_DELETE_DEPENDENCY_BLOCKED",
+        error: "A mappa nem helyezhető Lomtárba, mert kapcsolt dokumentumot tartalmaz.",
+        dependencies,
+      }, { status: 409, headers: { "cache-control": "no-store" } });
+    }
     const result = await softDeleteDriveFolderTree(projectId, folderId, access.actor.userId);
     return NextResponse.json(result, {
       status: result.ok ? 200 : 400,

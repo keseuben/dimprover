@@ -85,7 +85,24 @@ export function getDatabaseClient(): SupabaseClient {
 
 function databaseError(message: string, error: unknown, status = 500): never {
   const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  const marker = [candidate?.code, candidate?.message, candidate?.details, candidate?.hint].filter(Boolean).join(" ").toUpperCase();
   const missingSchema = candidate?.code === "PGRST205" || candidate?.code === "42P01" || candidate?.code === "42883";
+  const linkedDeleteCodes = [
+    "DRIVE_DOCUMENT_DELETE_LINKED_BLOCKED",
+    "DRIVE_DOCUMENT_DELETE_FORMAL_ISSUE_BLOCKED",
+    "DRIVE_DOCUMENT_DELETE_BOX_LINK_BLOCKED",
+    "DRIVE_DOCUMENT_DELETE_COMPARE_LINK_BLOCKED",
+    "DRIVE_DOCUMENT_DELETE_ENTITY_LINK_BLOCKED",
+  ];
+  const linkedDeleteCode = linkedDeleteCodes.find((code) => marker.includes(code));
+  if (linkedDeleteCode) {
+    throw new DriveCoreRepositoryError(
+      "A dokumentum nem helyezhető Lomtárba, mert aktív szakmai vagy projektkapcsolata van.",
+      linkedDeleteCode,
+      409,
+      candidate ? { message: candidate.message, details: candidate.details, hint: candidate.hint } : undefined,
+    );
+  }
   throw new DriveCoreRepositoryError(
     missingSchema ? "A DRIVE Core PostgreSQL-sémája még nincs alkalmazva." : message,
     missingSchema ? "DRIVE_CORE_SCHEMA_NOT_READY" : candidate?.code || "DRIVE_CORE_DATABASE_ERROR",

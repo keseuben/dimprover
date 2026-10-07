@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     await requireDriveFolderAclAccess(projectId, folderId, access.access);
     const passwordHash = hashDriveFolderPassword(body.password);
-    const unlockTtlMinutes = Math.max(5, Math.min(1440, Math.round(Number(body.unlockTtlMinutes) || 120)));
+    const unlockTtlMinutes = Math.max(5, Math.min(525600, Math.round(Number(body.unlockTtlMinutes) || 120)));
     const config = await setDriveFolderPasswordRecord({
       projectId,
       folderId,

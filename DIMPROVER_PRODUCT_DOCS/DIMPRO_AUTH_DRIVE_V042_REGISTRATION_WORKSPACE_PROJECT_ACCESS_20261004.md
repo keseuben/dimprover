@@ -769,3 +769,13 @@ V0.9.20 contract 24/24 PASS; TypeScript/célzott lint PASS; DEV migration prefli
 - Drive Core V0.9.2 verify PASS: 4 RPC, service-role execute, anon/authenticated direct execute DENY;
 - read-only projekt Lomtár ellenőrzés: 1 archivált mappa, 0 külön törölt dokumentum;
 - PROD DENY.
+
+### Drive V0.9.21 – kapcsolati törlésvédelem, mappajelszó UX és preview drawer – 2026-10-07
+
+A Drive törlési szabálya szigorodott: dokumentum vagy mappa nem helyezhető Lomtárba, amíg a dokumentum aktív szakmai/projektkapcsolattal rendelkezik. Blokkoló kapcsolatnak minősül az aktív Hibajegy/Projektügy melléklet, formális kiadás, aktív CsomagBOX-tagság, aktív Compare Finding és generikus Project Core entity-link. A törlési dialógus a blokkoló kapcsolat dokumentumnevét, referenciaazonosítóját, címét, állapotát és kapcsolattípusát megjeleníti. A Drive nem kínál force-delete kerülőutat; a kapcsolatot a forrásmodulban kell megszüntetni. PostgreSQL trigger a preflight és a tényleges soft-delete közötti race-condition esetén is fail-closed módon blokkol.
+
+A mappajelszó továbbra is 8–128 karakteres, de a minimum 8 karakter és az ismételt jelszó egyezése látható inline validációt kapott. A feloldás megjegyzési ideje 30 perctől 1 évig választható: `30 perc`, `1 óra`, `2 óra`, `8 óra`, `24 óra`, `1 hét`, `1 hónap`, `3 hónap`, `6 hónap`, `1 év`. A jelszavas védelem maga továbbra is határozatlan ideig, kikapcsolásig aktív. Backend/RPC maximum: 525 600 perc; feloldási cookie maxAge: 370 nap.
+
+A fő Drive fájlmegjelenítő elkülönült a metaadat részletezőtől. Fájlsor egy kattintására jobb oldali, nagy `DrivePreviewDrawer` nyílik, amely háttérkattintással, `Esc` billentyűvel vagy bezárógombbal becsukható. A `Részletek`, `Tervellenőrzés`, `Verziók`, `Megjegyzések` és `Listák` továbbra is közös metaadatpanelen maradnak. A drawer a meglévő, jogosultságvédett `DriveDocumentViewer` motort használja. A ProjectGate saját Tervnéző módja külön megőrzött viewer-komponenssel változatlanul működik.
+
+Drive UI target `0.9.21`; Drive Core target `0.9.3 / migrationCount 10`. V0.9.21 contract 42/42 PASS; regressziós contractok PASS; teljes migrációs read-only DEV preflight PASS; PROD DENY.

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
-import { listDriveTreeForAccess, requireDriveDocumentAccess, softDeleteDriveDocuments } from "@/app/lib/drive-core/store";
+import { listDriveDocumentDeleteDependencies, listDriveTreeForAccess, requireDriveDocumentAccess, softDeleteDriveDocuments } from "@/app/lib/drive-core/store";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 export const dynamic = "force-dynamic";
@@ -31,6 +31,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const visibleDocumentIds = new Set(tree.documents.map((document) => document.id));
       const hiddenDocumentId = documentIds.find((documentId) => !visibleDocumentIds.has(documentId));
       if (hiddenDocumentId) await requireDriveDocumentAccess(projectId, hiddenDocumentId, access.access);
+    }
+    const dependencies = await listDriveDocumentDeleteDependencies(projectId, documentIds);
+    if (dependencies.length) {
+      return NextResponse.json({
+        ok: false,
+        code: "DRIVE_DOCUMENT_DELETE_DEPENDENCY_BLOCKED",
+        error: "A dokumentum nem helyezhető Lomtárba, amíg aktív hibajegy/projektügy- vagy formális kiadási kapcsolata van.",
+        dependencies,
+      }, { status: 409, headers: { "cache-control": "no-store" } });
     }
     const result = await softDeleteDriveDocuments(projectId, documentIds, access.actor.userId);
     return NextResponse.json(result, {

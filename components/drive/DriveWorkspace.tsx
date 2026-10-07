@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
+  AlertTriangle,
   Bell,
   Building2,
   HelpCircle,
@@ -15,6 +16,7 @@ import CommanderPanel from "./CommanderPanel";
 import CompareWorkspace from "./CompareWorkspace";
 import DetailsPanel from "./DetailsPanel";
 import DrivePremiumLoader from "./DrivePremiumLoader";
+import DrivePreviewDrawer from "./DrivePreviewDrawer";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
@@ -106,6 +108,18 @@ type FolderRenameDialogState = {
   busy: boolean;
 };
 
+type DriveDeleteDependency = {
+  id: string;
+  documentId: string;
+  documentName: string;
+  kind: "PROJECT_ISSUE" | "FORMAL_ISSUE" | "BOX" | "COMPARE_FINDING" | "ENTITY_LINK";
+  reference: string;
+  title: string;
+  status: string;
+  relationType: string;
+  issueId: string | null;
+};
+
 type TrashDialogState = {
   kind: "documents" | "folder";
   documentIds: string[];
@@ -114,6 +128,7 @@ type TrashDialogState = {
   message: string;
   folderCount: number;
   documentCount: number;
+  dependencies: DriveDeleteDependency[];
   busy: boolean;
   error: string;
 };
@@ -225,6 +240,7 @@ export default function DriveWorkspace({
   const [newFolderName, setNewFolderName] = useState("Új mappa");
   const [newFolderSaving, setNewFolderSaving] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [previewDocumentId, setPreviewDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -469,6 +485,7 @@ export default function DriveWorkspace({
     setSelectedFolderId("all");
     setAllFilesInFolderMode(false);
     setSelectedDocumentId("");
+    setPreviewDocumentId("");
     void load();
   }, [load, onStorageQuotaChange, projectId]);
 
@@ -498,6 +515,7 @@ export default function DriveWorkspace({
 
   const selectedFolder = tree?.folders.find((folder) => folder.id === selectedFolderId) || null;
   const selectedDocument = tree?.documents.find((document) => document.id === selectedDocumentId) || null;
+  const previewDocument = tree?.documents.find((document) => document.id === previewDocumentId) || null;
 
   const folderDocumentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -579,6 +597,7 @@ export default function DriveWorkspace({
 
   useEffect(() => {
     if (!navigationRequest?.id) return;
+    setPreviewDocumentId("");
     if (navigationRequest.target === "trash") {
       setTrashMode(true);
       setFavoriteOnly(false);
@@ -1915,6 +1934,18 @@ export default function DriveWorkspace({
     finally { setBusy(false); }
   }
 
+  async function loadDeleteDependencies(input: { documentIds?: string[]; folderId?: string }) {
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/delete-dependencies`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; dependencies?: DriveDeleteDependency[] };
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "A törlési kapcsolatok ellenőrzése sikertelen.");
+    return payload.dependencies || [];
+  }
+
   function folderTrashSummary(folderId: string) {
     const folderIds = new Set<string>([folderId]);
     let changed = true;
@@ -1934,38 +1965,62 @@ export default function DriveWorkspace({
   async function deleteDocuments(documentIds: string[]) {
     if (!canDelete || !documentIds.length || busy) return;
     const uniqueIds = [...new Set(documentIds)];
-    setTrashDialog({
-      kind: "documents",
-      documentIds: uniqueIds,
-      folderId: null,
-      title: uniqueIds.length === 1 ? "Dokumentum Lomtárba helyezése" : `${uniqueIds.length} dokumentum Lomtárba helyezése`,
-      message: "A fájlok nem törlődnek fizikailag. A művelet auditálva lesz.",
-      folderCount: 0,
-      documentCount: uniqueIds.length,
-      busy: false,
-      error: "",
-    });
+    setBusy(true);
+    setError("");
+    try {
+      const dependencies = await loadDeleteDependencies({ documentIds: uniqueIds });
+      setTrashDialog({
+        kind: "documents",
+        documentIds: uniqueIds,
+        folderId: null,
+        title: dependencies.length ? "A dokumentum nem törölhető" : uniqueIds.length === 1 ? "Dokumentum Lomtárba helyezése" : `${uniqueIds.length} dokumentum Lomtárba helyezése`,
+        message: dependencies.length
+          ? "A dokumentum aktív szakmai kapcsolattal rendelkezik. Előbb szüntesd meg a felsorolt kapcsolatot."
+          : "A fájlok nem törlődnek fizikailag. A művelet auditálva lesz.",
+        folderCount: 0,
+        documentCount: uniqueIds.length,
+        dependencies,
+        busy: false,
+        error: "",
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A törlési kapcsolatok ellenőrzése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function deleteFolder(folder: DriveFolder) {
+  async function deleteFolder(folder: DriveFolder) {
     if (!canDeleteFolder || busy) return;
     const summary = folderTrashSummary(folder.id);
-    setTrashDialog({
-      kind: "folder",
-      documentIds: [],
-      folderId: folder.id,
-      title: "Mappa Lomtárba helyezése",
-      message: `${folder.displayName || folder.name} · a teljes almappastruktúra a Lomtárba kerül.`,
-      folderCount: summary.folderCount,
-      documentCount: summary.documentCount,
-      busy: false,
-      error: "",
-    });
+    setBusy(true);
+    setError("");
+    try {
+      const dependencies = await loadDeleteDependencies({ folderId: folder.id });
+      setTrashDialog({
+        kind: "folder",
+        documentIds: [],
+        folderId: folder.id,
+        title: dependencies.length ? "A mappa nem törölhető" : "Mappa Lomtárba helyezése",
+        message: dependencies.length
+          ? `${folder.displayName || folder.name} · a mappafa kapcsolt dokumentumot tartalmaz.`
+          : `${folder.displayName || folder.name} · a teljes almappastruktúra a Lomtárba kerül.`,
+        folderCount: summary.folderCount,
+        documentCount: summary.documentCount,
+        dependencies,
+        busy: false,
+        error: "",
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A törlési kapcsolatok ellenőrzése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmTrashDialog() {
     const dialog = trashDialog;
-    if (!dialog || dialog.busy) return;
+    if (!dialog || dialog.busy || dialog.dependencies.length) return;
     setTrashDialog((current) => current ? { ...current, busy: true, error: "" } : current);
     setError("");
     setNotice("");
@@ -1978,11 +2033,18 @@ export default function DriveWorkspace({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ documentIds: dialog.documentIds }),
         });
-        const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedCount?: number };
-        if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
+        const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedCount?: number; dependencies?: DriveDeleteDependency[] };
+        if (!response.ok || !payload.ok) {
+          if (response.status === 409 && payload.dependencies?.length) {
+            setTrashDialog((current) => current ? { ...current, busy: false, dependencies: payload.dependencies || [], title: "A dokumentum nem törölhető", message: "A dokumentum kapcsolatai időközben megváltoztak. Előbb szüntesd meg a felsorolt kapcsolatot." } : current);
+            return;
+          }
+          throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
+        }
         const deletedIds = payload.deletedIds || [];
         setSelectedDocumentIds((current) => current.filter((id) => !deletedIds.includes(id)));
         if (deletedIds.includes(selectedDocumentId)) { setSelectedDocumentId(""); setDetails(null); }
+        if (deletedIds.includes(previewDocumentId)) setPreviewDocumentId("");
         const blocked = Number(payload.blockedCount || 0);
         setNotice(`${payload.deletedCount || 0} dokumentum Lomtárba helyezve.${blocked ? ` ${blocked} formálisan kiadott dokumentum nem törölhető.` : ""}`);
       } else {
@@ -1995,15 +2057,21 @@ export default function DriveWorkspace({
           ok?: boolean;
           error?: string;
           code?: string;
+          dependencies?: DriveDeleteDependency[];
           archivedFolderCount?: number;
           deletedDocumentCount?: number;
         };
         if (!response.ok || !payload.ok) {
+          if (response.status === 409 && payload.dependencies?.length) {
+            setTrashDialog((current) => current ? { ...current, busy: false, dependencies: payload.dependencies || [], title: "A mappa nem törölhető", message: "A mappafa kapcsolatai időközben megváltoztak. Előbb szüntesd meg a felsorolt kapcsolatot." } : current);
+            return;
+          }
           const suffix = payload.code ? ` · ${payload.code}` : "";
           throw new Error((payload.error || "A mappa Lomtárba helyezése sikertelen.") + suffix);
         }
         if (selectedFolderId === dialog.folderId) setSelectedFolderId("all");
         setSelectedDocumentId("");
+        setPreviewDocumentId("");
         setSelectedDocumentIds([]);
         setDetails(null);
         setNotice(`${payload.archivedFolderCount || 0} mappa és ${payload.deletedDocumentCount || 0} dokumentum Lomtárba helyezve.`);
@@ -2408,14 +2476,37 @@ export default function DriveWorkspace({
               {trashDialog.folderCount > 0 && <span><strong>{trashDialog.folderCount}</strong> mappa</span>}
               <span><strong>{trashDialog.documentCount}</strong> dokumentum</span>
             </div>
-            <div className={styles.revisionIssueHint}>
-              <strong>Visszaállítható soft delete</strong>
-              <span>A fizikai fájlok most nem törlődnek. Formálisan kiadott dokumentumot tartalmazó mappafa törlése blokkolva lesz.</span>
-            </div>
+            {trashDialog.dependencies.length > 0 ? (
+              <div className={styles.deleteDependencyBlock}>
+                <div className={styles.deleteDependencyHeading}>
+                  <AlertTriangle size={16} />
+                  <div>
+                    <strong>Törlés blokkolva · {trashDialog.dependencies.length} aktív kapcsolat</strong>
+                    <span>A dokumentum csak a kapcsolat megszüntetése után helyezhető Lomtárba.</span>
+                  </div>
+                </div>
+                <div className={styles.deleteDependencyList}>
+                  {trashDialog.dependencies.map((dependency) => (
+                    <article key={dependency.id}>
+                      <div><strong>{dependency.documentName}</strong><span>{dependency.kind === "PROJECT_ISSUE" ? "Hibajegy / projektügy" : dependency.kind === "FORMAL_ISSUE" ? "Formális kiadás" : dependency.kind === "BOX" ? "CsomagBOX" : dependency.kind === "COMPARE_FINDING" ? "Compare Finding" : "Projektkapcsolat"}</span></div>
+                      <div><strong>{dependency.reference}</strong><span>{dependency.title}</span></div>
+                      <div><span>Állapot</span><strong>{dependency.status}</strong></div>
+                      <div><span>Kapcsolat</span><strong>{dependency.relationType}</strong></div>
+                    </article>
+                  ))}
+                </div>
+                <small>A kapcsolatot a forrásmodulban kell megszüntetni; a Drive itt szándékosan nem kínál kényszertörlést.</small>
+              </div>
+            ) : (
+              <div className={styles.revisionIssueHint}>
+                <strong>Visszaállítható soft delete</strong>
+                <span>A fizikai fájlok most nem törlődnek. Aktív hibajegy/projektügy- vagy formális kiadási kapcsolat esetén a törlés blokkolva van.</span>
+              </div>
+            )}
             {trashDialog.error && <div className={`${styles.notice} ${styles.noticeError}`}>{trashDialog.error}</div>}
             <footer>
               <button type="button" disabled={trashDialog.busy} onClick={() => setTrashDialog(null)}>Mégsem</button>
-              <button type="submit" className={styles.dangerButton} disabled={trashDialog.busy}>
+              <button type="submit" className={styles.dangerButton} disabled={trashDialog.busy || trashDialog.dependencies.length > 0}>
                 {trashDialog.busy ? "Áthelyezés…" : "Lomtárba helyezés"}
               </button>
             </footer>
@@ -2426,6 +2517,7 @@ export default function DriveWorkspace({
       {folderPasswordDialog && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label={folderPasswordDialog.mode === "unlock" ? "Jelszóvédett mappa feloldása" : "Mappavédelem beállítása"}>
           <form
+            noValidate
             className={`${styles.projectCreatePanel} ${styles.folderPasswordDialogPanel}`}
             onSubmit={(event) => {
               event.preventDefault();
@@ -2462,6 +2554,9 @@ export default function DriveWorkspace({
                     value={folderPasswordDialog.password}
                     onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, password: event.target.value, error: "" } : current)}
                   />
+                  <small className={`${styles.folderPasswordValidation} ${folderPasswordDialog.password.length > 0 && folderPasswordDialog.password.length < 8 ? styles.folderPasswordValidationError : ""}`}>
+                    {folderPasswordDialog.password.length >= 8 ? "✓ Megfelelő hossz" : `Minimum 8 karakter${folderPasswordDialog.password.length ? ` · még ${8 - folderPasswordDialog.password.length} hiányzik` : ""}`}
+                  </small>
                 </label>
               </>
             ) : (
@@ -2484,6 +2579,9 @@ export default function DriveWorkspace({
                       value={folderPasswordDialog.password}
                       onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, password: event.target.value, error: "" } : current)}
                     />
+                    <small className={`${styles.folderPasswordValidation} ${folderPasswordDialog.password.length > 0 && folderPasswordDialog.password.length < 8 ? styles.folderPasswordValidationError : ""}`}>
+                      {folderPasswordDialog.password.length >= 8 ? "✓ Megfelelő hossz" : `Minimum 8 karakter${folderPasswordDialog.password.length ? ` · még ${8 - folderPasswordDialog.password.length} hiányzik` : ""}`}
+                    </small>
                   </label>
                   <label>
                     Jelszó ismét
@@ -2495,6 +2593,9 @@ export default function DriveWorkspace({
                       value={folderPasswordDialog.confirmPassword}
                       onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, confirmPassword: event.target.value, error: "" } : current)}
                     />
+                    <small className={`${styles.folderPasswordValidation} ${folderPasswordDialog.confirmPassword.length > 0 && folderPasswordDialog.password !== folderPasswordDialog.confirmPassword ? styles.folderPasswordValidationError : ""}`}>
+                      {!folderPasswordDialog.confirmPassword ? "Írd be újra a jelszót" : folderPasswordDialog.password === folderPasswordDialog.confirmPassword ? "✓ A két jelszó egyezik" : "A két jelszó még nem egyezik"}
+                    </small>
                   </label>
                   <label>
                     Feloldás megjegyzési ideje
@@ -2507,8 +2608,13 @@ export default function DriveWorkspace({
                       <option value={120}>2 óra</option>
                       <option value={480}>8 óra</option>
                       <option value={1440}>24 óra</option>
+                      <option value={10080}>1 hét</option>
+                      <option value={43200}>1 hónap</option>
+                      <option value={129600}>3 hónap</option>
+                      <option value={259200}>6 hónap</option>
+                      <option value={525600}>1 év</option>
                     </select>
-                    <small className={styles.folderPasswordTtlHint}>Ez nem a jelszó érvényessége. Sikeres feloldás után ennyi ideig nem kérjük újra a jelszót ebben a böngészőben.</small>
+                    <small className={styles.folderPasswordTtlHint}>Ez nem a jelszó érvényessége. Sikeres feloldás után ennyi ideig nem kérjük újra a jelszót ebben a böngészőben. A védelem ettől továbbra is határozatlan idejű.</small>
                   </label>
                 </div>
                 <div className={styles.folderProtectionDuration}>
@@ -2551,11 +2657,7 @@ export default function DriveWorkspace({
               <button type="button" disabled={folderPasswordDialog.busy} onClick={() => setFolderPasswordDialog(null)}>Mégsem</button>
               <button
                 type="submit"
-                disabled={
-                  folderPasswordDialog.busy
-                  || folderPasswordDialog.password.length < 8
-                  || (folderPasswordDialog.mode === "manage" && folderPasswordDialog.password !== folderPasswordDialog.confirmPassword)
-                }
+                disabled={folderPasswordDialog.busy}
               >
                 {folderPasswordDialog.busy ? <Loader2 className={styles.spin} size={16} /> : null}
                 {folderPasswordDialog.mode === "unlock" ? "Mappa feloldása" : folderPasswordDialog.protected ? "Jelszó módosítása" : "Védelem bekapcsolása"}
@@ -2840,6 +2942,13 @@ export default function DriveWorkspace({
         </div>
       )}
 
+      <DrivePreviewDrawer
+        projectId={projectId}
+        document={previewDocument}
+        open={Boolean(previewDocumentId && previewDocument)}
+        onClose={() => setPreviewDocumentId("")}
+      />
+
 {externalDragActive && (
   <div className={styles.externalDropOverlay} aria-live="polite">
     <div>
@@ -2912,7 +3021,7 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onOpenDocument={(document) => { closeTableFullscreen(); void openDocument(document); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
@@ -3051,7 +3160,7 @@ export default function DriveWorkspace({
             canWrite={canWrite}
             moveReady={Boolean(health?.workspace?.databaseReady)}
             busy={busy}
-            onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+            onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
             onOpenDocument={(document) => void openDocument(document)}
             onMoveDocument={moveDocument}
             tableZoom={tableZoom}
@@ -3080,7 +3189,7 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onOpenDocument={(document) => void openDocument(document)}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails, DriveMetadataOptionKey, DriveMetadataOptions, DriveProjectSettings } from "./driveTypes";
 import { DEFAULT_DRIVE_METADATA_OPTIONS } from "@/app/lib/drive-core/metadataOptions";
-import DriveDocumentViewer from "./DriveDocumentViewer";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
 
@@ -663,9 +662,6 @@ export default function DetailsPanel({
           <div className={styles.previewPlaceholder}><div><FileSearch2 size={24} /><strong>Részletek betöltése…</strong></div></div>
         ) : tab === "details" ? (
           <div className={styles.detailsWorkspace}>
-            <section className={styles.detailsPreviewPane} aria-label="Fájl előnézet">
-              <DriveDocumentViewer projectId={projectId} document={document} />
-            </section>
             <section className={styles.detailsFieldsPane} aria-label="Dokumentumadatok szerkesztése">
             <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"} · Témakör: {inheritedTopic || "—"}</div>
 

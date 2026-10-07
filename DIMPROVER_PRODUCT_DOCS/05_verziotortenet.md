@@ -3853,3 +3853,25 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Public smoke PASS; Trash API fail-closed; runtime restart 0; error log 0 byte.
 - Szekszárd projekt read-only Lomtár backend ellenőrzés: 1 archivált mappa.
 - PROD DENY.
+
+### Drive V0.9.21 – kapcsolt dokumentum törlésvédelem + hosszú mappafeloldás + külön fájlmegjelenítő – 2026-10-07
+
+- A Drive dokumentum törlési workflow már a Lomtárba helyezés előtt függőségvizsgálatot futtat; kapcsolt dokumentum nem soft-delete-elhető.
+- A törlési dialógus konkrétan felsorolja a blokkoló kapcsolatokat dokumentumnévvel, referencia/sorszámmal, címmel, állapottal és kapcsolattípussal.
+- Blokkoló kapcsolatok: aktív Hibajegy / Projektügy melléklet, formális kiadás, aktív CsomagBOX-tagság, aktív Compare Finding és generikus Project Core entity-link.
+- Mappatörlésnél a teljes aktív almappafa dokumentumkapcsolatai ellenőrzésre kerülnek; egyetlen kapcsolt dokumentum is blokkolja a mappa Lomtárba helyezését.
+- Nincs force-delete/kényszertörlés a Drive-ból: a kapcsolatot a forrásmodulban kell megszüntetni, és csak ezután válik törölhetővé a dokumentum.
+- A preflight és a tényleges mutáció közötti race-condition ellen külön PostgreSQL trigger is védi a dokumentum státuszát; új kapcsolat keletkezése esetén a törlés DB-szinten is blokkolódik és 409 konfliktusra fordul.
+- Drive Core célállapot: `0.9.3`, migrationCount `10`, bootstrap `drive-core-v093-link-guard-password-ttl-20261007`.
+- A mappajelszó minimum 8 karakteres szabálya megmaradt, de a UI már nem némán tiltja a gombot: folyamatosan jelzi a minimumot, a hiányzó karakterek számát és a két jelszó egyezését. A mentési gomb csak folyamat közben tiltott; hibás adatnál látható validációs hiba jelenik meg.
+- A feloldás megjegyzési ideje kibővült: 30 perc, 1 óra, 2 óra, 8 óra, 24 óra, 1 hét, 1 hónap, 3 hónap, 6 hónap, 1 év.
+- A backend és a PostgreSQL RPC legfeljebb 525 600 percet kezel; a böngésző feloldási cookie maximális élettartama 370 napra nőtt, ezért az egyéves grant nem vész el 24 óra után.
+- A mappajelszó-védelem időtartama továbbra is `Határozatlan · kikapcsolásig`; a hosszú időtartamok csak a sikeres feloldás megjegyzésére vonatkoznak.
+- A fő DIMPRO Drive-ban a fájlelőnézet kikerült a `DetailsPanel` komponensből. A `Részletek / Tervellenőrzés / Verziók / Megjegyzések / Listák` közös metaadatpanel marad, teljes rendelkezésre álló szélességgel.
+- Új `DrivePreviewDrawer`: a fájlsor egy kattintására nagy jobb oldali megjelenítőpanel nyílik; a háttérre kattintás, `Esc` vagy a bezáró gomb becsukja. A soron belüli gombok, checkboxok és egyéb vezérlők nem nyitják meg véletlenül a drawert.
+- A drawer a közös `DriveDocumentViewer` motort használja, így a PDF/kép előnézet, lapozás, zoom és meglévő biztonsági preview API változatlanul újrahasznosul.
+- A ProjectGate / Projektkapu külön `Tervnéző` módja regresszió nélkül megmaradt: ott közvetlen `DriveDocumentViewer` + közös metaadat `DetailsPanel` működik.
+- V0.9.21 contract: 42/42 PASS; V0.9.20: 24/24 PASS; V0.9.19: 15/15 PASS; V0.9.18: 26/26 PASS; ProjectGate rich viewer: 15/15 PASS.
+- Régi Drive Jazmin acceptance suite: az új viewer-ellenőrzés PASS; 204/206 PASS, a két megmaradt FAIL régi CsomagBOX contract-adósság (`08`, `25`), nem V0.9.21 regresszió.
+- Drive Core V0.9.3 teljes read-only DEV migrációs preflight PASS. A migráció a source checkpoint elkészítésekor még nincs alkalmazva. PROD DENY.
+- Teljes repository lint baseline: 25 error / 107 warning, változatlan; a V0.9.21 módosított fájlok között 0 lint error, csak a `DetailsPanel.tsx` két korábbi hook-warningja maradt.

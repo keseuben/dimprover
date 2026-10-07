@@ -17,14 +17,15 @@ const check = (name, fn) => {
   console.log("PASS " + name);
 };
 
-check("ProjectGate reuses shared DetailsPanel and its DriveDocumentViewer", () => {
+check("ProjectGate keeps dedicated viewer while reusing shared metadata DetailsPanel", () => {
   assert.match(ui, /import DetailsPanel/);
+  assert.match(ui, /import DriveDocumentViewer/);
+  assert.match(ui, /<DriveDocumentViewer projectId=\{projectId\} document=\{selectedDocument\}/);
   assert.match(ui, /<DetailsPanel/);
-  assert.match(detailsPanel, /import DriveDocumentViewer/);
-  assert.match(detailsPanel, /<DriveDocumentViewer projectId=\{projectId\} document=\{document\}/);
+  assert.doesNotMatch(detailsPanel, /DriveDocumentViewer/);
 });
 check("List split and viewer modes exist", () => {
-  assert.match(ui, /type BrowserViewMode = "list" \| "engineering" \| "split" \| "viewer" \| "compare"/);
+  assert.match(ui, /type BrowserViewMode = "list" \| "engineering" \| "review" \| "split" \| "viewer" \| "compare"/);
   assert.match(ui, /> Lista<\/button>/);
   assert.match(ui, /> Osztott<\/button>/);
   assert.match(ui, /> Tervnéző<\/button>/);

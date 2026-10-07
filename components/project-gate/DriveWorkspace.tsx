@@ -36,6 +36,7 @@ import BottomInspectorResizeHandle from "@/components/drive/BottomInspectorResiz
 import CommanderPanel from "@/components/drive/CommanderPanel";
 import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
+import DriveDocumentViewer from "@/components/drive/DriveDocumentViewer";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import TableFullscreenBar from "@/components/drive/TableFullscreenBar";
@@ -2406,7 +2407,9 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               </div>
             </header>
             {selectedDocument
-              ? <DetailsPanel
+              ? <>
+                  <DriveDocumentViewer projectId={projectId} document={selectedDocument} />
+                  <DetailsPanel
                   projectId={projectId}
                   document={selectedDocument}
                   details={details}
@@ -2431,6 +2434,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onDownload={async () => { await downloadDocument(selectedDocument); }}
                   onDelete={async () => { await deleteDocuments([selectedDocument.id]); }}
                 />
+                </>
               : <div className={styles.previewEmpty}><Eye size={28} /><strong>Nincs kiválasztott terv</strong><span>Kattints egy dokumentum nevére vagy a szem ikonra.</span></div>}
           </section>}
           {browserViewMode === "compare" && <div className={styles.compareHost} data-project-gate-drive-compare="0.1.0">

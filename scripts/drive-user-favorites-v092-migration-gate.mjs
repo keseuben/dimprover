@@ -116,7 +116,7 @@ function favoriteCount() {
   if (query("select to_regclass('public.drive_core_user_favorites') is not null;") !== "t") return 0;
   return Number(query("select count(*) from public.drive_core_user_favorites;") || 0);
 }
-function coreReady(v){return (v.schemaVersion==="0.9.1"&&Number(v.migrationCount)===8&&v.bootstrapId==="drive-core-v091-folder-trash-20261003")||(v.schemaVersion==="0.9.2"&&Number(v.migrationCount)===9&&v.bootstrapId==="drive-core-v092-trash-restore-purge-20261007");}
+function coreReady(v){return (v.schemaVersion==="0.9.1"&&Number(v.migrationCount)===8&&v.bootstrapId==="drive-core-v091-folder-trash-20261003")||(v.schemaVersion==="0.9.2"&&Number(v.migrationCount)===9&&v.bootstrapId==="drive-core-v092-trash-restore-purge-20261007")||(v.schemaVersion==="0.9.3"&&Number(v.migrationCount)===10&&v.bootstrapId==="drive-core-v093-link-guard-password-ttl-20261007");}
 function targetReady(core,tables,meta){
   return coreReady(core)
     && tables.favoritesTable===true

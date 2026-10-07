@@ -30,7 +30,7 @@ check("restore API requires folder.restore permission",()=>assert.match(restore,
 check("purge API requires folder.purge permission",()=>assert.match(purge,/requireProjectPermission\(request,projectId,"folder\.purge"\)/));
 check("purge queues or runs object cleanup",()=>assert.match(purge,/processDriveObjectCleanup/));
 check("trash repository aggregates archived roots and deleted documents",()=>{assert.match(repo,/status==="ARCHIVED"/);assert.match(repo,/status","DELETED/)});
-check("schema target is Drive Core 0.9.2 migration 9",()=>{assert.match(schema,/"0\.9\.2"/);assert.match(schema,/MIGRATION_COUNT = 9/)});
+check("schema remains Drive Core 0.9.2 or successor",()=>{assert.match(schema,/"0\.9\.[23]"/);assert.match(schema,/MIGRATION_COUNT = (?:9|10)/)});
 check("migration creates restore RPCs",()=>{assert.match(sql,/drive_core_restore_document_atomic/);assert.match(sql,/drive_core_restore_folder_tree_atomic/)});
 check("migration creates purge RPCs",()=>{assert.match(sql,/drive_core_purge_document_atomic/);assert.match(sql,/drive_core_purge_folder_tree_atomic/)});
 check("purge cleanup tasks survive version metadata deletion",()=>assert.match(sql,/drop constraint if exists drive_core_object_cleanup_tasks_version_id_fkey/));
@@ -38,5 +38,5 @@ check("purge blocks project issue references",()=>assert.match(sql,/DRIVE_TRASH_
 check("password protection remains indefinite backend record",()=>{assert.doesNotMatch(passwordRoute,/password.*expires/i);assert.match(unlockRoute,/expiresAt = Date\.now\(\) \+ passwordRecord\.unlockTtlMinutes/)});
 check("password UI explicitly says indefinite until disabled",()=>{assert.match(drive,/Védelem időtartama/);assert.match(drive,/Határozatlan · kikapcsolásig/)});
 check("password UI labels TTL as unlock memory duration",()=>{assert.match(drive,/Feloldás megjegyzési ideje/);assert.match(drive,/Ez nem a jelszó érvényessége/)});
-check("backend TTL remains bounded 5 minutes to 24 hours",()=>assert.match(passwordRoute,/Math\.max\(5, Math\.min\(1440/));
+check("backend TTL remains bounded from 5 minutes with supported max",()=>assert.match(passwordRoute,/Math\.max\(5, Math\.min\((?:1440|525600)/));
 console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.20 trash + password clarity + contextual delete",pass,fail:0,productionAccess:"DENY"},null,2));

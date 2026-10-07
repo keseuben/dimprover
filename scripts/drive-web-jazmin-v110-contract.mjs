@@ -13,6 +13,7 @@ const files = {
   visualCompare: "components/drive/DriveVisualCompareViewer.tsx",
   viewer: "components/drive/DriveDocumentViewer.tsx",
   details: "components/drive/DetailsPanel.tsx",
+  previewDrawer: "components/drive/DrivePreviewDrawer.tsx",
   grid: "components/drive/FileGridPanel.tsx",
   toolbar: "components/drive/DriveToolbar.tsx",
   switcher: "components/drive/ViewLayoutSwitcher.tsx",
@@ -77,7 +78,7 @@ check("25 Compare CsomagBOX workflow", source.shelf.includes("onOpenCompareBox")
 check("26 Compare oldalcsere", source.compare.includes("swapSides") && source.compare.includes("Oldalak cseréje"), "A két összehasonlítási oldal felcserélhető.");
 check("27 Compare kiválasztott verzió letöltés", source.compare.includes("/download") && source.compare.includes("body: JSON.stringify({ versionId: version.id })") && source.compare.includes("Kiválasztott verzió megnyitása"), "A Compare a választott historikus verziót adja át a meglévő signed-download workflow-nak.");
 check("28 Compare VisualViewer bekötés", source.compare.includes("DriveVisualCompareViewer") && source.compare.includes("leftDocument={leftCompareDocument!}") && source.compare.includes("rightDocument={rightCompareDocument!}"), "A Compare a kiválasztott verziókból képzett effektív dokumentumokat adja a szinkronizált vizuális Viewernek.");
-check("29 DocumentViewer a részletpanelen", source.details.includes("DriveDocumentViewer") && source.details.includes("projectId={projectId}"), "A kiválasztott dokumentum részletpanelje inline Viewerrel működik.");
+check("29 DocumentViewer elkülönített preview felületen", source.previewDrawer.includes("DriveDocumentViewer") && !source.details.includes("DriveDocumentViewer"), "A fájlmegjelenítő külön preview felületen működik, a DetailsPanel metaadatpanel marad.");
 check("30 Projektjogosultság-védett preview API", source.previewRoute.includes('requireProjectPermission(request, projectId, "document.read")') && source.previewRoute.includes("initDriveObjectPreview"), "Az előnézeti URL csak project read jogosultsággal kérhető.");
 check("31 Same-origin preview proxy", source.storageService.includes("/preview/content?versionId=") && source.storageService.includes('transport: "same-origin-proxy"'), "A böngésző nem közvetlen S3 URL-t kap, hanem projektjogosultság-védett same-origin preview proxyt.");
 check("32 Letöltés attachment marad", source.s3Storage.includes('input.disposition === "inline" ? "inline" : "attachment"'), "A meglévő letöltési workflow alapértelmezett attachment viselkedése megmarad.");
