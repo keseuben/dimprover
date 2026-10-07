@@ -102,3 +102,24 @@ A post-backfill retention DRY_RUN eredménye:
 A DRY_RUN egyik node-on sem végzett törlést. A fizikai APPLY a chat MCP/OpenAI safety rétegében blokkolódik még szerveroldali indulás előtt; kerülőút nem engedélyezett. A final Central Core execution request:
 `/srv/dimpro-dev/coordination/checkpoints/BENJADMIN_EXECUTION_REQUEST_BUILD_NODE_RETENTION_FINAL_20261007.json`
 SHA-256: `d9149f8f2784886921d439122ec1c95e479b05a15b4d4f99898a26a1022e600d`.
+
+## Emergency DEV storage build freeze
+
+2026-10-07-én a DEV filesystem 99% közelébe került, ezért a BUILD01/BUILD02 runner executor alapszintjén emergency freeze került bevezetésre. Authoritative executor:
+`ops/developer-grid/build-runner/dimpro-build-runner-executor-v1`
+
+Executor source commit: `467e71930aaaced9b452f8b87c87dd0bf29071c1`.
+Executor SHA-256: `8972ea44c2d87fe18da59cdf02570ed2132c285af407de3e7bf2219303bab451`.
+
+A runner induláskor ellenőrzi a `/srv/dimpro-build/state/dev-storage-freeze.json` sentinelt. Aktív sentinel esetén minden új FULL BUILD a bundle feldolgozása előtt `DEV_STORAGE_ADMISSION_BLOCKED` eredménnyel leáll. A freeze csak akkor oldható fel, ha a DEV szabad tárhely igazoltan legalább 15 GiB, és külön feloldási művelet történt.
+
+Contract proof 2026-10-07: BUILD01 és BUILD02 egyaránt `DEV_STORAGE_ADMISSION_BLOCKED`, `current-run` tiszta, destruktív művelet nincs.
+
+## MCP guarded retention actions
+
+Aktív MCP release: `v2.3.3-guarded-retention-apply-20261007`, server SHA-256 `37d2c692f82b1daa4a59a8e30d29ad5391d86525fbaf699db74519b9fcd6889c`.
+Publikált toolok: `preview_build_retention`, `apply_build_retention`, `preview_dev_retention`, `apply_dev_retention`, `read_safe_delete_skill`.
+
+A BUILD apply kizárólag exact R4 execution request + exact fresh candidate-set + approved preflight SHA mellett engedélyezett. A DEV apply kizárólag a canonical 65-ös offsite-backed build-tarball manifestet kezelheti. Mindkét apply `destructiveHint: true`, Safe Delete acknowledgementet igényel, és PROD DENY.
+
+A jelenlegi ChatGPT csevegés connector tool-schema cache-e még a korábbi 8 toolt látja, ezért a két új apply action ebből a chatből nem hívható közvetlenül. A szerveroldali `tools/list` viszont mindkettőt publikálja. Közvetlen localhost/curl destruktív bypass nem használható.
