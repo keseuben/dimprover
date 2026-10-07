@@ -601,3 +601,33 @@ Fizikai acceptance még szükséges egy valódi másodlagos céges e-maillel: OT
 - `X-DIMPRO-Production-Access: DENY`.
 
 A következő kötelező fizikai E2E: bejelentkezett `keseruben@gmail.com` fiókból valódi munkahelyi e-mail hozzáadása → OTP kézbesítés és ellenőrzés → új projekt létrehozása a munkahelyi identitással → Project Core OWNER e-mail/szervezet és projekt-hozzáférési megjelenítés ellenőrzése.
+
+## AUTH V0.6.10 / Drive V0.9.16 – Identitás-életciklus kezelés – 2026-10-07
+
+A V0.6.9 több-e-mailes modell kiegészült a másodlagos identitások teljes felhasználói életciklusával. Új AUTH DB migráció nem szükséges; a migration 009 már tartalmazza a `PENDING / VERIFIED / DISABLED` állapotmodellt és a szükséges korlátozott runtime UPDATE jogokat.
+
+### Új funkciók
+
+- `Kód újraküldése`: PENDING identitásnál a meglévő `POST /api/dimpro-auth/identities` folyamat új OTP challenge-et hoz létre a meglévő cooldown és rate-limit szabályokkal; a korábbi aktív challenge érvénytelenedik.
+- `Mégsem`: függőben lévő másodlagos identitás hitelesítése megszakítható.
+- `Leválasztás`: VERIFIED másodlagos identitás leválasztható a központi DIMPRO-fiókról.
+- A leválasztás soft disable: az `auth_user_identities.status='DISABLED'`, nem történik fizikai rekordtörlés.
+- DISABLED identitás nem jelenik meg az aktív identitáslistában és nem választható projektindításhoz.
+- Ugyanaz az e-mail később ismét hozzáadható; ilyenkor új OTP-hitelesítés szükséges.
+
+### Biztonsági szabályok
+
+- Az elsődleges (`is_primary=true`) DIMPRO e-mail a self-service identitásfelületről nem választható le (`AUTH_USER_IDENTITY_PRIMARY_PROTECTED`).
+- A lifecycle API kizárólag az aktuális session `user_id` tulajdonában lévő identitást módosíthatja.
+- Új endpoint: `DELETE /api/dimpro-auth/identities/[identityId]`; a HTTP DELETE csak alkalmazásszintű életciklus-művelet, az adatbázisban `UPDATE ... SET status='DISABLED'` történik.
+- A runtime role továbbra sem rendelkezik PostgreSQL `DELETE` joggal az `auth_user_identities` táblán.
+- PENDING identitás leválasztásakor a kapcsolt, még fel nem használt `auth_email_challenges` rekord `invalidated_at` mezője beállításra kerül.
+- A művelet same-origin és aktív DIMPRO session követelményű.
+- Sikeres leválasztás audit eseménye: `USER_IDENTITY_DISABLED`.
+
+### Projektjogosultsági hatás
+
+Egy másodlagos e-mail leválasztása nem törli és nem módosítja a korábban létrehozott projekt tagságát vagy jogosultságát. Az authoritative projekt principal változatlanul a központi `user_id`; a korábban projektbe rögzített e-mail/szervezet audit- és kapcsolattartási kontextus marad. Emiatt egy munkahelyi cím későbbi leválasztása nem okozhat projekt-hozzáférés elvesztést.
+
+Contract: `auth-v046-user-identities-contract.mjs` → `35/35 PASS`.
+TypeScript PASS, lifecycle + identity célzott ESLint PASS. PROD DENY.

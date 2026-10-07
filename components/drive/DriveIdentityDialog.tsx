@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, BriefcaseBusiness, Loader2, MailPlus, RefreshCw, ShieldCheck, UserRound, X } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, Loader2, MailPlus, RefreshCw, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import type { DriveUserIdentitiesPayload, DriveUserIdentity, DriveUserIdentityType } from "./driveIdentityTypes";
 import styles from "./DriveIdentityDialog.module.css";
 
@@ -74,6 +74,62 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
     }
   }
 
+  async function resendIdentityCode(identity: DriveUserIdentity) {
+    setBusy(`resend:${identity.id}`);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/dimpro-auth/identities", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          identityType: identity.identityType,
+          email: identity.email,
+          displayName: identity.displayName || primary?.displayName || identity.email,
+          organizationName: identity.identityType === "WORK" ? identity.organizationName || "" : "",
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as DriveUserIdentitiesPayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "A hitelesítő kód újraküldése nem sikerült.");
+      setNotice(payload.message || "Új hitelesítő kódot küldtünk.");
+      setCodes((current) => ({ ...current, [identity.id]: "" }));
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A hitelesítő kód újraküldése nem sikerült.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function detachIdentity(identity: DriveUserIdentity) {
+    if (identity.isPrimary) {
+      setError("Az elsődleges DIMPRO e-mail-cím nem választható le erről a felületről.");
+      return;
+    }
+    const label = identity.status === "PENDING" ? "megszakítod ennek az e-mail-címnek a hitelesítését" : "leválasztod ezt az e-mail-identitást a DIMPRO-fiókodról";
+    if (!window.confirm(`Biztosan ${label}?\n\n${identity.email}`)) return;
+    setBusy(`detach:${identity.id}`);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/dimpro-auth/identities/${encodeURIComponent(identity.id)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => ({})) as DriveUserIdentitiesPayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "Az e-mail-identitás leválasztása nem sikerült.");
+      setNotice(identity.status === "PENDING" ? "A függőben lévő e-mail-hitelesítés megszakítva." : payload.message || "Az e-mail-identitás leválasztva.");
+      setCodes((current) => { const next = { ...current }; delete next[identity.id]; return next; });
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Az e-mail-identitás leválasztása nem sikerült.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function verifyIdentity(identity: DriveUserIdentity) {
     const code = (codes[identity.id] || "").trim();
     if (!/^\d{6}$/.test(code)) {
@@ -125,7 +181,11 @@ export default function DriveIdentityDialog({ open, onClose, onChanged }: Props)
                     <div className={styles.identityTitle}><strong>{identity.displayName || identity.email}</strong><div>{identity.isPrimary ? <span className={styles.primaryBadge}>Elsődleges</span> : null}{identity.status === "VERIFIED" ? <span className={styles.verifiedBadge}><BadgeCheck size={11} /> Hitelesített</span> : <span className={styles.pendingBadge}>Hitelesítésre vár</span>}</div></div>
                     <span>{identity.email}</span>
                     <small>{identity.identityType === "WORK" ? identity.organizationName || "Munkahelyi identitás" : "Személyes identitás"}</small>
-                    {identity.status === "PENDING" ? <div className={styles.verifyRow}><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6 jegyű kód" value={codes[identity.id] || ""} onChange={(event) => setCodes((current) => ({ ...current, [identity.id]: event.target.value.replace(/\D/g, "").slice(0, 6) }))} /><button type="button" disabled={busy !== ""} onClick={() => void verifyIdentity(identity)}>{busy === `verify:${identity.id}` ? <Loader2 size={13} className={styles.spin} /> : <BadgeCheck size={13} />} Hitelesítés</button></div> : null}
+                    {identity.status === "PENDING" ? <>
+                      <div className={styles.verifyRow}><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6 jegyű kód" value={codes[identity.id] || ""} onChange={(event) => setCodes((current) => ({ ...current, [identity.id]: event.target.value.replace(/\D/g, "").slice(0, 6) }))} /><button type="button" disabled={busy !== ""} onClick={() => void verifyIdentity(identity)}>{busy === `verify:${identity.id}` ? <Loader2 size={13} className={styles.spin} /> : <BadgeCheck size={13} />} Hitelesítés</button></div>
+                      <div className={styles.identityActions}><button type="button" disabled={busy !== ""} onClick={() => void resendIdentityCode(identity)}><RefreshCw size={12} className={busy === `resend:${identity.id}` ? styles.spin : ""} /> Kód újraküldése</button><button type="button" className={styles.dangerAction} disabled={busy !== ""} onClick={() => void detachIdentity(identity)}><X size={12} /> Mégsem</button></div>
+                    </> : null}
+                    {identity.status === "VERIFIED" && !identity.isPrimary ? <div className={styles.identityActions}><button type="button" className={styles.dangerAction} disabled={busy !== ""} onClick={() => void detachIdentity(identity)}>{busy === `detach:${identity.id}` ? <Loader2 size={12} className={styles.spin} /> : <Trash2 size={12} />} Leválasztás</button></div> : null}
                   </div>
                 </article>
               ))}

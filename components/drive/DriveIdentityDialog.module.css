@@ -32,6 +32,14 @@
 .verifyRow input,.formGrid input,.formGrid select { width: 100%; min-width: 0; height: 31px; border: 1px solid #cbd9e5; border-radius: 7px; background: #fff; color: #29445d; padding: 0 8px; font: inherit; font-size: 10px; outline: none; }
 .verifyRow input:focus,.formGrid input:focus,.formGrid select:focus { border-color: #79b9aa; box-shadow: 0 0 0 2px rgba(49,165,143,.1); }
 .verifyRow button { min-height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #9ed0c3; border-radius: 7px; background: #edf9f5; color: #237a69; padding: 0 8px; font-size: 9px; font-weight: 900; cursor: pointer; }
+
+.identityActions { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.identityActions button { min-height: 27px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid #d2dde6; border-radius: 7px; background: #fff; color: #587087; padding: 0 7px; font-size: 8px; font-weight: 900; cursor: pointer; }
+.identityActions button:hover:not(:disabled) { background: #f2f7fa; border-color: #adc2d3; }
+.identityActions .dangerAction { border-color: #efc2c6; background: #fff6f6; color: #aa3f49; }
+.identityActions .dangerAction:hover:not(:disabled) { border-color: #de959d; background: #ffecec; }
+.identityActions button:disabled { opacity: .5; cursor: wait; }
+
 .formSection { align-self: start; }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .formGrid label { min-width: 0; display: grid; gap: 4px; color: #64798c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; }
@@ -61,3 +69,6 @@
 :global([data-theme="dark"]) .listSection,:global([data-theme="dark"]) .formSection,:global([data-theme="dark"]) .identityCard { border-color: #2e4559; background: #13293b; }
 :global([data-theme="dark"]) .primaryCard { border-color: #357968; background: #153a35; }
 :global([data-theme="dark"]) .iconButton,:global([data-theme="dark"]) .sectionHeading > button,:global([data-theme="dark"]) .footer button,:global([data-theme="dark"]) .verifyRow input,:global([data-theme="dark"]) .formGrid input,:global([data-theme="dark"]) .formGrid select { border-color: #3a5064; background: #102334; color: #dfebf4; }
+
+:global(html[data-drive-theme="dark"]) .identityActions button,:global([data-theme="dark"]) .identityActions button { border-color: #3a5064; background: #102334; color: #b8c8d5; }
+:global(html[data-drive-theme="dark"]) .identityActions .dangerAction,:global([data-theme="dark"]) .identityActions .dangerAction { border-color: #6d454a; background: #351f24; color: #f0aeb5; }

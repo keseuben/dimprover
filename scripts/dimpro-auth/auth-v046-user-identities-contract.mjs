@@ -8,6 +8,7 @@ const service=read("app/lib/dimpro-auth/user-identities.ts");
 const repository=read("app/lib/dimpro-auth/repository.ts");
 const route=read("app/api/dimpro-auth/identities/route.ts");
 const verify=read("app/api/dimpro-auth/identities/verify/route.ts");
+const lifecycle=read("app/api/dimpro-auth/identities/[identityId]/route.ts");
 const projectRoute=read("app/api/projects/route.ts");
 const dbRepo=read("app/lib/project-core/databaseRepository.ts");
 const fileRepo=read("app/lib/project-core/fileRepository.ts");
@@ -44,6 +45,14 @@ const tests=[
   ["identity dialog supports add and OTP verify",()=>{assert.match(dialog,/\/api\/dimpro-auth\/identities/);assert.match(dialog,/\/api\/dimpro-auth\/identities\/verify/);assert.match(dialog,/Hitelesítő kód küldése/)}],
   ["identity dialog avoids parent callback reload loops",()=>{assert.match(dialog,/onChangedRef = useRef\(onChanged\)/);assert.match(dialog,/onChangedRef\.current\?\.\(next\)/);assert.match(dialog,/\}, \[open\]\);/)}],
   ["Project Gate project creation also selects acting identity",()=>{assert.match(projectList,/Projektindítási identitás/);assert.match(projectList,/actingIdentityId: selectedIdentityId/);assert.match(projectList,/E-mail \/ munkahely hozzáadása/)}],
+  ["identity disable is owner-scoped",()=>{assert.match(service,/disableAuthUserIdentity/);assert.match(service,/FROM auth_user_identities WHERE id=\$1 AND user_id=\$2 LIMIT 1 FOR UPDATE/)}],
+  ["primary identity cannot be disabled",()=>{assert.match(service,/identity\.is_primary/);assert.match(service,/AUTH_USER_IDENTITY_PRIMARY_PROTECTED/)}],
+  ["identity disable is soft state transition",()=>{assert.match(service,/SET status='DISABLED',challenge_id=NULL,updated_at=now\(\)/);assert.doesNotMatch(service,/DELETE FROM auth_user_identities/)}],
+  ["pending challenge is invalidated on detach",()=>assert.match(service,/UPDATE auth_email_challenges SET invalidated_at=COALESCE\(invalidated_at,now\(\)\)/)],
+  ["identity lifecycle endpoint is authenticated and same-origin",()=>{assert.match(lifecycle,/resolveProjectCoreAuth/);assert.match(lifecycle,/validateSameOriginMutation/);assert.match(lifecycle,/export async function DELETE/)}],
+  ["identity disable action is audited",()=>assert.match(lifecycle,/eventType: "USER_IDENTITY_DISABLED"/)],
+  ["identity dialog can resend pending OTP",()=>{assert.match(dialog,/resendIdentityCode/);assert.match(dialog,/Kód újraküldése/);assert.match(dialog,/method: "POST"/)}],
+  ["identity dialog can detach only non-primary identities",()=>{assert.match(dialog,/identity\.isPrimary/);assert.match(dialog,/Leválasztás/);assert.match(dialog,/method: "DELETE"/)}],
 ];
 let passed=0;
 for(const [name,test] of tests){try{test();passed++;console.log(`PASS ${passed}/${tests.length} ${name}`)}catch(error){console.error(`FAIL ${name}`);throw error}}

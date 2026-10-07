@@ -257,3 +257,55 @@ export async function verifyAuthUserIdentity(input: { userId: string; identityId
     return mapIdentity(verified.rows[0]!);
   });
 }
+
+export async function disableAuthUserIdentity(input: { userId: string; identityId: string }) {
+  return withAuthTransaction(async (client) => {
+    const identityResult = await client.query<IdentityRow>(
+      `SELECT id,user_id,identity_type,email_original,email_normalized,display_name,organization_name,status,is_primary,verified_at,challenge_id,created_at
+         FROM auth_user_identities WHERE id=$1 AND user_id=$2 LIMIT 1 FOR UPDATE`,
+      [input.identityId, input.userId],
+    );
+    const identity = identityResult.rows[0] || null;
+    if (!identity) {
+      throw new DimproAuthError(
+        "Identity not found for user.",
+        "AUTH_USER_IDENTITY_NOT_FOUND",
+        404,
+        "Az e-mail-identitás nem található.",
+      );
+    }
+    if (identity.is_primary) {
+      throw new DimproAuthError(
+        "Primary identity cannot be disabled.",
+        "AUTH_USER_IDENTITY_PRIMARY_PROTECTED",
+        409,
+        "Az elsődleges DIMPRO e-mail-cím nem választható le erről a felületről.",
+      );
+    }
+    if (identity.status === "DISABLED") return mapIdentity(identity);
+
+    if (identity.challenge_id) {
+      await client.query(
+        `UPDATE auth_email_challenges SET invalidated_at=COALESCE(invalidated_at,now())
+          WHERE id=$1 AND user_id=$2 AND consumed_at IS NULL`,
+        [identity.challenge_id, input.userId],
+      );
+    }
+    const disabled = await client.query<IdentityRow>(
+      `UPDATE auth_user_identities
+          SET status='DISABLED',challenge_id=NULL,updated_at=now()
+        WHERE id=$1 AND user_id=$2 AND is_primary=false
+        RETURNING id,user_id,identity_type,email_original,email_normalized,display_name,organization_name,status,is_primary,verified_at,challenge_id,created_at`,
+      [identity.id, input.userId],
+    );
+    if (!disabled.rows[0]) {
+      throw new DimproAuthError(
+        "Identity disable failed.",
+        "AUTH_USER_IDENTITY_DISABLE_FAILED",
+        409,
+        "Az e-mail-identitás leválasztása nem sikerült.",
+      );
+    }
+    return mapIdentity(disabled.rows[0]);
+  });
+}

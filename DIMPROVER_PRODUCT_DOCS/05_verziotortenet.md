@@ -3706,3 +3706,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Public smoke PASS; AUTH migrationCount 9; runtime restart 0; error log 0 byte.
 - Fizikai céges e-mail OTP + projektindítási E2E még függő.
 - PROD DENY.
+
+### AUTH V0.6.10 / Drive V0.9.16 Identity Lifecycle – 2026-10-07
+
+- PENDING másodlagos identitásnál `Kód újraküldése` funkció készült a meglévő OTP cooldown/rate-limit mechanizmussal.
+- Függő hitelesítés `Mégsem` művelettel megszakítható; az aktív OTP challenge érvénytelenedik.
+- VERIFIED másodlagos e-mail `Leválasztás` művelettel soft-disable állapotba tehető.
+- Elsődleges DIMPRO e-mail leválasztása szerveroldalon tiltott.
+- Új session-bound, same-origin lifecycle endpoint: `DELETE /api/dimpro-auth/identities/[identityId]`.
+- Nincs adatbázis DELETE: az AUTH rekord `DISABLED` státuszt kap, így auditálható és később újrahitelesíthető.
+- Az identitás leválasztása nem változtatja a Project Core `user_id` alapú projektjogosultságokat.
+- `USER_IDENTITY_DISABLED` audit esemény készült.
+- Multi-identity/lifecycle contract `35/35 PASS`; TypeScript és célzott ESLint PASS.
+- Új DB migráció nem szükséges; AUTH migrationCount változatlanul 9.
+- PROD DENY.
