@@ -281,7 +281,7 @@ export default function DriveWorkspace({
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
   const canDelete = effectivePermissions.includes("document.delete");
-  const canDeleteFolder = effectivePermissions.includes("folder.delete");
+  const canDeleteFolder = effectivePermissions.includes("folder.delete") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
@@ -3048,6 +3048,9 @@ export default function DriveWorkspace({
               documentCounts={folderDocumentCounts}
               totalDocumentCount={tree?.summary.documentCount || 0}
               onSelectFolder={selectFolder}
+              canDeleteFolder={canDeleteFolder}
+              busy={busy}
+              onDeleteFolder={deleteFolder}
               responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`}
             />
             <FileGridPanel

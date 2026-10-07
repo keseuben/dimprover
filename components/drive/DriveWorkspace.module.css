@@ -273,7 +273,7 @@
 .folderTree { height: calc(100% - 42px); overflow: auto; overflow-x: hidden; padding: 8px 7px 14px; }
 .folderRow { width: 100%; border: 0; background: transparent; color: #31445c; min-height: 31px; border-radius: 7px; display: flex; align-items: center; gap: 7px; text-align: left; font-size: var(--drive-font-sm); font-weight: 700; cursor: pointer; padding-right: 8px; }
 .folderRow:hover { background: #f1f6fa; }
-.folderTreeItem { min-width: 0; display: flex; align-items: center; min-height: 31px; }
+.folderTreeItem { min-width: 0; display: flex; align-items: center; min-height: 31px; position: relative; }
 .folderTreeToggle,
 .folderTreeTogglePlaceholder { width: 22px; min-width: 22px; height: 28px; display: grid; place-items: center; }
 .folderTreeToggle { border: 0; border-radius: 5px; background: transparent; color: #5f7286; cursor: pointer; padding: 0; }
@@ -4121,6 +4121,7 @@
   cursor: not-allowed;
   background: transparent;
 }
+.rowQuickActions > .rowTrashAction:not(:disabled) { color: #b64a4a; }
 .rowQuickActions > .rowTrashAction:hover:not(:disabled) {
   background: #fff0f0;
   color: #c53b3b;
@@ -5731,3 +5732,16 @@
 :global([data-theme="dark"]) .collapsedColumnRestore:hover { background: #31495e; color: #8fc1ff; }
 :global(html[data-drive-theme="dark"]) .collapsedColumnCell,
 :global([data-theme="dark"]) .collapsedColumnCell { background-image: linear-gradient(90deg, transparent 0, transparent 48%, rgba(154,178,198,.12) 49%, rgba(154,178,198,.12) 51%, transparent 52%, transparent 100%); }
+
+/* Drive V0.9.19 – folder tree actions */
+.folderTreeActionButton { flex: 0 0 24px; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #617589; display: grid; place-items: center; padding: 0; cursor: pointer; }
+.folderTreeActionButton:hover { background: #e9f0f6; color: #243f59; }
+.folderTreeActionMenu { position: absolute; right: 4px; top: calc(100% - 2px); z-index: 80; min-width: 158px; border: 1px solid #d4dee7; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(31,48,65,.18); padding: 5px; }
+.folderTreeActionMenu button { width: 100%; min-height: 30px; border: 0; border-radius: 6px; background: transparent; display: flex; align-items: center; gap: 7px; padding: 0 8px; text-align: left; font: inherit; font-size: var(--drive-font-xs); font-weight: 800; cursor: pointer; }
+.folderTreeActionMenu button:disabled { opacity: .45; cursor: not-allowed; }
+.folderTreeActionDanger { color: #b94747; }
+.folderTreeActionDanger:hover:not(:disabled) { background: #fff0f0 !important; color: #9e3030; }
+:global(html[data-drive-theme="dark"]) .folderTreeActionButton,:global([data-theme="dark"]) .folderTreeActionButton { color: #9fb2c2; }
+:global(html[data-drive-theme="dark"]) .folderTreeActionButton:hover,:global([data-theme="dark"]) .folderTreeActionButton:hover { background: #24394b; color: #e5eef5; }
+:global(html[data-drive-theme="dark"]) .folderTreeActionMenu,:global([data-theme="dark"]) .folderTreeActionMenu { border-color: #334b5f; background: #13283a; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+:global(html[data-drive-theme="dark"]) .folderTreeActionDanger,:global([data-theme="dark"]) .folderTreeActionDanger { color: #f0a0a0; }

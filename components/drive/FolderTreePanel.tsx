@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Folder, HardDrive, Link2, Pin, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, EllipsisVertical, Folder, HardDrive, Link2, Pin, Plus, Trash2 } from "lucide-react";
 import type { DriveFolder } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
@@ -23,6 +23,9 @@ type Props = {
   linkedProjects?: DriveLinkedProjectItem[];
   onOpenLinkedProject?: (project: DriveLinkedProjectItem) => void;
   onManageLinkedProjects?: () => void;
+  canDeleteFolder?: boolean;
+  busy?: boolean;
+  onDeleteFolder?: (folder: DriveFolder) => void;
   responsiveClassName?: string;
 };
 
@@ -59,9 +62,13 @@ export default function FolderTreePanel({
   linkedProjects = [],
   onOpenLinkedProject,
   onManageLinkedProjects,
+  canDeleteFolder = false,
+  busy = false,
+  onDeleteFolder,
   responsiveClassName = "",
 }: Props) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const [actionMenuFolderId, setActionMenuFolderId] = useState("");
   const knownBranchIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
 
@@ -115,6 +122,15 @@ export default function FolderTreePanel({
       return next;
     });
   }, [folders.length, hierarchy.branchIds]);
+
+  useEffect(() => {
+    if (!actionMenuFolderId) return;
+    const close = () => setActionMenuFolderId("");
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", onKeyDown); };
+  }, [actionMenuFolderId]);
 
   useEffect(() => {
     if (selectedFolderId === "all") return;
@@ -199,7 +215,17 @@ export default function FolderTreePanel({
           const expanded = expandedFolderIds.has(folder.id);
           const security = folderSecurityVisual(folder);
           return (
-            <div key={folder.id} className={styles.folderTreeItem} style={{ paddingLeft: depth * 15 }}>
+            <div
+              key={folder.id}
+              className={styles.folderTreeItem}
+              style={{ paddingLeft: depth * 15 }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onSelectFolder(folder.id);
+                setActionMenuFolderId(folder.id);
+              }}
+            >
               {hasChildren ? (
                 <button type="button" className={styles.folderTreeToggle} aria-label={(expanded ? "Mappa összecsukása: " : "Mappa kibontása: ") + (folder.displayName || folder.name)} aria-expanded={expanded} onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleFolder(folder.id); }}>
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -210,6 +236,32 @@ export default function FolderTreePanel({
                 <OverflowTooltipText text={folder.displayName || folder.name} className={styles.folderTreeLabel} />
                 <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
               </button>
+              {selectedFolderId === folder.id ? (
+                <button
+                  type="button"
+                  className={styles.folderTreeActionButton}
+                  title="Mappaműveletek"
+                  aria-label={`${folder.displayName || folder.name} mappaműveletek`}
+                  aria-expanded={actionMenuFolderId === folder.id}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActionMenuFolderId((current) => current === folder.id ? "" : folder.id); }}
+                >
+                  <EllipsisVertical size={13} />
+                </button>
+              ) : null}
+              {actionMenuFolderId === folder.id ? (
+                <div className={styles.folderTreeActionMenu} onPointerDown={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    className={styles.folderTreeActionDanger}
+                    disabled={!canDeleteFolder || busy || !onDeleteFolder}
+                    title={canDeleteFolder ? "Mappa Lomtárba helyezése" : "Nincs jogosultságod a mappa törléséhez"}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActionMenuFolderId(""); onDeleteFolder?.(folder); }}
+                  >
+                    <Trash2 size={13} />
+                    Lomtárba helyezés
+                  </button>
+                </div>
+              ) : null}
             </div>
           );
         })}

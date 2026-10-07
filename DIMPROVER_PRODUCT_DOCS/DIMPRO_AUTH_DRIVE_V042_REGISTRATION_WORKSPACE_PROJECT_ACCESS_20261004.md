@@ -716,3 +716,11 @@ Statikus ellenőrzések: V0.9.18 26/26 PASS; sort/resize 36/36 PASS; full-table 
 - public smoke: `/drive` 307 central SSO; AUTH readiness migrationCount 10; új runtime restart 0; error log 0 byte;
 - publikus header: `776fb4031 DRIVE V0.9.18 AUTH V0.6.11 DEFAULT FOLDER+TABLE + BOTTOM DETAILS + 90% ZOOM + PERSISTENT COMPACT COLUMNS ... DEV`;
 - `X-DIMPRO-Production-Access: DENY`.
+
+### Drive V0.9.19 – mappaműveletek a táblázatban és mappafán – 2026-10-07
+
+A Projektvezető és Beruházási projektvezető szerepkör mappatörlési UI-ja igazodik a Project Core `folder.delete` jogosultságához. Kliensoldali compatibility fallback segít elkerülni a tévesen szürke mappakukát, miközben a DELETE endpoint továbbra is saját permission- és folder ACL-ellenőrzést végez.
+
+A bal oldali mappafában a kijelölt mappán `⋮` műveletgomb jelenik meg, és jobb kattintással is megnyitható a mappaművelet menü. A `Lomtárba helyezés` ugyanazt a megerősítő dialógust és soft-delete folyamatot használja, mint a dokumentumtár táblázatos mappatörlése.
+
+Contract: V0.9.19 15/15 PASS; TypeScript és célzott ESLint PASS. PROD DENY.

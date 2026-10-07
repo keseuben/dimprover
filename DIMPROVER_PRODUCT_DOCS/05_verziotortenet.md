@@ -3804,3 +3804,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Nginx backup SHA-256 `f7b6387ec095e50f5b8b04567077e5c2bc6c729a136cfdff00049c1763034517`.
 - Public smoke PASS; AUTH migrationCount 10; runtime restart 0; error log 0 byte.
 - PROD DENY.
+
+### Drive V0.9.19 – mappatörlés UX és jogosultságmegjelenítés – 2026-10-07
+
+- Javítva a projektmappa törlésének tévesen inaktív kliensoldali állapota OWNER / PROJECT_MANAGER szerepkörben.
+- A UI a `folder.delete` effective permission mellett OWNER/PROJECT_MANAGER kompatibilitási fallbacket is használ; a backend továbbra is authoritative.
+- A mappatörlési API változatlanul `requireProjectPermission(..., "folder.delete")` és `requireDriveFolderAccess(...)` ellenőrzést végez.
+- A táblázati mappasor engedélyezett kuka ikonja visszafogott piros aktív színt kapott; valóban tiltott állapotban továbbra is szürke/inaktív.
+- A bal oldali mappafában a kiválasztott mappán `⋮` műveletmenü jelenik meg.
+- Jobb kattintás a mappafán ugyanazt a mappaművelet menüt nyitja meg.
+- Új menüpont: `Lomtárba helyezés`.
+- A művelet ugyanazt a meglévő mappa Lomtár dialógust használja, tehát az almappák és dokumentumok összesítése látszik, és nem történik közvetlen fizikai törlés.
+- ESC és külső kattintás bezárja a mappafa műveletmenüt.
+- Drive V0.9.19 folder delete UX contract: 15/15 PASS; TypeScript + célzott ESLint PASS.
+- PROD DENY.
