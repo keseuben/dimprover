@@ -428,3 +428,25 @@ Release:
 - PROD DENY.
 
 Contractok: V0.6.7 legacy manager sync 8/8 PASS, V0.3.2 Drive project integration 16/16 PASS, V0.6.6 external guest 9/9 PASS, atomic role 8/8 PASS, project access admin 19/19 PASS, AUTH compatibility 10/10 PASS, TypeScript/ESLint/build PASS.
+
+## Projekt-hozzáférés profil UX V0.6.8 – 2026-10-07
+
+A projekt-hozzáférések panel a meghívási és sajátprofil-kezelési folyamatot az alábbiakkal egészíti ki:
+- a saját aktív projekttagság teljes kártyája `data-self=true` jelölést és jól érzékelhető, de visszafogott türkizzöld hátteret kap; a `Te` badge továbbra is megmarad, ezért a szín nem az egyetlen azonosító;
+- a saját kártya kiemelése light és dark témában, hover állapotban és mobil nézetben is megmarad;
+- az új projektmeghívás UI-ban a `Név *` mező kötelező, 2–160 karakteres értékkel; a frontend a meglévő `displayName` backend mezőt küldi, az API backward compatibility miatt továbbra is képes régebbi kliensek név nélküli kérését kezelni;
+- a felhasználó a saját projektkártyájáról módosíthatja a saját nevét;
+- a self-service profilmutáció csak same-origin Drive app-sessionből használható, target user azonosítót nem fogad, tehát normál felhasználó ezen az endpointon nem módosíthat másik felhasználót;
+- authoritative profilnév a központi `auth_users.display_name`;
+- sikeres self-service névmódosításkor a felhasználó elérhető aktív Project Core tagságainak `display_name` mezője is szinkronizálódik, hogy a központi és projektmegjelenítési név ne váljon indokolatlanul ketté;
+- részleges Project Core hiba vagy AUTH-frissítési hiba esetén kompenzációs visszaállítás fut a már módosított tagságokra;
+- AUTH oldalon `PROFILE_DISPLAY_NAME_CHANGED`, Project Core oldalon `PROJECT_MEMBER_DISPLAY_NAME_CHANGED` audit esemény készül.
+
+Új endpoint: `PATCH /api/dimpro-auth/profile`.
+
+Új contract: `scripts/drive-v0914-project-access-profile-contract.mjs` → `12/12 PASS`.
+TypeScript, célzott ESLint és `git diff --check`: PASS.
+
+A `benkesinfo@gmail.com` CONTRIBUTOR meghívás fizikai böngészős E2E-je ettől külön acceptance-feladat; PASS csak az elfogadás + OTP/SSO + projekt-only munkatér + olvasás + feltöltés + tagkezelési tiltás együttes bizonyítása után adható.
+
+DEV ONLY · PROD DENY.

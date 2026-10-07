@@ -3644,3 +3644,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Szekszárd projekt AUTH scope regisztrálva a központi `keseruben@gmail.com` identityhez.
 - Source `2f5ba3cd4907b0ba5fb608dfd162498a076d2060`, build `1VsTANAwbEjuFDwPkhL2R`, artifact SHA-256 `0092b85f92f67e286baad4aa037f7ec2e87e58aeaf43e8172c4aa0d6dea6e38a`, DEV 3390.
 - Rollback 3389 online; PROD DENY.
+
+### AUTH/Drive V0.6.8 – projekt-hozzáférés profil UX
+
+- A saját jogosultsági kártya teljes soros türkizzöld kiemelést kapott light/dark témában, a meglévő `Te` badge megtartásával.
+- Az új projektmeghívás felületére kötelező `Név *` mező került; a UI a már támogatott `displayName` mezőt küldi az AUTH + Project Core meghívási láncnak.
+- Új same-origin, app-session kötött `PATCH /api/dimpro-auth/profile` self-service névmódosítás készült; más felhasználó target ID-ja nem adható meg.
+- Az authoritative `auth_users.display_name` frissítésével együtt a felhasználó aktív Project Core tagságainak neve is szinkronizálódik; részleges hibánál kompenzációs visszaállítás fut.
+- AUTH és Project Core névmódosítás külön audit eseményt kapott.
+- Új profile/access contract `12/12 PASS`; TypeScript, célzott ESLint és `git diff --check` PASS.
+- A CONTRIBUTOR meghívás teljes böngészős E2E-je továbbra is külön, felhasználói elfogadást igénylő acceptance-pont; még nem jelölhető PASS-nak.
+- DEV ONLY · PROD DENY.

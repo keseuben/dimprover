@@ -8,11 +8,13 @@ import {
   Clock3,
   LoaderCircle,
   Mail,
+  Pencil,
   RefreshCw,
   Save,
   ShieldCheck,
   Trash2,
   UserPlus,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -58,6 +60,8 @@ type InvitationPayload = {
 
 type EditableRole = Exclude<ProjectMembershipRole, "OWNER">;
 type PanelView = "members" | "pending";
+
+const SELF_PROFILE_PATH = "/api/dimpro-auth/profile";
 
 const editableRoles: Array<{ value: EditableRole; label: string; hint: string }> = [
   { value: "PROJECT_MANAGER", label: "Projektvezető", hint: "Tagkezelés, projektmódosítás és teljes dokumentum-munkafolyamat." },
@@ -116,8 +120,11 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   const [success, setSuccess] = useState("");
   const [draftRoles, setDraftRoles] = useState<Record<string, EditableRole>>({});
   const [confirmRemove, setConfirmRemove] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteOrganization, setInviteOrganization] = useState("");
+  const [editingSelfName, setEditingSelfName] = useState("");
+  const [selfNameDraft, setSelfNameDraft] = useState("");
   const [inviteRole, setInviteRole] = useState<EditableRole>("VIEWER");
   const [inviteDays, setInviteDays] = useState(7);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -238,8 +245,8 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   }
 
   async function submitInvite() {
-    if (!inviteEmail.trim() || !inviteOrganization.trim()) {
-      setError("A meghíváshoz e-mail-cím és szervezet szükséges.");
+    if (inviteName.trim().length < 2 || !inviteEmail.trim() || !inviteOrganization.trim()) {
+      setError("A meghíváshoz név, e-mail-cím és szervezet szükséges.");
       return;
     }
     setBusy("invite");
@@ -249,12 +256,14 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
         body: JSON.stringify({
           projectId,
           email: inviteEmail.trim(),
+          displayName: inviteName.trim(),
           organizationName: inviteOrganization.trim(),
           role: inviteRole,
           expiresInDays: inviteDays,
         }),
       });
       setSuccess("A projektmeghívás elküldve.");
+      setInviteName("");
       setInviteEmail("");
       setInviteOrganization("");
       setInviteRole("VIEWER");
@@ -267,6 +276,21 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
     } finally {
       setBusy("");
     }
+  }
+
+  async function saveSelfName(member: ProjectMembership) {
+    const displayName = selfNameDraft.trim();
+    if (displayName.length < 2 || displayName.length > 160) { setError("A név legalább 2, legfeljebb 160 karakter lehet."); return; }
+    setBusy(`self-name:${member.id}`);
+    try {
+      await mutate(SELF_PROFILE_PATH, { method: "PATCH", body: JSON.stringify({ displayName }) });
+      setSuccess("A saját neved frissítve.");
+      setEditingSelfName("");
+      setSelfNameDraft("");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A név módosítása nem sikerült.");
+    } finally { setBusy(""); }
   }
 
   async function saveRole(member: ProjectMembership) {
@@ -357,7 +381,7 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   }
 
   return (
-    <div className={styles.root} ref={rootRef} data-project-access-menu="0.2.0">
+    <div className={styles.root} ref={rootRef} data-project-access-menu="0.3.0">
       <button
         type="button"
         className={`${styles.trigger} ${compact ? styles.triggerCompact : ""} ${open ? styles.triggerOpen : ""}`}
@@ -415,13 +439,17 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                 <button type="button" onClick={() => setShowInvite(false)} aria-label="Meghívás bezárása"><X size={13} /></button>
               </div>
               <div className={styles.formGrid}>
-                <label className={styles.fieldWide}>
-                  <span>E-mail-cím *</span>
-                  <div className={styles.inputIcon}><Mail size={13} /><input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="nev@ceg.hu" /></div>
+                <label>
+                  <span>Név *</span>
+                  <div className={styles.inputIcon}><UserRound size={13} /><input required maxLength={160} value={inviteName} onChange={(event) => setInviteName(event.target.value)} placeholder="Teljes név" /></div>
                 </label>
                 <label>
                   <span>Szervezet *</span>
-                  <div className={styles.inputIcon}><Building2 size={13} /><input required value={inviteOrganization} onChange={(event) => setInviteOrganization(event.target.value)} placeholder="Cég / szervezet" /></div>
+                  <div className={styles.inputIcon}><Building2 size={13} /><input required maxLength={160} value={inviteOrganization} onChange={(event) => setInviteOrganization(event.target.value)} placeholder="Cég / szervezet" /></div>
+                </label>
+                <label className={styles.fieldWide}>
+                  <span>E-mail-cím *</span>
+                  <div className={styles.inputIcon}><Mail size={13} /><input required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="nev@ceg.hu" /></div>
                 </label>
                 <label>
                   <span>Szerepkör</span>
@@ -470,7 +498,7 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
               const roleChanged = !isOwner && draftRole !== member.role;
               const removing = busy === `remove:${member.id}`;
               return (
-                <article className={styles.member} key={member.id}>
+                <article className={`${styles.member} ${isSelf ? styles.selfMember : ""}`} data-self={isSelf ? "true" : undefined} key={member.id}>
                   <span className={`${styles.memberIcon} ${isOwner ? styles.ownerIcon : ""}`}><ShieldCheck size={14} /></span>
                   <div className={styles.memberMain}>
                     <div className={styles.memberTitle}>
@@ -481,6 +509,17 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                       </div>
                     </div>
                     <small>{secondaryLine(member)}</small>
+                    {isSelf && editingSelfName === member.id ? (
+                      <div className={styles.selfNameEditor}>
+                        <input autoFocus maxLength={160} value={selfNameDraft} onChange={(event) => setSelfNameDraft(event.target.value)} />
+                        <button type="button" className={styles.saveRole} onClick={() => void saveSelfName(member)} disabled={busy !== ""} title="Név mentése">{busy === `self-name:${member.id}` ? <LoaderCircle size={13} className={styles.spin} /> : <Save size={13} />}</button>
+                        <button type="button" className={styles.cancelSelfName} onClick={() => { setEditingSelfName(""); setSelfNameDraft(""); }} disabled={busy !== ""} title="Mégse"><X size={13} /></button>
+                      </div>
+                    ) : isSelf ? (
+                      <button type="button" className={styles.editSelfName} onClick={() => { setEditingSelfName(member.id); setSelfNameDraft(member.displayName || ""); setError(""); setSuccess(""); }} disabled={busy !== ""}>
+                        <Pencil size={11} /> Saját név módosítása
+                      </button>
+                    ) : null}
                     {access?.canManageMembers && !isOwner && !isSelf ? (
                       <div className={styles.roleEditor}>
                         <label>

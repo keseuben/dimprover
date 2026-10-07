@@ -29,6 +29,10 @@ export function listProjectMemberships(projectId: string) {
   return getProjectCoreRepository().listProjectMemberships(projectId);
 }
 
+export function updateProjectMembershipDisplayName(projectId: string, membershipId: string, displayName: string, actorUserId: string) {
+  return getProjectCoreRepository().updateProjectMembershipDisplayName(projectId, membershipId, displayName, actorUserId);
+}
+
 export function updateProjectMembershipRole(projectId: string, membershipId: string, role: ProjectMembershipRole, actorUserId: string) {
   return getProjectCoreRepository().updateProjectMembershipRole(projectId, membershipId, role, actorUserId);
 }

@@ -787,3 +787,89 @@
   .footer { flex-wrap: wrap; }
   .footerRole { width: 100%; margin-left: 0; }
 }
+
+/* V0.3.0 - own membership highlight + self-service name editor */
+.selfMember {
+  background: #d9f2ec;
+  box-shadow: inset 3px 0 0 #31a58f;
+}
+.selfMember:hover { background: #cfebe4; }
+.selfNameEditor {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) 31px 31px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.selfNameEditor input {
+  min-width: 0;
+  min-height: 31px;
+  padding: 0 8px;
+  border: 1px solid #8dcabb;
+  border-radius: 8px;
+  background: #fff;
+  color: #29445d;
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+.selfNameEditor input:focus { box-shadow: 0 0 0 2px rgba(49,165,143,.14); }
+.editSelfName {
+  width: fit-content;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 0 7px;
+  border: 1px solid #a8d8ce;
+  border-radius: 7px;
+  background: rgba(255,255,255,.62);
+  color: #237a69;
+  font-size: 9px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.editSelfName:disabled { opacity: .55; cursor: wait; }
+.cancelSelfName {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd9e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #667b8e;
+  cursor: pointer;
+}
+.cancelSelfName:disabled { opacity: .55; cursor: wait; }
+
+:global(html[data-drive-theme="dark"]) .selfMember,
+:global([data-theme="dark"]) .selfMember {
+  background: #133c37;
+  box-shadow: inset 3px 0 0 #45c3aa;
+}
+:global(html[data-drive-theme="dark"]) .selfMember:hover,
+:global([data-theme="dark"]) .selfMember:hover { background: #16463f; }
+:global(html[data-drive-theme="dark"]) .selfNameEditor input,
+:global([data-theme="dark"]) .selfNameEditor input {
+  border-color: #3f7d72;
+  background: #0d2725;
+  color: #e1f5f0;
+}
+:global(html[data-drive-theme="dark"]) .editSelfName,
+:global([data-theme="dark"]) .editSelfName {
+  border-color: #3f756b;
+  background: #143b36;
+  color: #9ee0d1;
+}
+:global(html[data-drive-theme="dark"]) .cancelSelfName,
+:global([data-theme="dark"]) .cancelSelfName {
+  border-color: #3a5064;
+  background: #14283a;
+  color: #bed0dd;
+}
+
+@media (max-width: 640px) {
+  .selfNameEditor { grid-template-columns: minmax(0, 1fr) 31px 31px; }
+}

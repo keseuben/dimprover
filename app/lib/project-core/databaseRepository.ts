@@ -405,6 +405,64 @@ export async function listProjectMemberships(projectId: string) {
   return (data || []).map((row) => mapMembership(row as DbMembership));
 }
 
+export async function updateProjectMembershipDisplayName(
+  projectId: string,
+  membershipId: string,
+  displayNameRaw: string,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const displayName = normalizeText(displayNameRaw);
+  if (displayName.length < 2 || displayName.length > 160) {
+    return { ok: false as const, error: "A név legalább 2, legfeljebb 160 karakter lehet." };
+  }
+  const { data: current, error: currentError } = await client
+    .from("project_core_memberships")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .maybeSingle();
+  if (currentError) databaseError("A projekttagság betöltése sikertelen.", currentError);
+  if (!current) return { ok: false as const, error: "A projekttagság nem található." };
+  const row = current as DbMembership;
+  if (row.status !== "ACTIVE") return { ok: false as const, error: "Csak aktív projekttag neve módosítható." };
+  if (row.display_name === displayName) {
+    return { ok: true as const, membership: mapMembership(row), previousDisplayName: row.display_name };
+  }
+  const now = new Date().toISOString();
+  const { data: updated, error: updateError } = await client
+    .from("project_core_memberships")
+    .update({ display_name: displayName, updated_at: now })
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .eq("status", "ACTIVE")
+    .select("*")
+    .maybeSingle();
+  if (updateError) databaseError("A projekttag nevének módosítása sikertelen.", updateError);
+  if (!updated) return { ok: false as const, error: "A projekttagság időközben megváltozott." };
+  const auditRow = {
+    id: `project-audit-${randomUUID().slice(0, 12)}`,
+    project_id: projectId,
+    actor_user_id: actorUserId,
+    event_type: "PROJECT_MEMBER_DISPLAY_NAME_CHANGED",
+    entity_type: "membership",
+    entity_id: membershipId,
+    summary: `Projekt-résztvevő neve módosítva: ${displayName}`,
+    metadata: { previousDisplayName: row.display_name, nextDisplayName: displayName },
+    created_at: now,
+  };
+  const { error: auditError } = await client.from("project_core_audit_events").insert(auditRow);
+  if (auditError) {
+    await client
+      .from("project_core_memberships")
+      .update({ display_name: row.display_name, updated_at: row.updated_at })
+      .eq("id", membershipId)
+      .eq("project_id", projectId);
+    databaseError("A projekttag névmódosításának auditálása sikertelen; a módosítás visszaállítva.", auditError);
+  }
+  return { ok: true as const, membership: mapMembership(updated as DbMembership), previousDisplayName: row.display_name };
+}
+
 export async function updateProjectMembershipRole(
   projectId: string,
   membershipId: string,

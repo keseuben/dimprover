@@ -440,6 +440,39 @@ export async function listProjectMemberships(projectId: string) {
   return state.memberships.filter((membership) => membership.projectId === projectId);
 }
 
+export async function updateProjectMembershipDisplayName(
+  projectId: string,
+  membershipId: string,
+  displayNameRaw: string,
+  actorUserId: string,
+) {
+  const state = await getProjectCoreState();
+  const displayName = normalizeText(displayNameRaw);
+  if (displayName.length < 2 || displayName.length > 160) {
+    return { ok: false as const, error: "A név legalább 2, legfeljebb 160 karakter lehet." };
+  }
+  const membership = state.memberships.find((item) => item.projectId === projectId && item.id === membershipId);
+  if (!membership) return { ok: false as const, error: "A projekttagság nem található." };
+  if (membership.status !== "ACTIVE") return { ok: false as const, error: "Csak aktív projekttag neve módosítható." };
+  const previousDisplayName = membership.displayName;
+  if (previousDisplayName === displayName) return { ok: true as const, membership, previousDisplayName };
+  const now = nowIso();
+  membership.displayName = displayName;
+  membership.updatedAt = now;
+  state.auditEvents.unshift(auditEvent({
+    projectId,
+    actorUserId,
+    eventType: "PROJECT_MEMBER_DISPLAY_NAME_CHANGED",
+    entityType: "membership",
+    entityId: membership.id,
+    summary: `Projekt-résztvevő neve módosítva: ${displayName}`,
+    metadata: { previousDisplayName, nextDisplayName: displayName },
+  }));
+  state.updatedAt = now;
+  await writeState(state);
+  return { ok: true as const, membership, previousDisplayName };
+}
+
 export async function changeProjectLifecycle(
   projectId: string,
   nextStatus: ProjectLifecycleStatus,
