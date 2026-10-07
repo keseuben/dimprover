@@ -3969,3 +3969,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Regresszió: V0.9.22 41/41 PASS, V0.9.21 42/42 PASS, V0.9.20 24/24 PASS, V0.9.19 15/15 PASS, V0.9.18 26/26 PASS. A V0.9.23 korábbi tárhelypozíció-assertje szándékosan elavult a board-áthelyezés miatt.
 - TypeScript PASS, targeted ESLint 0 error (2 korábbi hook-warning), `git diff --check` PASS.
 - PROD DENY.
+
+### V0.9.24 DEV aktiválás
+
+- Runtime source: `4b7f57ab9135a153f088ba14097b132462de85d5`.
+- BUILD-02 run: `drive-v0924-4b7f57ab9-20261007-manual-b1`.
+- Build ID: `1KeJWDL6v9Do2PB8Rvo5-`.
+- Artifact SHA-256: `260f9f5fc6a4aac00f95502dc07f5e87a4409325d4762e14f9938c58a4c34e13`.
+- BUILD-02 `result.json`: PASS; actual artifact SHA = metadata SHA = result SHA.
+- DEV candidate runtime: `dimpro-drive-v0924-workspace-details-4b7f57ab9-p3403`, port `3403`, online, restart `0`.
+- Rollback runtime: `dimpro-drive-v0923-desktop-v019-ec7d58d8a-p3402`, port `3402`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0924/dimpro-dev.conf.before-v0924-20261007T204137Z`.
+- Public smoke: `/drive` -> 307 központi AUTH start; candidate header `4b7f57ab9 DRIVE V0.9.24 ...`; `X-DIMPRO-Production-Access: DENY`.
+- AUTH ready: database ready, migration count `10`.
+- Új runtime error log: `0 byte` a post-cutover ellenőrzéskor.
+- DEV tárhely a release aktiválása után: kb. `118G total / 114G used / 3.0G free`, `98%`; új cleanup csak külön inventory + DIMPRO safe-delete jóváhagyással.

@@ -823,3 +823,7 @@ A DEV VPS tárhelyhasználata az aktiválás után 97% körüli; következő fej
 A Drive fejlécben a felhasználó neve és alatta az aktuális projekttagsághoz tartozó e-mail jelenik meg. A szerepkör külön, színezett rövid jelvény, így nem foglal harmadik szövegsort. Több hitelesített e-mail esetén a projektmunkatér a projekt létrehozásakor/meghívásakor használt tagsági e-mailt mutatja; a Saját Drive a központi elsődleges személyes identitást mutatja.
 
 A kiválasztott Drive munkatér böngésző-localStorage állapotban megmarad. Újratöltéskor a rendszer először ezt próbálja visszaállítani, és csak akkor esik vissza az első elérhető munkatérre, ha a korábbi munkatér már nem hozzáférhető.
+
+### Drive V0.9.24 aktiválási állapot
+
+A V0.9.24 DEV-en aktív. Runtime source `4b7f57ab9135a153f088ba14097b132462de85d5`, BUILD-02 build ID `1KeJWDL6v9Do2PB8Rvo5-`, artifact SHA-256 `260f9f5fc6a4aac00f95502dc07f5e87a4409325d4762e14f9938c58a4c34e13`. Aktív port `3403`; a korábbi V0.9.23 + Desktop v0.1.9 `3402` rollbackként online maradt. Public auth/smoke PASS, AUTH database ready, PROD DENY.
