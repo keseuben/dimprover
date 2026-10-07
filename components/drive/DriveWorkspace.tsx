@@ -1632,6 +1632,15 @@ export default function DriveWorkspace({
     }
   }
 
+  function openDriveDesktopSettings() {
+    try {
+      window.location.assign("dimpro-drive://settings");
+      setNotice("A DIMPRO Drive Desktop beállítási ablaka megnyitásra került.");
+    } catch {
+      setError("A DIMPRO Drive Desktop beállításai nem nyithatók meg. Telepítsd vagy frissítsd a Drive Desktopot.");
+    }
+  }
+
   function downloadDriveDesktopInstaller() {
     const anchor = window.document.createElement("a");
     anchor.href = DRIVE_DESKTOP_INSTALLER_URL;
@@ -2584,6 +2593,7 @@ export default function DriveWorkspace({
         onOpenSelected={() => void openDocument()}
         onOpenWindowsSelected={() => { if (selectedDocument) void openDocumentInWindows(selectedDocument); }}
         onDownloadDriveDesktop={downloadDriveDesktopInstaller}
+        onOpenDriveDesktopSettings={openDriveDesktopSettings}
         onDownloadSelected={() => void downloadSelected()}
         onDownloadFolder={downloadSelectedFolder}
         boxCount={boxes.length}

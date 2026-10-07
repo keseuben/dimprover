@@ -606,7 +606,7 @@ A telepítés nem igényel HKLM módosítást; a protokollregisztráció per-use
 
 DEV artifact SHA-256:
 
-bff6556c6a033307c66e5f5d060a2ecb576b152472caea903077aaefc88f64d7
+630ac00df3d5399acb1838db9176fcfc77b80024f88b2232ce8bbda3cd2d7c13
 
 ### Web UX
 
@@ -706,3 +706,58 @@ Javítás:
 - PROD továbbra is DENY.
 
 A 3402 candidate emiatt superseded, publikus cutover nem történt.
+
+### V0.1.9 settings UX – munkafájl-mappa kiválasztás és későbbi módosítás
+
+Felhasználói észrevétel alapján a munkafájl-mappa kiválasztása nem maradhat rejtett/első fájlmegnyitásra halasztott technikai lépés.
+
+Javított működés:
+
+- friss telepítéskor, ha még nincs beállított munkafájl-mappa, a telepítő azonnal kéri a hely kiválasztását;
+- a FolderBrowserDialog TopMost owner ablakot kap, ezért nem maradhat a böngésző vagy más alkalmazás mögött;
+- az első fájlmegnyitáskor megmarad a fallback mappaválasztás, ugyanezzel az előtér-kényszerítéssel;
+- a dimpro-drive://settings protokollútvonal natív Windows Beállítások ablakot nyit;
+- a Beállítások ablak mutatja az aktuális munkafájl-mappát;
+- elérhető Mappa módosítása..., Mappa megnyitása, Mentés, Mégsem;
+- a Drive web Műveletek menüjében új Drive Desktop beállítások pont nyitja ezt az ablakot;
+- mappaváltáskor a régi helyi munkafájlok nem kerülnek automatikusan mozgatásra vagy törlésre;
+- az új célmappa a következő Windows-megnyitásoktól érvényes;
+- PROD továbbra is DENY.
+
+A végleges felhasználói csomagolási irány egyetlen Windows EXE telepítő; a ZIP/CMD/PS1 csomag később csak fejlesztői diagnosztikai fallback marad.
+
+### V0.1.9 single-EXE installer source
+
+A végfelhasználói telepítési cél egyetlen DIMPRO_Drive_Desktop_Setup_V019.exe.
+
+Forrás:
+
+- desktop/dimpro-drive-desktop/windows-installer/Program.cs
+- desktop/dimpro-drive-desktop/windows-installer/Build_DIMPRO_Drive_Desktop_Setup_V019.ps1
+
+Az EXE telepítő:
+
+- natív Windows WinForms felület;
+- beépített handler resource;
+- natív FolderBrowserDialog;
+- munkafájl-mappa kiválasztás;
+- per-user HKCU dimpro-drive:// protokollregisztráció;
+- meglévő mappabeállítás megőrzése frissítéskor;
+- rendszergazdai jogosultság nélkül telepíthető;
+- nem végez teljes Drive-szinkront.
+
+A BUILD01 Linux szerveren nincs Windows C# toolchain, ezért az első EXE build egyszer a Windows fejlesztői gépen készül a Windows beépített .NET Framework csc.exe fordítójával. A kész EXE utána publikus Drive Desktop artifactként szolgálható ki minden felhasználónak.
+
+DEV builder artifact:
+
+/downloads/DIMPRO_Drive_Desktop_V019_EXE_BUILDER_DEV.zip
+
+Ez kizárólag fejlesztői buildcsomag; végfelhasználói terjesztésre nem szolgál.
+
+DEV settings ZIP SHA-256:
+
+630ac00df3d5399acb1838db9176fcfc77b80024f88b2232ce8bbda3cd2d7c13
+
+DEV EXE-builder ZIP SHA-256:
+
+25ef5776ea7f2a2fce59f87f0cbb7d9bf9830b8b9d9358be2d6e53a4a5384c52

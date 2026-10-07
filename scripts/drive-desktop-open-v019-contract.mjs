@@ -14,6 +14,8 @@ const files = {
   installer: read("scripts/DIMPRO_Drive_Desktop_Install_V019.cmd"),
   uninstaller: read("scripts/DIMPRO_Drive_Desktop_Uninstall_V019.cmd"),
   proxy: read("proxy.ts"),
+  exeInstaller: read("desktop/dimpro-drive-desktop/windows-installer/Program.cs"),
+  exeBuilder: read("desktop/dimpro-drive-desktop/windows-installer/Build_DIMPRO_Drive_Desktop_Setup_V019.ps1"),
 };
 const packagePath = "public/downloads/DIMPRO_Drive_Desktop_V019_WINDOWS_DEV.zip";
 
@@ -98,6 +100,27 @@ check("first-use panel explains partial workfile semantics", () => {
   assert.match(files.workspace, /Drive teljes tartalma nem szinkronizálódik/);
   assert.match(files.css, /desktopOpenPromptSteps/);
 });
+check("installer forces visible first-use work-folder selection", () => {
+  assert.match(files.manager, /Select-WorkRoot/);
+  assert.match(files.manager, /TopMost = \$true/);
+  assert.match(files.manager, /A telepítéshez válaszd ki, hova kerüljenek/);
+});
+check("handler exposes native settings route and work-folder UI", () => {
+  assert.match(files.handler, /Parse-DriveProtocolUri/);
+  assert.match(files.handler, /parsed\.Host -eq 'settings'/);
+  assert.match(files.handler, /Show-DriveDesktopSettings/);
+  assert.match(files.handler, /Mappa módosítása\.\.\./);
+  assert.match(files.handler, /Mappa megnyitása/);
+  assert.match(files.handler, /SETTINGS_SAVED/);
+});
+check("settings folder chooser is forced to foreground", () => {
+  assert.match(files.handler, /owner\.TopMost = \$true/);
+  assert.match(files.handler, /dialog\.ShowDialog\(\$owner\)/);
+});
+check("web exposes Drive Desktop settings action", () => {
+  assert.match(files.toolbar, /Drive Desktop beállítások/);
+  assert.match(files.workspace, /dimpro-drive:\/\/settings/);
+});
 check("installer uses Windows PowerShell and manager Install mode", () => {
   assert.match(files.installer, /powershell\.exe -NoProfile -ExecutionPolicy Bypass/);
   assert.match(files.installer, /open-handler-manager-v019\.ps1" -Mode Install/);
@@ -106,6 +129,19 @@ check("uninstaller preserves manager-controlled uninstall path", () => assert.ma
 check("downloadable Windows package exists", () => {
   const stat = fs.statSync(packagePath);
   assert.ok(stat.isFile() && stat.size > 1000);
+});
+check("single-EXE installer source embeds handler and uses native folder picker", () => {
+  assert.match(files.exeInstaller, /GetManifestResourceStream\(ResourceName\)/);
+  assert.match(files.exeInstaller, /FolderBrowserDialog/);
+  assert.match(files.exeInstaller, /Registry\.CurrentUser\.CreateSubKey/);
+  assert.match(files.exeInstaller, /Software\\Classes\\dimpro-drive/);
+  assert.doesNotMatch(files.exeInstaller, /Registry\.LocalMachine/);
+});
+check("Windows EXE builder uses built-in .NET Framework compiler", () => {
+  assert.match(files.exeBuilder, /Framework64\\v4\.0\.30319\\csc\.exe/);
+  assert.match(files.exeBuilder, /target:winexe/);
+  assert.match(files.exeBuilder, /DIMPRO_Drive_Desktop_Setup_V019\.exe/);
+  assert.match(files.exeBuilder, /DIMPRO_DRIVE_DESKTOP_V019_SETUP_EXE_BUILD_PASS/);
 });
 check("PROD remains denied in installer package", () => assert.match(files.installer, /PROD DENY/));
 

@@ -35,11 +35,32 @@ function Resolve-HandlerSource {
 
 function Select-WorkRoot([string]$Current = '') {
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = 'DIMPRO helyi munkafájlok mappája. Ez nem teljes Drive-szinkronizálás; csak a Windowsban megnyitott fájlok kerülnek ide.'
-  $dialog.ShowNewFolderButton = $true
-  if ($Current -and (Test-Path -LiteralPath $Current -PathType Container)) { $dialog.SelectedPath = $Current }
-  if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK -or -not $dialog.SelectedPath) { throw 'DRIVE_DESKTOP_WORKFILES_ROOT_SELECTION_CANCELLED' }
-  return [IO.Path]::GetFullPath($dialog.SelectedPath)
+  $owner = New-Object System.Windows.Forms.Form
+  try {
+    $owner.Text = 'DIMPRO Drive Desktop'
+    $owner.TopMost = $true
+    $owner.ShowInTaskbar = $false
+    $owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow
+    $owner.Width = 1
+    $owner.Height = 1
+    $owner.Opacity = 0.01
+
+    $dialog.Description = 'Válaszd ki a DIMPRO helyi munkafájlok mappáját. Ez nem teljes Drive-szinkronizálás; csak a Windowsban megnyitott fájlok kerülnek ide.'
+    $dialog.ShowNewFolderButton = $true
+    if ($Current -and (Test-Path -LiteralPath $Current -PathType Container)) { $dialog.SelectedPath = $Current }
+
+    $owner.Show()
+    $owner.Activate()
+    [System.Windows.Forms.Application]::DoEvents()
+    $result = $dialog.ShowDialog($owner)
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK -or -not $dialog.SelectedPath) { throw 'DRIVE_DESKTOP_WORKFILES_ROOT_SELECTION_CANCELLED' }
+    return [IO.Path]::GetFullPath($dialog.SelectedPath)
+  } finally {
+    $dialog.Dispose()
+    $owner.Close()
+    $owner.Dispose()
+  }
 }
 
 function Read-ExistingConfig {
@@ -108,6 +129,15 @@ if ($Mode -eq 'Install') {
   $existing = Read-ExistingConfig
   $resolvedWorkRoot = $WorkFilesRoot
   if (-not $resolvedWorkRoot -and $existing -and $existing.workFilesRoot) { $resolvedWorkRoot = [string]$existing.workFilesRoot }
+  if (-not $resolvedWorkRoot) {
+    [void][System.Windows.Forms.MessageBox]::Show(
+      'A telepítéshez válaszd ki, hova kerüljenek a DIMPRO helyi munkafájlok. A teljes Drive nem szinkronizálódik erre a mappára.',
+      'DIMPRO Drive Desktop – Munkafájlok helye',
+      [System.Windows.Forms.MessageBoxButtons]::OK,
+      [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+    $resolvedWorkRoot = Select-WorkRoot
+  }
   if ($resolvedWorkRoot) { $resolvedWorkRoot = [IO.Path]::GetFullPath($resolvedWorkRoot) }
   Save-DriveConfig $resolvedServer $resolvedWorkRoot
   Register-Protocol

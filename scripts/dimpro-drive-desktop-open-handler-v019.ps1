@@ -64,12 +64,32 @@ function Assert-DevServerUrl([string]$ServerUrl) {
 
 function Select-WorkFilesRoot([string]$CurrentPath = '') {
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = 'Válaszd ki a DIMPRO helyi munkafájlok mappáját. Ez NEM teljes Drive-szinkronizálás; csak a Windowsban megnyitott fájlok kerülnek ide.'
-  $dialog.ShowNewFolderButton = $true
-  if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath -PathType Container)) { $dialog.SelectedPath = $CurrentPath }
-  $result = $dialog.ShowDialog()
-  if ($result -ne [System.Windows.Forms.DialogResult]::OK -or -not $dialog.SelectedPath) { throw 'DRIVE_DESKTOP_WORKFILES_ROOT_SELECTION_CANCELLED' }
-  return [IO.Path]::GetFullPath($dialog.SelectedPath)
+  $owner = New-Object System.Windows.Forms.Form
+  try {
+    $owner.Text = 'DIMPRO Drive Desktop'
+    $owner.TopMost = $true
+    $owner.ShowInTaskbar = $false
+    $owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow
+    $owner.Width = 1
+    $owner.Height = 1
+    $owner.Opacity = 0.01
+
+    $dialog.Description = 'Válaszd ki a DIMPRO helyi munkafájlok mappáját. Ez NEM teljes Drive-szinkronizálás; csak a Windowsban megnyitott fájlok kerülnek ide.'
+    $dialog.ShowNewFolderButton = $true
+    if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath -PathType Container)) { $dialog.SelectedPath = $CurrentPath }
+
+    $owner.Show()
+    $owner.Activate()
+    [System.Windows.Forms.Application]::DoEvents()
+    $result = $dialog.ShowDialog($owner)
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK -or -not $dialog.SelectedPath) { throw 'DRIVE_DESKTOP_WORKFILES_ROOT_SELECTION_CANCELLED' }
+    return [IO.Path]::GetFullPath($dialog.SelectedPath)
+  } finally {
+    $dialog.Dispose()
+    $owner.Close()
+    $owner.Dispose()
+  }
 }
 
 function Ensure-WorkFilesRoot($Config) {
@@ -92,6 +112,125 @@ function Ensure-WorkFilesRoot($Config) {
   }
   New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
   return [IO.Path]::GetFullPath($workRoot)
+}
+
+function Show-DriveDesktopSettings {
+  $config = Read-Config
+  $serverUrl = Assert-DevServerUrl ([string](Get-ObjectPropertyValue $config 'serverUrl' $DefaultServerUrl))
+  $current = [string](Get-ObjectPropertyValue $config 'workFilesRoot' '')
+  $script:selectedSettingsRoot = $current
+
+  $form = New-Object System.Windows.Forms.Form
+  $form.Text = 'DIMPRO Drive Desktop – Beállítások'
+  $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+  $form.Size = New-Object System.Drawing.Size(720,300)
+  $form.MinimumSize = New-Object System.Drawing.Size(620,300)
+  $form.TopMost = $true
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+  $form.ShowIcon = $false
+
+  $title = New-Object System.Windows.Forms.Label
+  $title.Text = 'Helyi munkafájlok'
+  $title.Font = New-Object System.Drawing.Font('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
+  $title.AutoSize = $true
+  $title.Location = New-Object System.Drawing.Point(22,18)
+  $form.Controls.Add($title)
+
+  $description = New-Object System.Windows.Forms.Label
+  $description.Text = 'Itt adhatod meg, hova kerüljenek a Windowsban megnyitott DIMPRO fájlok. A teljes Drive nem szinkronizálódik erre a mappára.'
+  $description.AutoSize = $false
+  $description.Size = New-Object System.Drawing.Size(660,42)
+  $description.Location = New-Object System.Drawing.Point(22,50)
+  $form.Controls.Add($description)
+
+  $pathLabel = New-Object System.Windows.Forms.Label
+  $pathLabel.Text = 'Munkafájlok mappája:'
+  $pathLabel.AutoSize = $true
+  $pathLabel.Location = New-Object System.Drawing.Point(22,102)
+  $form.Controls.Add($pathLabel)
+
+  $pathBox = New-Object System.Windows.Forms.TextBox
+  $pathBox.ReadOnly = $true
+  $pathBox.Location = New-Object System.Drawing.Point(22,124)
+  $pathBox.Size = New-Object System.Drawing.Size(510,25)
+  $pathBox.Text = $current
+  $form.Controls.Add($pathBox)
+
+  $browse = New-Object System.Windows.Forms.Button
+  $browse.Text = 'Mappa módosítása...'
+  $browse.Location = New-Object System.Drawing.Point(542,122)
+  $browse.Size = New-Object System.Drawing.Size(140,29)
+  $browse.Add_Click({
+    try {
+      $next = Select-WorkFilesRoot $script:selectedSettingsRoot
+      $script:selectedSettingsRoot = $next
+      $pathBox.Text = $next
+    } catch {
+      if ($_.Exception.Message -ne 'DRIVE_DESKTOP_WORKFILES_ROOT_SELECTION_CANCELLED') { throw }
+    }
+  })
+  $form.Controls.Add($browse)
+
+  $openFolder = New-Object System.Windows.Forms.Button
+  $openFolder.Text = 'Mappa megnyitása'
+  $openFolder.Location = New-Object System.Drawing.Point(22,162)
+  $openFolder.Size = New-Object System.Drawing.Size(132,29)
+  $openFolder.Add_Click({
+    if ($script:selectedSettingsRoot -and (Test-Path -LiteralPath $script:selectedSettingsRoot -PathType Container)) {
+      Start-Process explorer.exe -ArgumentList @($script:selectedSettingsRoot) | Out-Null
+    }
+  })
+  $form.Controls.Add($openFolder)
+
+  $hint = New-Object System.Windows.Forms.Label
+  $hint.Text = 'A hely módosítása nem mozgatja és nem törli a korábbi helyi munkafájlokat. Az új hely a következő megnyitásoktól érvényes.'
+  $hint.AutoSize = $false
+  $hint.Size = New-Object System.Drawing.Size(660,38)
+  $hint.Location = New-Object System.Drawing.Point(22,199)
+  $form.Controls.Add($hint)
+
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = 'Mégsem'
+  $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+  $cancel.Location = New-Object System.Drawing.Point(492,224)
+  $cancel.Size = New-Object System.Drawing.Size(90,30)
+  $form.Controls.Add($cancel)
+
+  $save = New-Object System.Windows.Forms.Button
+  $save.Text = 'Mentés'
+  $save.DialogResult = [System.Windows.Forms.DialogResult]::OK
+  $save.Location = New-Object System.Drawing.Point(592,224)
+  $save.Size = New-Object System.Drawing.Size(90,30)
+  $form.Controls.Add($save)
+
+  $form.AcceptButton = $save
+  $form.CancelButton = $cancel
+
+  try {
+    $result = $form.ShowDialog()
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK) {
+      return [pscustomobject][ordered]@{ ok=$true; code='DIMPRO_DRIVE_DESKTOP_V019_SETTINGS_CANCELLED'; changed=$false; workFilesRoot=$current }
+    }
+    if (-not $script:selectedSettingsRoot) { throw 'DRIVE_DESKTOP_WORKFILES_ROOT_REQUIRED' }
+    $resolved = [IO.Path]::GetFullPath($script:selectedSettingsRoot)
+    New-Item -ItemType Directory -Force -Path $resolved | Out-Null
+    $now = (Get-Date).ToUniversalTime().ToString('o')
+    $next = [ordered]@{
+      schemaVersion = 1
+      serverUrl = $serverUrl
+      workFilesRoot = $resolved
+      configuredAt = if (Get-ObjectPropertyValue $config 'configuredAt' $null) { [string]$config.configuredAt } else { $now }
+      updatedAt = $now
+      semantics = 'PARTIAL_WORKFILES_NOT_SYNC'
+    }
+    Save-Config $next
+    $nl = [Environment]::NewLine
+    Show-DriveMessage ('A DIMPRO munkafájlok új helye mentve:' + $nl + $nl + $resolved + $nl + $nl + 'A korábbi helyi fájlok nem kerültek áthelyezésre.') 'DIMPRO Drive Desktop – Beállítások'
+    return [pscustomobject][ordered]@{ ok=$true; code='DIMPRO_DRIVE_DESKTOP_V019_SETTINGS_SAVED'; changed=($resolved -ne $current); workFilesRoot=$resolved }
+  } finally {
+    $form.Dispose()
+  }
 }
 
 function Get-DriveClientId {
@@ -154,16 +293,22 @@ function Get-DriveOpenHeaders {
   return @{ 'x-dimpro-drive-client-id'=(Get-DriveClientId) }
 }
 
-function Parse-OpenTicket([string]$RawUri) {
+function Parse-DriveProtocolUri([string]$RawUri) {
   if (-not $RawUri) { throw 'DRIVE_DESKTOP_URI_REQUIRED' }
   try { $parsed = New-Object System.Uri($RawUri) }
   catch { throw 'DRIVE_DESKTOP_URI_INVALID' }
-  if ($parsed.Scheme -ne 'dimpro-drive' -or $parsed.Host -ne 'open-file') { throw 'DRIVE_DESKTOP_URI_ROUTE_INVALID' }
+  if ($parsed.Scheme -ne 'dimpro-drive') { throw 'DRIVE_DESKTOP_URI_ROUTE_INVALID' }
+
+  if ($parsed.Host -eq 'settings') {
+    return [pscustomobject][ordered]@{ action='SETTINGS'; ticket='' }
+  }
+
+  if ($parsed.Host -ne 'open-file') { throw 'DRIVE_DESKTOP_URI_ROUTE_INVALID' }
   $query = [System.Web.HttpUtility]::ParseQueryString($parsed.Query)
   $ticket = [string]$query.Get('ticket')
   if ($ticket -notmatch '^[A-Za-z0-9_-]{43}$') { throw 'DRIVE_DESKTOP_OPEN_TICKET_INVALID' }
   if ($query.Get('server')) { throw 'DRIVE_DESKTOP_URI_SERVER_OVERRIDE_DENIED' }
-  return $ticket
+  return [pscustomobject][ordered]@{ action='OPEN_FILE'; ticket=$ticket }
 }
 
 function Convert-ToSafeWindowsName([string]$Value,[string]$Fallback='DIMPRO') {
@@ -273,7 +418,9 @@ function Download-VerifiedFile($Open,[string]$TargetPath,[string]$ExpectedSha,[l
 }
 
 function Invoke-OpenFlow([string]$RawUri) {
-  $ticket = Parse-OpenTicket $RawUri
+  $route = Parse-DriveProtocolUri $RawUri
+  if ([string]$route.action -eq 'SETTINGS') { return Show-DriveDesktopSettings }
+  $ticket = [string]$route.ticket
   $config = Read-Config
   $serverUrl = Assert-DevServerUrl ([string](Get-ObjectPropertyValue $config 'serverUrl' $DefaultServerUrl))
   $workRoot = Ensure-WorkFilesRoot $config

@@ -14,6 +14,7 @@ import {
   PackageCheck,
   Search,
   Send,
+  Settings2,
   Share2,
   UploadCloud,
 } from "lucide-react";
@@ -49,6 +50,7 @@ type Props = {
   onOpenSelected: () => void;
   onOpenWindowsSelected?: () => void;
   onDownloadDriveDesktop?: () => void;
+  onOpenDriveDesktopSettings?: () => void;
   onDownloadSelected: () => void;
   onDownloadFolder: () => void;
   boxCount: number;
@@ -87,6 +89,7 @@ export default function DriveToolbar({
   onOpenSelected,
   onOpenWindowsSelected,
   onDownloadDriveDesktop,
+  onOpenDriveDesktopSettings,
   onDownloadSelected,
   onDownloadFolder,
   boxCount,
@@ -164,6 +167,11 @@ export default function DriveToolbar({
             {onDownloadDriveDesktop && (
               <button type="button" role="menuitem" onClick={() => runMenuAction(onDownloadDriveDesktop)}>
                 <Download size={15} /><span>Drive Desktop letöltése</span>
+              </button>
+            )}
+            {onOpenDriveDesktopSettings && (
+              <button type="button" role="menuitem" onClick={() => runMenuAction(onOpenDriveDesktopSettings)}>
+                <Settings2 size={15} /><span>Drive Desktop beállítások</span>
               </button>
             )}
             <button type="button" role="menuitem" disabled={!canDownloadSelected} onClick={() => runMenuAction(onDownloadSelected)}>
