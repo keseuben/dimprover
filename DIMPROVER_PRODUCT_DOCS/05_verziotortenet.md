@@ -3696,3 +3696,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Migration 009 SHA-256 `7eb7cb6de5222db0967d18bdf5e0cdcc0eef3f6eac8f2b0f1da5de79f151343b`; DEV migrationCount 9.
 - Multi-identity contract 27/27 PASS; AUTH/Drive regressziók, TypeScript és célzott ESLint PASS. A teljes repository lint 25 korábban meglévő errort jelez kizárólag a `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban; az új V0.6.9 fájlok között nincs lint error.
 - PROD DENY.
+
+#### AUTH V0.6.9 / Drive V0.9.15 DEV aktiválás
+
+- Source `86d97054b9ed386d36e8a7157ff5d550aaeaac53`; BUILD-02 PASS.
+- Build ID `YKacDBGlrgE9ig_JojcYZ`; artifact SHA-256 `fff9abbbad074a872ad3f4d90eaa56f0f200cf82f9b0b2bb610257a3c18f20dc`.
+- Aktív DEV runtime `dimpro-drive-v0915-auth069-identities-86d97054b-p3393`; V0.9.14 / 3392 online rollback.
+- Nginx backup SHA-256 `4a5135bbd072961e5247aec9a1c73524af650e4efcb9711b4eee33ab7834d025`.
+- Public smoke PASS; AUTH migrationCount 9; runtime restart 0; error log 0 byte.
+- Fizikai céges e-mail OTP + projektindítási E2E még függő.
+- PROD DENY.

@@ -582,3 +582,22 @@ Contract: `auth-v046-user-identities-contract.mjs` → `27/27 PASS`.
 Regressziók: AUTH security 56/56 PASS, Drive registration 11/11 PASS, atomic project role 8/8 PASS, external guest 9/9 PASS, Project Access 14/14 PASS, TypeScript és célzott ESLint PASS.
 
 Fizikai acceptance még szükséges egy valódi másodlagos céges e-maillel: OTP kézbesítés → hitelesítés → projektindítási identitás kiválasztása → OWNER tagság e-mail/szervezet ellenőrzése. DEV ONLY · PROD DENY.
+
+### AUTH V0.6.9 / Drive V0.9.15 DEV aktiválás – 2026-10-07
+
+- runtime source: `86d97054b9ed386d36e8a7157ff5d550aaeaac53`;
+- BUILD-02 run: `drive-auth-v069-identities-86d97054b-20261007-b1`;
+- build ID: `YKacDBGlrgE9ig_JojcYZ`;
+- artifact SHA-256: `fff9abbbad074a872ad3f4d90eaa56f0f200cf82f9b0b2bb610257a3c18f20dc`;
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/86d97054b9ed`;
+- aktív DEV runtime: `dimpro-drive-v0915-auth069-identities-86d97054b-p3393`;
+- publikus upstream: `127.0.0.1:3393`;
+- rollback runtime: `dimpro-drive-v0914-projectaccess-v032-15ab8d6f7-p3392`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-identities/dimpro-dev.conf.before-86d97054-20261007T112204`;
+- Nginx backup SHA-256: `4a5135bbd072961e5247aec9a1c73524af650e4efcb9711b4eee33ab7834d025`;
+- cutover: 2026-10-07 11:22:14 Europe/Budapest;
+- public smoke: `/drive` 307 central SSO, `/api/dimpro-auth/identities` session nélkül 401, AUTH readiness `migrationCount=9`, új runtime restart 0, error log 0 byte;
+- publikus header: `86d97054 DRIVE V0.9.15 AUTH V0.6.9 MULTI-IDENTITY + PROJECT ACTING IDENTITY ... DEV`;
+- `X-DIMPRO-Production-Access: DENY`.
+
+A következő kötelező fizikai E2E: bejelentkezett `keseruben@gmail.com` fiókból valódi munkahelyi e-mail hozzáadása → OTP kézbesítés és ellenőrzés → új projekt létrehozása a munkahelyi identitással → Project Core OWNER e-mail/szervezet és projekt-hozzáférési megjelenítés ellenőrzése.
