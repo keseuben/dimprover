@@ -188,126 +188,34 @@ export default function DriveToolbar({
         )}
       </div>
 
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolPrimary} ${styles.toolIconOnly}`}
-        onClick={onCreateFolder}
-        disabled={!canWrite}
-        title={canWrite ? "Új mappa" : "Új mappa – nincs írási jogosultságod"}
-        aria-label="Új mappa"
-      >
-        <FolderPlus size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onUpload}
-        disabled={!canUpload}
-        title={canUpload ? "Feltöltés" : "Feltöltés – ebben a munkatérben még nem aktív"}
-        aria-label="Feltöltés"
-      >
-        <UploadCloud size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onUploadSelectedVersion}
-        disabled={!canUploadSelectedVersion}
-        title={canUploadSelectedVersion ? "Új verzió" : "Új verzió – jelölj ki egy írható dokumentumot"}
-        aria-label="Új verzió"
-      >
-        <UploadCloud size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onUploadSelectedRevision}
-        disabled={!canUploadSelectedRevision}
-        title={canUploadSelectedRevision ? "Új revízió" : "Új revízió – jelölj ki egy írható dokumentumot"}
-        aria-label="Új revízió"
-      >
-        <PackageCheck size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onOpenSelected}
-        disabled={!canOpenSelected}
-        title={canOpenSelected ? "Megnyitás" : "Megnyitás – jelölj ki egy megnyitható fájlt"}
-        aria-label="Megnyitás"
-      >
-        <ExternalLink size={16} />
-      </button>
-      {onOpenWindowsSelected && (
-        <button
-          type="button"
-          className={`${styles.toolButton} ${styles.toolIconOnly}`}
-          onClick={onOpenWindowsSelected}
-          disabled={!canOpenWindowsSelected}
-          title={canOpenWindowsSelected ? "Megnyitás Windowsban" : "Megnyitás Windowsban – jelölj ki egy megnyitható fájlt"}
-          aria-label="Megnyitás Windowsban"
-        >
-          <MonitorUp size={16} />
-        </button>
-      )}
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onDownloadSelected}
-        disabled={!canDownloadSelected}
-        title={canDownloadSelected ? "Letöltés" : "Letöltés – jelölj ki egy letölthető fájlt"}
-        aria-label="Letöltés"
-      >
-        <Download size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly}`}
-        onClick={onDownloadFolder}
-        disabled={!canDownloadFolder}
-        title={canDownloadFolder ? "Mappa ZIP" : "Mappa ZIP – válassz ki egy mappát"}
-        aria-label="Mappa ZIP"
-      >
-        <FolderDown size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly} ${boxShelfOpen ? styles.toolActive : ""}`}
-        onClick={onToggleBoxShelf}
-        disabled={!boxEnabled}
-        title={!boxEnabled ? "CsomagBOX – a személyes backend bekötése folyamatban" : boxReady ? "CsomagBOX" : "CsomagBOX – az adatmotor még nem aktív"}
-        aria-label="CsomagBOX"
-      >
-        <PackageCheck size={16} />{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}
-      </button>
-      <DropActionButton iconOnly />
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly} ${compareActive ? styles.toolActive : ""}`}
-        onClick={onToggleCompare}
-        disabled={!compareEnabled}
-        title={!compareEnabled ? "Összehasonlítás – a személyes backend bekötése folyamatban" : compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
-        aria-label={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
-      >
-        <GitCompareArrows size={16} />
-      </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló" aria-label="AI Dokumentumvizsgáló">
-        <BrainCircuit size={16} />
-      </button>
-      <button
-        type="button"
-        className={`${styles.toolButton} ${styles.toolIconOnly} ${canIssueSelected ? "" : styles.toolDisabled}`}
-        disabled={!canIssueSelected}
-        onClick={onIssueSelected}
-        title={canIssueSelected ? "Formális dokumentumkiadás" : "Formális dokumentumkiadás – jelölj ki egy kiadható dokumentumverziót"}
-        aria-label="Formális dokumentumkiadás"
-      >
-        <PackageCheck size={16} />
-      </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás" aria-label="Megosztás">
-        <Share2 size={16} />
-      </button>
+      <div className={`${styles.toolbarActionCluster} ${styles.toolbarActionClusterMisc}`} data-toolbar-group="misc" title="Mappa és egyéb műveletek">
+        <button type="button" className={`${styles.toolButton} ${styles.toolPrimary} ${styles.toolIconOnly}`} onClick={onCreateFolder} disabled={!canWrite} title={canWrite ? "Új mappa" : "Új mappa – nincs írási jogosultságod"} aria-label="Új mappa"><FolderPlus size={16} /></button>
+      </div>
 
+      <div className={`${styles.toolbarActionCluster} ${styles.toolbarActionClusterUpload}`} data-toolbar-group="upload" title="Feltöltés · Új verzió · Új revízió">
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onUpload} disabled={!canUpload} title={canUpload ? "Feltöltés" : "Feltöltés – ebben a munkatérben még nem aktív"} aria-label="Feltöltés"><UploadCloud size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onUploadSelectedVersion} disabled={!canUploadSelectedVersion} title={canUploadSelectedVersion ? "Új verzió" : "Új verzió – jelölj ki egy írható dokumentumot"} aria-label="Új verzió"><UploadCloud size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onUploadSelectedRevision} disabled={!canUploadSelectedRevision} title={canUploadSelectedRevision ? "Új revízió" : "Új revízió – jelölj ki egy írható dokumentumot"} aria-label="Új revízió"><PackageCheck size={16} /></button>
+      </div>
+
+      <div className={`${styles.toolbarActionCluster} ${styles.toolbarActionClusterOpen}`} data-toolbar-group="open" title="Megnyitás · Windows · Letöltés">
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onOpenSelected} disabled={!canOpenSelected} title={canOpenSelected ? "Megnyitás" : "Megnyitás – jelölj ki egy megnyitható fájlt"} aria-label="Megnyitás"><ExternalLink size={16} /></button>
+        {onOpenWindowsSelected && <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onOpenWindowsSelected} disabled={!canOpenWindowsSelected} title={canOpenWindowsSelected ? "Megnyitás Windowsban" : "Megnyitás Windowsban – jelölj ki egy megnyitható fájlt"} aria-label="Megnyitás Windowsban"><MonitorUp size={16} /></button>}
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onDownloadSelected} disabled={!canDownloadSelected} title={canDownloadSelected ? "Letöltés" : "Letöltés – jelölj ki egy letölthető fájlt"} aria-label="Letöltés"><Download size={16} /></button>
+      </div>
+
+      <div className={`${styles.toolbarActionCluster} ${styles.toolbarActionClusterPackage}`} data-toolbar-group="package" title="Mappa ZIP · CsomagBOX · Drop">
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly}`} onClick={onDownloadFolder} disabled={!canDownloadFolder} title={canDownloadFolder ? "Mappa ZIP" : "Mappa ZIP – válassz ki egy mappát"} aria-label="Mappa ZIP"><FolderDown size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${boxShelfOpen ? styles.toolActive : ""}`} onClick={onToggleBoxShelf} disabled={!boxEnabled} title={!boxEnabled ? "CsomagBOX – a személyes backend bekötése folyamatban" : boxReady ? "CsomagBOX" : "CsomagBOX – az adatmotor még nem aktív"} aria-label="CsomagBOX"><PackageCheck size={16} />{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}</button>
+        <DropActionButton iconOnly />
+      </div>
+
+      <div className={`${styles.toolbarActionCluster} ${styles.toolbarActionClusterOther}`} data-toolbar-group="other" title="További dokumentumműveletek">
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${compareActive ? styles.toolActive : ""}`} onClick={onToggleCompare} disabled={!compareEnabled} title={!compareEnabled ? "Összehasonlítás – a személyes backend bekötése folyamatban" : compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"} aria-label={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}><GitCompareArrows size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló" aria-label="AI Dokumentumvizsgáló"><BrainCircuit size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${canIssueSelected ? "" : styles.toolDisabled}`} disabled={!canIssueSelected} onClick={onIssueSelected} title={canIssueSelected ? "Formális dokumentumkiadás" : "Formális dokumentumkiadás – jelölj ki egy kiadható dokumentumverziót"} aria-label="Formális dokumentumkiadás"><PackageCheck size={16} /></button>
+        <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás" aria-label="Megosztás"><Share2 size={16} /></button>
+      </div>
       <div className={styles.toolbarSpacer} />
       <label className={styles.searchBox}>
         <Search size={14} />

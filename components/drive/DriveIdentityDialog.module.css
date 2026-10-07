@@ -8,7 +8,14 @@
 .headingText span { color: #6d8194; font-size: 11px; }
 .iconButton { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid #d3dee7; border-radius: 8px; background: #fff; color: #63798d; cursor: pointer; }
 .body { min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(0,1.08fr) minmax(290px,.92fr); gap: 12px; padding: 12px; background: #f5f8fa; }
+.profileSection { grid-column: 1 / -1; min-width: 0; border: 1px solid #b9ddd4; border-radius: 11px; background: #f2faf7; padding: 11px; }
 .listSection,.formSection { min-width: 0; border: 1px solid #dce5ec; border-radius: 11px; background: #fff; padding: 11px; }
+.profileNameRow { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: end; }
+.profileNameRow label { display: grid; gap: 4px; color: #55766d; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; }
+.profileNameRow input { width: 100%; min-width: 0; height: 32px; border: 1px solid #a9d0c5; border-radius: 7px; background: #fff; color: #29445d; padding: 0 9px; font: inherit; font-size: 10px; outline: none; }
+.profileNameRow input:focus { border-color: #4aa994; box-shadow: 0 0 0 2px rgba(49,165,143,.12); }
+.profileNameRow button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #18806b; border-radius: 7px; background: #18806b; color: #fff; padding: 0 10px; font-size: 9px; font-weight: 900; cursor: pointer; }
+.profileNameRow button:disabled { opacity: .5; cursor: wait; }
 .sectionHeading { min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .sectionHeading > div { min-width: 0; display: grid; gap: 2px; }
 .sectionHeading strong { font-size: 12px; }
@@ -58,14 +65,20 @@
 :global(html[data-drive-theme="dark"]) .panel { border-color: #31485d; background: #122536; color: #e3edf5; }
 :global(html[data-drive-theme="dark"]) .header,:global(html[data-drive-theme="dark"]) .footer { border-color: #2c4356; background: #142b3e; }
 :global(html[data-drive-theme="dark"]) .body { background: #0d1e2d; }
+:global(html[data-drive-theme="dark"]) .profileSection { border-color: #315f56; background: #153630; }
+:global(html[data-drive-theme="dark"]) .profileNameRow label { color: #abd5ca; }
+:global(html[data-drive-theme="dark"]) .profileNameRow input { border-color: #3f756b; background: #102b27; color: #e0f1ed; }
 :global(html[data-drive-theme="dark"]) .listSection,:global(html[data-drive-theme="dark"]) .formSection,:global(html[data-drive-theme="dark"]) .identityCard { border-color: #2e4559; background: #13293b; }
 :global(html[data-drive-theme="dark"]) .primaryCard { border-color: #357968; background: #153a35; }
 :global(html[data-drive-theme="dark"]) .iconButton,:global(html[data-drive-theme="dark"]) .sectionHeading > button,:global(html[data-drive-theme="dark"]) .footer button,:global(html[data-drive-theme="dark"]) .verifyRow input,:global(html[data-drive-theme="dark"]) .formGrid input,:global(html[data-drive-theme="dark"]) .formGrid select { border-color: #3a5064; background: #102334; color: #dfebf4; }
-@media (max-width: 720px) { .body { grid-template-columns: 1fr; } .formGrid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .headingText span { display: none; } }
+@media (max-width: 720px) { .body { grid-template-columns: 1fr; } .formGrid { grid-template-columns: 1fr; } .profileNameRow { grid-template-columns: 1fr; } .profileNameRow button { justify-self: start; } .wide { grid-column: auto; } .headingText span { display: none; } }
 
 :global([data-theme="dark"]) .panel { border-color: #31485d; background: #122536; color: #e3edf5; }
 :global([data-theme="dark"]) .header,:global([data-theme="dark"]) .footer { border-color: #2c4356; background: #142b3e; }
 :global([data-theme="dark"]) .body { background: #0d1e2d; }
+:global([data-theme="dark"]) .profileSection { border-color: #315f56; background: #153630; }
+:global([data-theme="dark"]) .profileNameRow label { color: #abd5ca; }
+:global([data-theme="dark"]) .profileNameRow input { border-color: #3f756b; background: #102b27; color: #e0f1ed; }
 :global([data-theme="dark"]) .listSection,:global([data-theme="dark"]) .formSection,:global([data-theme="dark"]) .identityCard { border-color: #2e4559; background: #13293b; }
 :global([data-theme="dark"]) .primaryCard { border-color: #357968; background: #153a35; }
 :global([data-theme="dark"]) .iconButton,:global([data-theme="dark"]) .sectionHeading > button,:global([data-theme="dark"]) .footer button,:global([data-theme="dark"]) .verifyRow input,:global([data-theme="dark"]) .formGrid input,:global([data-theme="dark"]) .formGrid select { border-color: #3a5064; background: #102334; color: #dfebf4; }

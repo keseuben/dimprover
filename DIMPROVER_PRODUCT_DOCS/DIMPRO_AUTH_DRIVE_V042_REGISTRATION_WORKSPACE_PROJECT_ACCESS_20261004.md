@@ -827,3 +827,9 @@ A kiválasztott Drive munkatér böngésző-localStorage állapotban megmarad. �
 ### Drive V0.9.24 aktiválási állapot
 
 A V0.9.24 DEV-en aktív. Runtime source `4b7f57ab9135a153f088ba14097b132462de85d5`, BUILD-02 build ID `1KeJWDL6v9Do2PB8Rvo5-`, artifact SHA-256 `260f9f5fc6a4aac00f95502dc07f5e87a4409325d4762e14f9938c58a4c34e13`. Aktív port `3403`; a korábbi V0.9.23 + Desktop v0.1.9 `3402` rollbackként online maradt. Public auth/smoke PASS, AUTH database ready, PROD DENY.
+
+## Drive V0.9.25 – fióknév és fullscreen részletpanel
+
+A központi DIMPRO-fiók megjelenítési neve most közvetlenül az `E-mail-címek és munkahelyek` ablakból szerkeszthető. A módosítás nem hoz létre új felhasználót vagy új identitást: ugyanazt a központi usert frissíti a session-bound profile API, és a kapcsolódó aktív projekttagságok megjelenítési nevét szinkronizálja.
+
+A teljes ablakos Drive táblázatban az adatpanel viselkedése projekt és Saját Drive esetén azonos. Egy kattintás kijelöli a fájlt és megnyitja a részleteket; dupla kattintás fájlelőnézetet nyit. Panelen kívüli kattintás csak a panelt zárja. Esc hierarchia: előnézet → részletek → teljes nézet. PROD DENY.

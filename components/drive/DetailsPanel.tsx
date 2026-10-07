@@ -25,6 +25,7 @@ type MetadataForm = {
 type MetadataTextKey = Exclude<keyof MetadataForm, "scales">;
 
 type ReviewSectionKey = "technical" | "customer" | "manager" | "investor" | "lifecycle";
+type DetailsSectionKey = "plan" | "folder" | "security";
 
 type ReviewObservationItem = { id: string; text: string; source: "text" | "voice" };
 
@@ -511,6 +512,7 @@ export default function DetailsPanel({
   detailsFocus = "",
 }: Props) {
   const [tab, setTab] = useState<"details" | "review" | "versions" | "notes" | "settings">("details");
+  const [detailsSection, setDetailsSection] = useState<DetailsSectionKey>("plan");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
   const [numberingMode, setNumberingMode] = useState<"NONE" | "IMPORT" | "CORRECT">("NONE");
   const [numberingVersion, setNumberingVersion] = useState(1);
@@ -523,9 +525,15 @@ export default function DetailsPanel({
   const [reviewTimelineOpen, setReviewTimelineOpen] = useState(false);
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
-  useEffect(() => { if (detailsFocus) setTab("details"); }, [detailsFocus]);
   useEffect(() => {
-    if (!detailsFocus || tab !== "details" || !document) return;
+    if (!detailsFocus) return;
+    if (detailsFocus === "numbering") setTab("versions");
+    else { setTab("details"); setDetailsSection("plan"); }
+  }, [detailsFocus]);
+  useEffect(() => {
+    if (!detailsFocus || !document) return;
+    if (detailsFocus === "numbering" && tab !== "versions") return;
+    if (detailsFocus !== "numbering" && tab !== "details") return;
     const targetId = detailsFocus === "planNo"
       ? "drive-meta-planNo"
       : detailsFocus === "planTitle"
@@ -669,6 +677,43 @@ export default function DetailsPanel({
     );
   }
 
+  const numberingEditor = (
+    <section id="drive-numbering-editor" tabIndex={-1} className={styles.numberingEditor} data-details-focused={detailsFocus === "numbering" ? "true" : undefined}>
+      <header className={styles.numberingEditorHead}>
+        <div>
+          <strong>Verzió és revízió számozás</strong>
+          <span className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>{numberingOriginLabel(document.currentVersion?.numberingOrigin)}</span>
+        </div>
+        {document.currentVersion?.numberingCorrectedAt && <small>{formatAuditDate(document.currentVersion.numberingCorrectedAt)}</small>}
+      </header>
+      <div className={styles.numberingCurrent}>
+        <strong className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>
+          {document.currentVersion?.revisionCode || "R00"} · V{String(document.currentVersion?.versionNumber || document.currentVersionNumber).padStart(2, "0")}
+        </strong>
+        {document.currentVersion?.numberingCorrectionReason && <span>{document.currentVersion.numberingCorrectionReason}</span>}
+      </div>
+      {numberingMode === "NONE" ? (
+        <div className={styles.numberingActions}>
+          {canWrite && details?.versions.length === 1 && document.currentVersion?.versionKind === "INITIAL" && (
+            <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("IMPORT"); setNumberingReason(""); }}>Hozott számozás beállítása</button>
+          )}
+          {canApprove && (
+            <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("CORRECT"); setNumberingReason(""); }}>Számozás korrekciója</button>
+          )}
+          {!canApprove && document.currentVersion?.numberingOrigin === "SYSTEM" && (
+            <span className={styles.numberingLocked}><Lock size={11} /> Automatikusan kezelt számozás</span>
+          )}
+        </div>
+      ) : (
+        <div className={styles.numberingEditGrid}>
+          <label>Verzió<select value={numberingVersion} disabled={busy} onChange={(event) => setNumberingVersion(Number(event.target.value))}>{versionSelectValues().map((value) => <option key={value} value={value}>V{String(value).padStart(2, "0")}</option>)}</select></label>
+          <label>Revízió<select value={numberingRevision} disabled={busy} onChange={(event) => setNumberingRevision(Number(event.target.value))}>{revisionSelectValues().map((value) => <option key={value} value={value}>R{String(value).padStart(2, "0")}</option>)}</select></label>
+          <label className={styles.numberingReasonField}>{numberingMode === "CORRECT" ? "Korrekció indoka *" : "Import megjegyzés"}<input value={numberingReason} disabled={busy} maxLength={1000} onChange={(event) => setNumberingReason(event.target.value)} placeholder={numberingMode === "CORRECT" ? "Miért szükséges a számozás javítása?" : "Opcionális megjegyzés"} /></label>
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <aside className={`${styles.detailsPanel} ${responsiveClassName}`}>
       <header className={styles.detailsHeader}>
@@ -690,29 +735,27 @@ export default function DetailsPanel({
         <button type="button" className={tab === "settings" ? styles.detailsTabActive : ""} onClick={() => setTab("settings")}>Listák</button>
       </div>
 
-      {tab !== "versions" && (
+      {(tab !== "versions" || numberingMode !== "NONE") && (
         <div className={styles.detailsTopActions} aria-label="Dokumentumműveletek">
           {tab === "details" && (
             <>
-              {numberingMode !== "NONE" && (
-                <>
-                  <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={busy || (numberingMode === "CORRECT" && !numberingReason.trim())} onClick={() => void saveNumbering()} title="Számozás mentése" aria-label="Számozás mentése"><Save size={14} /></button>
-                  <button type="button" className={styles.detailsActionIcon} disabled={busy} onClick={() => setNumberingMode("NONE")} title="Számozás szerkesztésének megszakítása" aria-label="Számozás szerkesztésének megszakítása"><X size={14} /></button>
-                </>
-              )}
-              {canApprove && document.currentVersion?.status === "QUARANTINED" && (
+              {detailsSection === "security" && canApprove && document.currentVersion?.status === "QUARANTINED" && (
                 <>
                   <button type="button" className={styles.detailsActionIcon} disabled={busy || !securityReady} onClick={() => void onScan()} title="Biztonsági ellenőrzés" aria-label="Biztonsági ellenőrzés"><ShieldCheck size={14} /></button>
                   <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionSuccess}`} disabled={busy || !securityReady} onClick={() => void onReview("APPROVE")} title="Jóváhagyás" aria-label="Jóváhagyás"><Check size={14} /></button>
                   <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionDanger}`} disabled={busy} onClick={() => void onReview("REJECT")} title="Elutasítás" aria-label="Elutasítás"><X size={14} /></button>
                 </>
               )}
-              <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canWrite || busy} onClick={() => void saveMetadata()} title="Metaadatok mentése" aria-label="Metaadatok mentése"><Save size={14} /></button>
+              {detailsSection === "plan" && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canWrite || busy} onClick={() => void saveMetadata()} title="Tervadatok mentése" aria-label="Tervadatok mentése"><Save size={14} /></button>}
               <button type="button" className={styles.detailsActionIcon} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()} title="Letöltés" aria-label="Letöltés"><Download size={14} /></button>
               <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionQr}`} disabled={!canWrite || busy} onClick={() => void onEnsureQr()} title={activeQr ? "QR azonosító aktív" : "QR létrehozása"} aria-label={activeQr ? "QR azonosító aktív" : "QR létrehozása"}><QrCode size={14} /></button>
               {canDelete && onDelete && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionDanger}`} disabled={busy} onClick={() => void onDelete()} title="Lomtárba helyezés" aria-label="Lomtárba helyezés"><Trash2 size={14} /></button>}
             </>
           )}
+          {tab === "versions" && numberingMode !== "NONE" && (<>
+            <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={busy || (numberingMode === "CORRECT" && !numberingReason.trim())} onClick={() => void saveNumbering()} title="Számozás mentése" aria-label="Számozás mentése"><Save size={14} /></button>
+            <button type="button" className={styles.detailsActionIcon} disabled={busy} onClick={() => setNumberingMode("NONE")} title="Számozás szerkesztésének megszakítása" aria-label="Számozás szerkesztésének megszakítása"><X size={14} /></button>
+          </>)}
           {tab === "review" && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canAnyReviewEdit || busy} onClick={() => void saveReview()} title="Jogosult szakaszok mentése" aria-label="Jogosult szakaszok mentése"><Save size={14} /></button>}
           {tab === "notes" && <button type="button" className={`${styles.detailsActionIcon} ${styles.detailsActionPrimary}`} disabled={!canComment || busy} onClick={() => void onSaveNote(note)} title="Megjegyzés mentése" aria-label="Megjegyzés mentése"><StickyNote size={14} /></button>}
           {tab === "settings" && (
@@ -730,155 +773,53 @@ export default function DetailsPanel({
         ) : tab === "details" ? (
           <div className={styles.detailsWorkspace}>
             <section className={styles.detailsFieldsPane} aria-label="Dokumentumadatok szerkesztése">
-            <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"} · Témakör: {inheritedTopic || "—"}</div>
+              <nav className={styles.detailsSubTabs} aria-label="Részletek csoportjai">
+                <button type="button" className={detailsSection === "plan" ? styles.detailsSubTabActive : ""} onClick={() => setDetailsSection("plan")}>Tervadatok</button>
+                <button type="button" className={detailsSection === "folder" ? styles.detailsSubTabActive : ""} onClick={() => setDetailsSection("folder")}>Mappa</button>
+                <button type="button" className={detailsSection === "security" ? styles.detailsSubTabActive : ""} onClick={() => setDetailsSection("security")}>Biztonság</button>
+              </nav>
 
-            <div className={styles.fileNameAuditBox}>
-              <div><span>Eredeti fájlnév</span><strong>{typeof details?.metadata?.extra?.originalFileName === "string" ? details.metadata.extra.originalFileName : document.currentVersion?.originalName || "—"}</strong></div>
-              <div><span>DIMPRO technikai fájlnév</span><strong>{typeof details?.metadata?.extra?.safeFileName === "string" ? details.metadata.extra.safeFileName : document.name}</strong></div>
-            </div>
-
-            <section id="drive-numbering-editor" tabIndex={-1} className={styles.numberingEditor} data-details-focused={detailsFocus === "numbering" ? "true" : undefined}>
-              <header className={styles.numberingEditorHead}>
-                <div>
-                  <strong>Verzió és revízió</strong>
-                  <span className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>{numberingOriginLabel(document.currentVersion?.numberingOrigin)}</span>
+              {detailsSection === "plan" && (<>
+                <div className={styles.metaGrid}>
+                  {([["planNo", "Tervszám"], ["planTitle", "Egyedi megjelenítési név / tervlap neve"]] as Array<[MetadataTextKey, string]>).map(([key, label]) => (
+                    <div className={styles.metaItem} key={key} data-details-focused={detailsFocus === key ? "true" : undefined}>
+                      <label htmlFor={`drive-meta-${key}`}>{label}</label>
+                      <input id={`drive-meta-${key}`} value={metadata[key]} readOnly={!canWrite} onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))} placeholder="–" />
+                    </div>
+                  ))}
+                  {metadataOptionKeys.map((key) => (
+                    <div className={styles.metaItem} key={key}>
+                      <label htmlFor={`drive-meta-${key}`}>{metadataOptionLabels[key]}</label>
+                      <select id={`drive-meta-${key}`} value={metadata[key]} disabled={!canWrite} onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}>
+                        <option value="">—</option>
+                        {selectOptionsWithCurrent(projectSettings?.metadataOptions[key] || DEFAULT_DRIVE_METADATA_OPTIONS[key], metadata[key]).map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </div>
+                  ))}
                 </div>
-                {document.currentVersion?.numberingCorrectedAt && <small>{formatAuditDate(document.currentVersion.numberingCorrectedAt)}</small>}
-              </header>
-              <div className={styles.numberingCurrent}>
-                <strong className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>
-                  {document.currentVersion?.revisionCode || "R00"} · V{String(document.currentVersion?.versionNumber || document.currentVersionNumber).padStart(2, "0")}
-                </strong>
-                {document.currentVersion?.numberingCorrectionReason && <span>{document.currentVersion.numberingCorrectionReason}</span>}
-              </div>
-
-              {numberingMode === "NONE" ? (
-                <div className={styles.numberingActions}>
-                  {canWrite && details?.versions.length === 1 && document.currentVersion?.versionKind === "INITIAL" && (
-                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("IMPORT"); setNumberingReason(""); }}>
-                      Hozott számozás beállítása
-                    </button>
-                  )}
-                  {canApprove && (
-                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("CORRECT"); setNumberingReason(""); }}>
-                      Számozás korrekciója
-                    </button>
-                  )}
-                  {!canApprove && document.currentVersion?.numberingOrigin === "SYSTEM" && (
-                    <span className={styles.numberingLocked}><Lock size={11} /> Automatikusan kezelt számozás</span>
-                  )}
-                </div>
-              ) : (
-                <div className={styles.numberingEditGrid}>
-                  <label>
-                    Verzió
-                    <select value={numberingVersion} disabled={busy} onChange={(event) => setNumberingVersion(Number(event.target.value))}>
-                      {versionSelectValues().map((value) => <option key={value} value={value}>V{String(value).padStart(2, "0")}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    Revízió
-                    <select value={numberingRevision} disabled={busy} onChange={(event) => setNumberingRevision(Number(event.target.value))}>
-                      {revisionSelectValues().map((value) => <option key={value} value={value}>R{String(value).padStart(2, "0")}</option>)}
-                    </select>
-                  </label>
-                  <label className={styles.numberingReasonField}>
-                    {numberingMode === "CORRECT" ? "Korrekció indoka *" : "Import megjegyzés"}
-                    <input value={numberingReason} disabled={busy} maxLength={1000} onChange={(event) => setNumberingReason(event.target.value)} placeholder={numberingMode === "CORRECT" ? "Miért szükséges a számozás javítása?" : "Opcionális megjegyzés"} />
-                  </label>
-                </div>
-              )}
-            </section>
-
-            <div className={styles.metaGrid}>
-              {([
-                ["planNo", "Tervszám"],
-                ["planTitle", "Egyedi megjelenítési név / tervlap neve"],
-              ] as Array<[MetadataTextKey, string]>).map(([key, label]) => (
-                <div className={styles.metaItem} key={key} data-details-focused={detailsFocus === key ? "true" : undefined}>
-                  <label htmlFor={`drive-meta-${key}`}>{label}</label>
-                  <input
-                    id={`drive-meta-${key}`}
-                    value={metadata[key]}
-                    readOnly={!canWrite}
-                    onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}
-                    placeholder="–"
-                  />
-                </div>
-              ))}
-              {metadataOptionKeys.map((key) => (
-                <div className={styles.metaItem} key={key}>
-                  <label htmlFor={`drive-meta-${key}`}>{metadataOptionLabels[key]}</label>
-                  <select
-                    id={`drive-meta-${key}`}
-                    value={metadata[key]}
-                    disabled={!canWrite}
-                    onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}
-                  >
-                    <option value="">—</option>
-                    {selectOptionsWithCurrent(projectSettings?.metadataOptions[key] || DEFAULT_DRIVE_METADATA_OPTIONS[key], metadata[key]).map((option) => (
-                      <option key={option} value={option}>{option}</option>
+                <div className={styles.scaleEditor} data-details-focused={detailsFocus === "scales" ? "true" : undefined}>
+                  <div className={styles.scaleEditorHead}><div><strong>Tervlépték</strong><span>Legfeljebb 3 lépték rögzíthető.</span></div>{canWrite && metadata.scales.length < 3 && <button type="button" onClick={() => setMetadata((current) => ({ ...current, scales: [...current.scales, ""] }))}><Plus size={12} /> Lépték hozzáadása</button>}</div>
+                  <div className={styles.scaleEditorList}>
+                    {metadata.scales.map((scale, index) => (
+                      <div className={styles.scaleEditorRow} key={"scale-" + index}><span>M=1:</span><input id={"drive-meta-scale-" + index} inputMode="numeric" pattern="[0-9]*" value={scale} readOnly={!canWrite} onChange={(event) => { const value = event.target.value.replace(/\D+/g, "").slice(0, 8); setMetadata((current) => ({ ...current, scales: current.scales.map((entry, entryIndex) => entryIndex === index ? value : entry) })); }} placeholder="100" aria-label={"Lépték " + (index + 1)} />{canWrite && index > 0 && <button type="button" className={styles.scaleRemove} onClick={() => setMetadata((current) => ({ ...current, scales: current.scales.filter((_, entryIndex) => entryIndex !== index) }))} title="Lépték eltávolítása" aria-label={"Lépték " + (index + 1) + " eltávolítása"}><X size={12} /></button>}</div>
                     ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-
-            <div className={styles.scaleEditor} data-details-focused={detailsFocus === "scales" ? "true" : undefined}>
-              <div className={styles.scaleEditorHead}>
-                <div>
-                  <strong>Tervlépték</strong>
-                  <span>Legfeljebb 3 lépték rögzíthető.</span>
-                </div>
-                {canWrite && metadata.scales.length < 3 && (
-                  <button type="button" onClick={() => setMetadata((current) => ({ ...current, scales: [...current.scales, ""] }))}>
-                    <Plus size={12} /> Lépték hozzáadása
-                  </button>
-                )}
-              </div>
-              <div className={styles.scaleEditorList}>
-                {metadata.scales.map((scale, index) => (
-                  <div className={styles.scaleEditorRow} key={"scale-" + index}>
-                    <span>M=1:</span>
-                    <input
-                      id={"drive-meta-scale-" + index}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={scale}
-                      readOnly={!canWrite}
-                      onChange={(event) => {
-                        const value = event.target.value.replace(/\D+/g, "").slice(0, 8);
-                        setMetadata((current) => ({
-                          ...current,
-                          scales: current.scales.map((entry, entryIndex) => entryIndex === index ? value : entry),
-                        }));
-                      }}
-                      placeholder="100"
-                      aria-label={"Lépték " + (index + 1)}
-                    />
-                    {canWrite && index > 0 && (
-                      <button
-                        type="button"
-                        className={styles.scaleRemove}
-                        onClick={() => setMetadata((current) => ({ ...current, scales: current.scales.filter((_, entryIndex) => entryIndex !== index) }))}
-                        title="Lépték eltávolítása"
-                        aria-label={"Lépték " + (index + 1) + " eltávolítása"}
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              </>)}
 
-            {document.currentVersion?.status === "QUARANTINED" && (
-              <div className={styles.infoBox}>
-                <strong>Biztonsági karantén</strong><br />
-                {securityReady ? `${securityLabel} aktív. Sikeres ellenőrzés után a fájl megnyitható és letölthető; a végleges kiadáshoz továbbra is a dokumentumfolyamat szabályai érvényesek.` : `Biztonsági ellenőrzés nem elérhető (${securityLabel}). Az előnézet, letöltés és kiadás biztonsági okból tiltva.`}
-              </div>
-            )}
-            {activeQr && <div className={styles.infoBox}>QR azonosító aktív. A publikus QR feloldó oldal és vizuális QR-kép későbbi vertikális szeletben kapcsolódik hozzá.</div>}
+              {detailsSection === "folder" && (<>
+                <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"}<br />Témakör: {inheritedTopic || "—"}</div>
+                <div className={styles.fileNameAuditBox}>
+                  <div><span>Eredeti fájlnév</span><strong>{typeof details?.metadata?.extra?.originalFileName === "string" ? details.metadata.extra.originalFileName : document.currentVersion?.originalName || "—"}</strong></div>
+                  <div><span>DIMPRO technikai fájlnév</span><strong>{typeof details?.metadata?.extra?.safeFileName === "string" ? details.metadata.extra.safeFileName : document.name}</strong></div>
+                </div>
+              </>)}
+
+              {detailsSection === "security" && (<>
+                <div className={styles.infoBox}><strong>Biztonsági állapot</strong><br />{document.currentVersion?.status === "QUARANTINED" ? (securityReady ? `${securityLabel} aktív. Sikeres ellenőrzés után a fájl megnyitható és letölthető.` : `Biztonsági ellenőrzés nem elérhető (${securityLabel}). Az előnézet és letöltés tiltva.`) : `Aktuális fájlállapot: ${document.currentVersion?.status || "—"}.`}</div>
+                {document.currentVersion?.status === "QUARANTINED" && <div className={styles.securityStatusCard} data-security-ready={securityReady ? "true" : "false"}><ShieldCheck size={18} /><div><strong>Biztonsági karantén</strong><span>{securityReady ? "Ellenőrzés végrehajtható." : "A biztonsági motor jelenleg nem áll készen."}</span></div></div>}
+                {activeQr ? <div className={styles.infoBox}><strong>QR azonosító</strong><br />Aktív QR azonosító kapcsolódik a dokumentumhoz.</div> : <div className={styles.infoBox}><strong>QR azonosító</strong><br />Nincs aktív QR azonosító.</div>}
+              </>)}
             </section>
           </div>
         ) : tab === "review" ? (
@@ -897,7 +838,7 @@ export default function DetailsPanel({
                 const stateClass = step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending;
                 return (
                   <div className={`${styles.reviewProgressStepWrap} ${stateClass}`} key={step.key} aria-current={step.active ? "step" : undefined}>
-                    <div className={styles.reviewProgressStep} title={step.label}><step.Icon size={14} /><span>{step.label}</span></div>
+                    <div className={styles.reviewProgressStep} title={step.label} aria-label={step.label}><step.Icon size={15} /></div>
                     <span className={styles.reviewProgressBar} aria-hidden="true" />
                     {index < steps.length - 1 && <ChevronRight className={styles.reviewProgressArrow} size={13} aria-hidden="true" />}
                   </div>
@@ -1070,6 +1011,8 @@ export default function DetailsPanel({
           </div>
         ) : tab === "versions" ? (
           <div className={styles.versionList}>
+            {numberingEditor}
+            <div className={styles.versionHistoryHeading}><strong>Verzióelőzmények</strong><span>{details?.versions.length || 0} bejegyzés</span></div>
             {(details?.versions || []).map((version) => (
               <article className={styles.versionCard} key={version.id}>
                 <strong>V{version.versionNumber} · {version.revisionCode || "revízió nélkül"}</strong>

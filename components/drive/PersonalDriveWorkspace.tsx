@@ -186,9 +186,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const closeTableFullscreen = useCallback(() => {
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    }
+    setPreviewDocumentId("");
   }, []);
 
   const toggleTableFullscreen = useCallback(() => {
@@ -198,9 +196,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     }
     setTableFullscreen(true);
     setFullTableInspectorOpen(false);
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      void document.documentElement.requestFullscreen().catch(() => undefined);
-    }
+    setPreviewDocumentId("");
   }, [closeTableFullscreen, tableFullscreen]);
 
   const load = useCallback(async () => {
@@ -286,22 +282,27 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.fullscreenElement) closeTableFullscreen();
-    };
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setTableFullscreen(false);
-        setFullTableInspectorOpen(false);
+      if (event.key !== "Escape") return;
+      if (previewDocumentId) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setPreviewDocumentId("");
+        return;
       }
+      if (fullTableInspectorOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setFullTableInspectorOpen(false);
+        return;
+      }
+      closeTableFullscreen();
     };
     window.addEventListener("keydown", onKeyDown);
-    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [closeTableFullscreen, tableFullscreen]);
+  }, [closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
 
   useEffect(() => {
     if (!navigationRequest) return;
@@ -650,8 +651,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
 
   const openDocument = useCallback((document: DriveDocument) => {
     setSelectedDocumentId(document.id);
+    if (tableFullscreen) setFullTableInspectorOpen(false);
     setPreviewDocumentId(document.id);
-  }, []);
+  }, [tableFullscreen]);
 
   const browserClass = [styles.browser, layoutMode === "folders" ? styles.layoutFolders : "", layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
   const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
@@ -834,7 +836,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
             </aside>
           ) : null}
         </div>
-        {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
+        {fullTableInspectorOpen ? <div className={styles.fullTableInspectorBackdrop} role="presentation" onPointerDown={() => setFullTableInspectorOpen(false)} /> : null}
+        {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} onPointerDown={(event) => event.stopPropagation()}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
       </section> : null}
 
       <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : layoutMode === "folders" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` } : undefined}>

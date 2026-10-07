@@ -339,9 +339,7 @@ export default function DriveWorkspace({
   const closeTableFullscreen = useCallback(() => {
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    }
+    setPreviewDocumentId("");
   }, []);
 
   const toggleTableFullscreen = useCallback(() => {
@@ -351,9 +349,7 @@ export default function DriveWorkspace({
     }
     setTableFullscreen(true);
     setFullTableInspectorOpen(false);
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      void document.documentElement.requestFullscreen().catch(() => undefined);
-    }
+    setPreviewDocumentId("");
   }, [closeTableFullscreen, tableFullscreen]);
 
   useEffect(() => {
@@ -397,22 +393,27 @@ export default function DriveWorkspace({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.fullscreenElement) closeTableFullscreen();
-    };
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setTableFullscreen(false);
-        setFullTableInspectorOpen(false);
+      if (event.key !== "Escape") return;
+      if (previewDocumentId) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setPreviewDocumentId("");
+        return;
       }
+      if (fullTableInspectorOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setFullTableInspectorOpen(false);
+        return;
+      }
+      closeTableFullscreen();
     };
     window.addEventListener("keydown", onKeyDown);
-    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [closeTableFullscreen, tableFullscreen]);
+  }, [closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
 
   const loadBoxes = useCallback(async () => {
     try {
@@ -3210,8 +3211,8 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
-              onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
+              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setFullTableInspectorOpen(true); }}
+              onOpenDocument={(document) => { setSelectedDocumentId(document.id); setFullTableInspectorOpen(false); setPreviewDocumentId(document.id); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}
@@ -3282,8 +3283,9 @@ export default function DriveWorkspace({
               </aside>
             )}
           </div>
+          {fullTableInspectorOpen && <div className={styles.fullTableInspectorBackdrop} role="presentation" onPointerDown={() => setFullTableInspectorOpen(false)} />}
           {fullTableInspectorOpen && (
-            <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">
+            <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} aria-label="Dokumentumadatok" onPointerDown={(event) => event.stopPropagation()}>
               {fullTableInspectorLayout === "bottom" && <BottomInspectorResizeHandle />}
               <button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
               <DetailsPanel
@@ -3313,7 +3315,7 @@ export default function DriveWorkspace({
                 onDownload={downloadSelected}
                 onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
                 responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`}
-                focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
+                focusTab={detailsFocus?.documentId === selectedDocument?.id ? (detailsFocus?.field === "numbering" ? "versions" : "details") : viewMode === "review" ? "review" : undefined}
                 reviewFocus={reviewFocus}
                 detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}
                 inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
@@ -3507,7 +3509,7 @@ export default function DriveWorkspace({
               onDownload={downloadSelected}
               onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
               responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
-              focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
+              focusTab={detailsFocus?.documentId === selectedDocument?.id ? (detailsFocus?.field === "numbering" ? "versions" : "details") : viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}
               detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}
               inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}

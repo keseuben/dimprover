@@ -6238,3 +6238,161 @@
   .userIdentityText { max-width: 138px; }
   .userRoleBadge { width: 31px; }
 }
+
+/* Drive V0.9.25 – compact review workline, detail sub-tabs, commander security, toolbar groups and layered fullscreen inspectors */
+.detailsTabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.detailsTabs button { font-size: 8px; padding-left: 2px; padding-right: 2px; }
+.detailsBody,
+.detailsBody.detailsBodyStructured {
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.detailsWorkspace { min-height: 100%; height: auto; overflow: visible; }
+.detailsFieldsPane,
+.detailsSplitCard .detailsFieldsPane {
+  min-height: 0;
+  height: auto !important;
+  overflow: visible !important;
+}
+.detailsSubTabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 4px;
+  margin: -2px -2px 10px;
+  padding: 3px 2px 7px;
+  border-bottom: 1px solid #e3ebf2;
+  background: rgba(255,255,255,.97);
+}
+.detailsSubTabs button {
+  min-width: 0;
+  min-height: 27px;
+  border: 1px solid #d7e1e9;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #63778b;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.detailsSubTabs button:hover { background: #eef5fb; color: #315f8d; }
+.detailsSubTabActive { border-color: #82ade2 !important; background: #eaf3ff !important; color: #1765d7 !important; }
+.versionHistoryHeading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:10px 0 7px; color:#314a62; }
+.versionHistoryHeading strong { font-size:10px; }
+.versionHistoryHeading span { font-size:8px; color:#7c8e9f; }
+.securityStatusCard { display:flex; align-items:flex-start; gap:8px; border:1px solid #efd39e; border-radius:8px; background:#fff8e9; color:#825d14; padding:9px 10px; }
+.securityStatusCard strong,.securityStatusCard span { display:block; }
+.securityStatusCard strong { font-size:10px; }
+.securityStatusCard span { margin-top:2px; font-size:8px; color:#8b7039; line-height:1.35; }
+.securityStatusCard[data-security-ready="true"] { border-color:#b9ddc8; background:#effaf4; color:#277149; }
+.securityStatusCard[data-security-ready="true"] span { color:#5d806d; }
+
+.reviewProgress {
+  grid-template-columns: repeat(6, minmax(26px, 1fr));
+  gap: 4px;
+  overflow: hidden;
+  padding: 4px 1px 7px;
+}
+.reviewProgressStepWrap {
+  min-width: 0;
+  grid-template-rows: 22px 5px;
+  gap: 2px;
+}
+.reviewProgressStep { min-height: 22px; padding: 0 !important; }
+.reviewProgressStep svg { width: 15px; height: 15px; }
+.reviewProgressBar { height: 5px; }
+.reviewProgressArrow { right: -7px; bottom: -1px; width: 11px; height: 11px; }
+
+.fullTableInspectorBackdrop {
+  position: absolute;
+  inset: 50px 0 0 0;
+  z-index: 2510;
+  background: rgba(22,38,54,.035);
+}
+
+.commanderHeader strong,
+.commanderPaneLabel,
+.commanderFolderNameText,
+.commanderFileNameText { color: #1e354a !important; }
+.commanderHeader span,
+.commanderPath,
+.commanderFileName span,
+.commanderFolderRow > span:last-child { color: #687d91; }
+.commanderFolderSecurityIcon {
+  width: 20px;
+  height: 22px;
+  display:grid;
+  place-items:center;
+  border-radius:5px;
+}
+.commanderFolderSecurityNormal { color:#397fca; }
+.commanderFolderSecurityPassword { color:#8f2026; background:#ffe4e6; }
+.commanderFolderSecurityRestricted { color:#a33a32; background:#ffebe5; }
+.commanderFolderSecurityCustom { color:#5c46a2; background:#ece6ff; }
+.commanderFolderRow.commanderFolderPassword { background:#fff0f1; color:#762128; }
+.commanderFolderRow.commanderFolderRestricted { background:#fff4f0; color:#82372f; }
+.commanderFolderRow.commanderFolderCustom { background:#f4f1ff; color:#51408e; }
+.commanderFolderRow.commanderFolderPassword:hover { background:#ffe4e6; }
+.commanderFolderRow.commanderFolderRestricted:hover { background:#ffebe5; }
+.commanderFolderRow.commanderFolderCustom:hover { background:#ece6ff; }
+
+.toolbarActionCluster {
+  flex: 0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  min-height:34px;
+  padding:2px 4px;
+  border-left:2px solid #d8e1e9;
+  border-radius:6px;
+}
+.toolbarActionClusterMisc { border-left-color:#8295a7; background:#f7f9fb; }
+.toolbarActionClusterUpload { border-left-color:#2d75d8; background:#f3f7fd; }
+.toolbarActionClusterOpen { border-left-color:#2c9870; background:#f2faf6; }
+.toolbarActionClusterPackage { border-left-color:#7253bf; background:#f7f4fc; }
+.toolbarActionClusterOther { border-left-color:#b18a3e; background:#fbf8f1; }
+
+:global(html[data-drive-theme="dark"]) .detailsSubTabs,
+:global([data-theme="dark"]) .detailsSubTabs { border-color:#2c4254; background:rgba(17,38,56,.98); }
+:global(html[data-drive-theme="dark"]) .detailsSubTabs button,
+:global([data-theme="dark"]) .detailsSubTabs button { border-color:#365064; background:#152b3c; color:#a9bdcc; }
+:global(html[data-drive-theme="dark"]) .detailsSubTabActive,
+:global([data-theme="dark"]) .detailsSubTabActive { border-color:#4f83c6 !important; background:#17385d !important; color:#b9d8ff !important; }
+:global(html[data-drive-theme="dark"]) .securityStatusCard,
+:global([data-theme="dark"]) .securityStatusCard { border-color:#735c2c; background:#3a301a; color:#f0c66e; }
+:global(html[data-drive-theme="dark"]) .securityStatusCard[data-security-ready="true"],
+:global([data-theme="dark"]) .securityStatusCard[data-security-ready="true"] { border-color:#315e48; background:#17372a; color:#9bd4b2; }
+:global(html[data-drive-theme="dark"]) .commanderHeader strong,
+:global([data-theme="dark"]) .commanderHeader strong,
+:global(html[data-drive-theme="dark"]) .commanderPaneLabel,
+:global([data-theme="dark"]) .commanderPaneLabel,
+:global(html[data-drive-theme="dark"]) .commanderFolderNameText,
+:global([data-theme="dark"]) .commanderFolderNameText,
+:global(html[data-drive-theme="dark"]) .commanderFileNameText,
+:global([data-theme="dark"]) .commanderFileNameText { color:#d9e7f1 !important; }
+:global(html[data-drive-theme="dark"]) .commanderFolderRow.commanderFolderPassword,
+:global([data-theme="dark"]) .commanderFolderRow.commanderFolderPassword { background:#3a171d; color:#f0a8ae; }
+:global(html[data-drive-theme="dark"]) .commanderFolderRow.commanderFolderRestricted,
+:global([data-theme="dark"]) .commanderFolderRow.commanderFolderRestricted { background:#38211d; color:#e7ad9e; }
+:global(html[data-drive-theme="dark"]) .commanderFolderRow.commanderFolderCustom,
+:global([data-theme="dark"]) .commanderFolderRow.commanderFolderCustom { background:#241f3f; color:#c8bdf2; }
+:global(html[data-drive-theme="dark"]) .toolbarActionCluster,
+:global([data-theme="dark"]) .toolbarActionCluster { background:#122638; border-left-color:#42596c; }
+:global(html[data-drive-theme="dark"]) .toolbarActionClusterUpload,
+:global([data-theme="dark"]) .toolbarActionClusterUpload { border-left-color:#4a8de8; }
+:global(html[data-drive-theme="dark"]) .toolbarActionClusterOpen,
+:global([data-theme="dark"]) .toolbarActionClusterOpen { border-left-color:#48ad87; }
+:global(html[data-drive-theme="dark"]) .toolbarActionClusterPackage,
+:global([data-theme="dark"]) .toolbarActionClusterPackage { border-left-color:#9276d8; }
+:global(html[data-drive-theme="dark"]) .toolbarActionClusterOther,
+:global([data-theme="dark"]) .toolbarActionClusterOther { border-left-color:#c4a25b; }
+
+@media (max-width: 1050px) {
+  .toolbarActionCluster { padding-left:3px; padding-right:3px; gap:2px; }
+  .detailsTabs button { font-size:7px; }
+}
