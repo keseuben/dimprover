@@ -3740,3 +3740,30 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Outlook fizikai megjelenítési minta megérkezett és elfogadva.
 - Multi-identity contract 43/43 PASS; TypeScript és célzott ESLint PASS.
 - PROD DENY.
+
+### Drive V0.9.17 – Folder+Table layout + version/revision confirmation UX – 2026-10-07
+
+- Új `Mappák + dokumentumtár` nézet került a 3 paneles nézet elé: bal oldali mappafa + középső dokumentumtár, jobb oldali részletező nélkül.
+- A nézet elérhető a projekt Drive-ban, Saját Drive-ban és a közös Projektkapu mérnöki felületén is.
+- Részletezőt igénylő művelet esetén a `folders` nézet automatikusan 3 paneles módra vált, így a jobb oldali adatok láthatóvá válnak.
+- A `Teljes ablak táblázati nézet` gomb a nézetkapcsolók legszélére, jobbra került; az inaktív gomb is erősebb lila háttérkiemelést kapott.
+- Az `Új verzió` művelet többé nem nyit közvetlen rejtett fájlválasztót. Saját megerősítő kártyát kapott a kijelölt dokumentummal, jelenlegi és létrejövő V/R állapottal, majd ezen belül választható az új fájl.
+- `Új verzió` szabály: a verziószám +1, a revíziószám változatlan.
+- Az `Új revízió` kártya narancssárga figyelmeztető célfájl-blokkot kapott; nagy betűvel megjelenik a pontos kijelölt fájlnév.
+- Az `Új verzió` kártya ugyanezt a célfájl-figyelmeztetést használja.
+- A célfájl-figyelmeztetés light és dark témában is külön, narancssárga figyelmeztető megjelenést kapott.
+- Meglévő optimistic `expectedCurrentVersion`, azonos fájlkiterjesztés és REVISION reason/date ellenőrzés változatlanul érvényes.
+- Drive V0.8.1 verzió/revízió contract: 26/26 PASS.
+- Drive V0.9.17 layout/version/revision UX contract: 18/18 PASS.
+- TypeScript és célzott ESLint PASS. PROD DENY.
+
+#### Esti fizikai acceptance – minta fájlokkal
+
+1. Válasszunk ki egy nem kritikus DEV mintadokumentumot.
+2. `Új verzió`: ellenőrizzük a narancssárga célfájl blokkot és a pontos fájlnevet; töltsünk fel azonos kiterjesztésű mintafájlt.
+3. Ellenőrizzük, hogy `Vn / Rm → V(n+1) / Rm`, a verziótörténetben a régi verzió megmarad, az új lesz current.
+4. `Új revízió`: ellenőrizzük a célfájl blokkot, a kötelező okot/dátumot és az új fájlt.
+5. Ellenőrizzük, hogy a revízió létrejötte megfelel a jelenlegi V/R modellnek, és `NOT_ISSUED` marad; formális kiadás nem történik automatikusan.
+6. Ellenőrizzük a Verziók panelt, a fájlelőnézetet, letöltést és current version pointert mindkét művelet után.
+7. Hibás kiterjesztésű fájllal ellenőrizzük a blokkolást.
+8. Párhuzamos/elhúzódó módosítás esetén ellenőrizzük az `expectedCurrentVersion` optimistic guardot.

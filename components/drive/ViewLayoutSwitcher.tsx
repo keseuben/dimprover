@@ -1,6 +1,6 @@
 "use client";
 
-import { Columns2, Columns3, PanelsLeftRight, Rows3, Square, Table2 } from "lucide-react";
+import { Columns2, Columns3, PanelLeft, PanelsLeftRight, Rows3, Square, Table2 } from "lucide-react";
 import type { DriveLayoutMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -12,6 +12,7 @@ type Props = {
 };
 
 const modes: Array<{ value: DriveLayoutMode; label: string; icon: typeof Columns3 }> = [
+  { value: "folders", label: "Mappák + dokumentumtár", icon: PanelLeft },
   { value: "three", label: "3 paneles nézet", icon: Columns3 },
   { value: "two", label: "2 paneles nézet", icon: Columns2 },
   { value: "one", label: "1 paneles nézet", icon: Square },
@@ -42,6 +43,15 @@ export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = 
           </button>
         );
       })}
+      <button
+        type="button"
+        className={value === commanderMode.value ? styles.layoutActive : ""}
+        onClick={() => onChange(commanderMode.value)}
+        title={commanderMode.label}
+        aria-label={commanderMode.label}
+      >
+        <PanelsLeftRight size={14} />
+      </button>
       {onToggleTableFullscreen && (
         <button
           type="button"
@@ -54,15 +64,6 @@ export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = 
           <Table2 size={14} />
         </button>
       )}
-      <button
-        type="button"
-        className={value === commanderMode.value ? styles.layoutActive : ""}
-        onClick={() => onChange(commanderMode.value)}
-        title={commanderMode.label}
-        aria-label={commanderMode.label}
-      >
-        <PanelsLeftRight size={14} />
-      </button>
     </div>
   );
 }

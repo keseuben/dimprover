@@ -606,13 +606,14 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
   const engineeringBrowserClass = [
     richStyles.browser,
+    engineeringLayoutMode === "folders" ? richStyles.layoutFolders : "",
     engineeringLayoutMode === "two" ? richStyles.layoutTwo : "",
     engineeringLayoutMode === "one" ? richStyles.layoutOne : "",
     engineeringLayoutMode === "split" ? richStyles.layoutSplit : "",
     engineeringLayoutMode === "commander" ? richStyles.layoutCommander : "",
   ].filter(Boolean).join(" ");
-  const engineeringFolderHidden = engineeringLayoutMode !== "three";
-  const engineeringDetailsHidden = engineeringLayoutMode === "one";
+  const engineeringFolderHidden = engineeringLayoutMode !== "three" && engineeringLayoutMode !== "folders";
+  const engineeringDetailsHidden = engineeringLayoutMode === "one" || engineeringLayoutMode === "folders";
   const engineeringTitle = selectedFolder?.name || "Teljes dokumentumtár";
 
   const businessFilterCounts = useMemo(() => {
@@ -663,6 +664,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setDetailsFocus({ documentId, field });
       setReviewFocus("");
       if (engineeringLayoutMode === "one") setEngineeringLayoutMode("two");
+      else if (engineeringLayoutMode === "folders") setEngineeringLayoutMode("three");
       return;
     }
     setDetailsFocus(null);

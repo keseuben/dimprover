@@ -246,7 +246,8 @@ export default function DriveWorkspace({
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const versionFileInputRef = useRef<HTMLInputElement>(null);
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [versionFile, setVersionFile] = useState<File | null>(null);
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [revisionReason, setRevisionReason] = useState("");
@@ -1001,8 +1002,15 @@ export default function DriveWorkspace({
       setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
       return;
     }
+    setVersionFile(null);
     setError("");
-    versionFileInputRef.current?.click();
+    setVersionDialogOpen(true);
+  }
+
+  function closeVersionUploadDialog() {
+    if (busy) return;
+    setVersionDialogOpen(false);
+    setVersionFile(null);
   }
 
   function openRevisionUploadDialog() {
@@ -1134,7 +1142,10 @@ export default function DriveWorkspace({
         : " · Biztonsági ellenőrzés folyamatban.";
       setNotice(`${versionKind === "REVISION" ? "Új revízió" : "Új verzió"} létrejött: ${versionLabel} · ${revisionLabel}${securityLabel}`);
 
-      if (versionKind === "REVISION") {
+      if (versionKind === "VERSION") {
+        setVersionDialogOpen(false);
+        setVersionFile(null);
+      } else {
         setRevisionDialogOpen(false);
         setRevisionFile(null);
         setRevisionReason("");
@@ -1153,7 +1164,6 @@ export default function DriveWorkspace({
       setNotice("");
     } finally {
       setBusy(false);
-      if (versionFileInputRef.current) versionFileInputRef.current.value = "";
     }
   }
 
@@ -1701,6 +1711,7 @@ export default function DriveWorkspace({
       setDetailsFocus({ documentId: document.id, field });
       setReviewFocus("");
       if (layoutMode === "one") setLayoutMode("two");
+      else if (layoutMode === "folders") setLayoutMode("three");
       return;
     }
     setDetailsFocus(null);
@@ -2206,14 +2217,15 @@ export default function DriveWorkspace({
 
   const browserClass = [
     styles.browser,
+    layoutMode === "folders" ? styles.layoutFolders : "",
     layoutMode === "two" ? styles.layoutTwo : "",
     layoutMode === "one" ? styles.layoutOne : "",
     layoutMode === "split" ? styles.layoutSplit : "",
     layoutMode === "commander" ? styles.layoutCommander : "",
   ].filter(Boolean).join(" ");
 
-  const folderHidden = layoutMode !== "three";
-  const detailsHidden = layoutMode === "one";
+  const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
+  const detailsHidden = layoutMode === "one" || layoutMode === "folders";
   const titleBase = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
   const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
@@ -2317,17 +2329,6 @@ export default function DriveWorkspace({
         onIssueSelected={() => void openIssueDialog()}
       />
       <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
-      <input
-        ref={versionFileInputRef}
-        type="file"
-        hidden
-        accept={selectedDocument?.extension ? `.${selectedDocument.extension}` : undefined}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void uploadSelectedDocumentFile(file, "VERSION");
-        }}
-        aria-label="Új verzió fájljának kiválasztása"
-      />
 
       {folderRenameDialog && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Mappa átnevezése">
@@ -2533,6 +2534,66 @@ export default function DriveWorkspace({
         </div>
       )}
 
+      {versionDialogOpen && selectedDocument?.currentVersion && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Új dokumentumverzió">
+          <form
+            className={styles.projectCreatePanel}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (versionFile) void uploadSelectedDocumentFile(versionFile, "VERSION");
+            }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Verziókezelés</small>
+                <strong>Új verzió</strong>
+                <span>A kijelölt dokumentum új fájlverziója készül.</span>
+              </div>
+              <button type="button" disabled={busy} onClick={closeVersionUploadDialog} aria-label="Bezárás">×</button>
+            </header>
+
+            <div className={styles.versionTargetWarning}>
+              <span>Figyelem: ezt a kijelölt fájlt fogjuk verziózni</span>
+              <strong>{selectedDocument.name}</strong>
+            </div>
+
+            <div className={styles.revisionUploadSummary}>
+              <div>
+                <span>Jelenlegi állapot</span>
+                <strong>V{selectedDocument.currentVersion.versionNumber} · {selectedDocument.currentVersion.revisionCode || `R${String(selectedDocument.currentVersion.revisionNumber).padStart(2, "0")}`}</strong>
+              </div>
+              <div>
+                <span>Létrejövő állapot</span>
+                <strong>V{selectedDocument.currentVersion.versionNumber + 1} · {selectedDocument.currentVersion.revisionCode || `R${String(selectedDocument.currentVersion.revisionNumber).padStart(2, "0")}`}</strong>
+              </div>
+            </div>
+
+            <label>
+              Új verzió fájlja
+              <input
+                type="file"
+                required
+                accept={selectedDocument.extension ? `.${selectedDocument.extension}` : undefined}
+                onChange={(event) => setVersionFile(event.target.files?.[0] || null)}
+              />
+            </label>
+
+            <div className={styles.revisionIssueHint}>
+              <strong>Verzióváltás · a revíziószám nem változik</strong>
+              <span>Az új fájl ugyanahhoz a dokumentumhoz kerül új verzióként. Hivatalos revízióhoz használd külön az Új revízió műveletet.</span>
+            </div>
+
+            <footer>
+              <button type="button" disabled={busy} onClick={closeVersionUploadDialog}>Mégsem</button>
+              <button type="submit" disabled={busy || !versionFile}>
+                {busy ? <Loader2 className={styles.spin} size={16} /> : null}
+                Verzió feltöltése
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
       {revisionDialogOpen && selectedDocument?.currentVersion && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Új hivatalos dokumentumrevízió">
           <form
@@ -2550,6 +2611,11 @@ export default function DriveWorkspace({
               </div>
               <button type="button" disabled={busy} onClick={closeRevisionUploadDialog} aria-label="Bezárás">×</button>
             </header>
+
+            <div className={styles.versionTargetWarning}>
+              <span>Figyelem: ezt a kijelölt fájlt fogjuk revíziózni</span>
+              <strong>{selectedDocument.name}</strong>
+            </div>
 
             <div className={styles.revisionUploadSummary}>
               <div>

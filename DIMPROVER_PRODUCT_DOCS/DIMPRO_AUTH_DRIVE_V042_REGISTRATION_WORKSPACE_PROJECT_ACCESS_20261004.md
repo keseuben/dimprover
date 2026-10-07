@@ -662,3 +662,13 @@ A következő fizikai acceptance továbbra is valódi másodlagos e-mailt igény
 - Valódi Outlook megjelenítési teszt a `keseru.benjamin@nagisz.hu` címen PASS: a levél megérkezett és a táblázatos sablon helyesen jelent meg.
 - Contract: `43/43 PASS`; TypeScript és célzott ESLint PASS.
 - PROD DENY.
+
+### Drive V0.9.17 nézet + verzió/revízió UX – 2026-10-07
+
+A Drive nézetválasztó új `folders` layout módot kapott. Sorrendben ez a `3 paneles nézet` előtt jelenik meg, és kizárólag a mappafát valamint a dokumentumtár táblát mutatja. A jobb oldali részletező rejtett. A mód a projekt Drive, Saját Drive és Projektkapu mérnöki nézet közös layout-contract része.
+
+A teljes ablakos táblázati mód különleges gombja a nézetválasztó sor legszélére került, erősebb vizuális kiemeléssel.
+
+A verzió/revízió műveletek cél-dokumentum megerősítése egységes: mindkét dialógus narancssárga figyelmeztető blokkban, nagy fájlnévvel mutatja, mely dokumentum kap új verziót vagy revíziót. Az `Új verzió` korábbi rejtett közvetlen fájlválasztó flow-ja megszűnt; a verzió is külön megerősítő dialóguson indul.
+
+Statikus ellenőrzések: V0.8.1 contract 26/26 PASS; V0.9.17 contract 18/18 PASS; TypeScript + célzott ESLint PASS. Fizikai V/R acceptance DEV mintafájlokkal estére ütemezve. PROD DENY.

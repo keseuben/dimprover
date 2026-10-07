@@ -301,7 +301,7 @@ export type DriveDocumentDetails = {
   qrCodes: DriveQrCode[];
 };
 
-export type DriveLayoutMode = "three" | "two" | "one" | "split" | "commander";
+export type DriveLayoutMode = "folders" | "three" | "two" | "one" | "split" | "commander";
 export type DriveViewMode = "simple" | "engineering" | "review";
 
 export type DriveStorageQuota = {

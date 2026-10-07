@@ -247,7 +247,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       const storedBoxOpen = window.localStorage.getItem("dimpro-drive-personal-box-open");
       const storedBoxHeight = Number(window.localStorage.getItem("dimpro-drive-personal-box-height") || "");
       if (storedView === "simple" || storedView === "engineering") setViewMode(storedView);
-      if (["three", "two", "one", "split", "commander"].includes(storedLayout || "")) setLayoutMode(storedLayout as DriveLayoutMode);
+      if (["folders", "three", "two", "one", "split", "commander"].includes(storedLayout || "")) setLayoutMode(storedLayout as DriveLayoutMode);
       if (storedBoxOpen === "1") setBoxShelfOpen(true);
       if (Number.isFinite(storedBoxHeight) && storedBoxHeight >= 118) setBoxShelfHeight(storedBoxHeight);
     } catch {}
@@ -538,9 +538,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     } catch (caught) { previewWindow?.close(); setError(caught instanceof Error ? caught.message : "Az előnézet nem nyitható meg."); }
   }, []);
 
-  const browserClass = [styles.browser, layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
-  const folderHidden = layoutMode !== "three";
-  const detailsHidden = layoutMode === "one";
+  const browserClass = [styles.browser, layoutMode === "folders" ? styles.layoutFolders : "", layoutMode === "two" ? styles.layoutTwo : "", layoutMode === "one" ? styles.layoutOne : "", layoutMode === "split" ? styles.layoutSplit : "", layoutMode === "commander" ? styles.layoutCommander : ""].filter(Boolean).join(" ");
+  const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
+  const detailsHidden = layoutMode === "one" || layoutMode === "folders";
 
   const grid = () => <FileGridPanel
     title={title}

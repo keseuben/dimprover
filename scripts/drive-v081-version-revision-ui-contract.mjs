@@ -20,7 +20,7 @@ check("toolbar exposes dedicated new revision action", () => {
 check("new version requires selected current document and writable storage", () => assert.match(workspace, /canUploadSelectedVersion=\{Boolean\(canWrite && selectedDocument\?\.currentVersion && health\?\.storage\?\.realObjectWriteEnabled\)\}/));
 check("new revision requires selected current document and writable storage", () => assert.match(workspace, /canUploadSelectedRevision=\{Boolean\(canWrite && selectedDocument\?\.currentVersion && health\?\.storage\?\.realObjectWriteEnabled\)\}/));
 check("new version uses selected document upload endpoint", () => assert.match(workspace, /documentId: document\.id[\s\S]*?expectedCurrentVersion: currentVersion\.versionNumber[\s\S]*?versionKind/));
-check("normal version is explicitly VERSION", () => assert.match(workspace, /uploadSelectedDocumentFile\(file, "VERSION"\)/));
+check("normal version is explicitly VERSION", () => assert.match(workspace, /uploadSelectedDocumentFile\(versionFile, "VERSION"\)/));
 check("official revision is explicitly REVISION", () => assert.match(workspace, /uploadSelectedDocumentFile\(revisionFile, "REVISION"/));
 check("revision requires reason", () => assert.match(workspace, /versionKind === "REVISION" && !reason/));
 check("revision requires ISO date", () => assert.match(workspace, /versionKind === "REVISION" && !\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//));
@@ -41,6 +41,20 @@ check("revision modal explains formal issue is separate Document Flow action", (
 check("revision upload UI does not fake business status mutation", () => assert.doesNotMatch(workspace, /businessStatus\s*:\s*"KIADOTT"|issueStatus\s*:\s*"ISSUED"/));
 check("revision modal has dedicated summary styling", () => assert.match(css, /\.revisionUploadSummary/));
 check("revision modal has dedicated issue-status hint styling", () => assert.match(css, /\.revisionIssueHint/));
+check("version action opens confirmation dialog instead of hidden file input", () => {
+  assert.match(workspace, /setVersionDialogOpen\(true\)/);
+  assert.match(workspace, /aria-label="Új dokumentumverzió"/);
+  assert.doesNotMatch(workspace, /versionFileInputRef/);
+});
+check("version modal shows current and next version state", () => {
+  assert.match(workspace, /Új verzió[\s\S]*?Jelenlegi állapot[\s\S]*?currentVersion\.versionNumber/);
+  assert.match(workspace, /Új verzió[\s\S]*?Létrejövő állapot[\s\S]*?currentVersion\.versionNumber \+ 1/);
+});
+check("version and revision modals highlight target document", () => {
+  assert.match(workspace, /ezt a kijelölt fájlt fogjuk verziózni[\s\S]*?selectedDocument\.name/);
+  assert.match(workspace, /ezt a kijelölt fájlt fogjuk revíziózni[\s\S]*?selectedDocument\.name/);
+  assert.match(css, /\.versionTargetWarning/);
+});
 
 console.log(JSON.stringify({
   ok: true,
