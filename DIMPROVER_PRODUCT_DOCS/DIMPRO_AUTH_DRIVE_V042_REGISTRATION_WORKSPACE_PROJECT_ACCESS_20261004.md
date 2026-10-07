@@ -748,3 +748,24 @@ A jelszavas mappavédelem határozatlan idejű, kikapcsolásig aktív. Az `unloc
 A Dokumentumtár felső Törlés gombja dokumentum-kijelölés vagy külön táblázatos mappasor-kijelölés esetén aktív. A navigációval megnyitott mappa önmagában nem tekintendő törlésre kijelölt elemnek.
 
 V0.9.20 contract 24/24 PASS; TypeScript/célzott lint PASS; DEV migration preflight PASS; PROD DENY.
+
+### Drive V0.9.20 DEV aktiválás – 2026-10-07
+
+- runtime source: `f17d3f48a4a419aa3f3fb97c5482f207c48045f8`;
+- BUILD-02 run: `drive-v0920-trash-password-f17d3f48a-20261007-b1`;
+- build ID: `yyS_m5_wouYrecU19S90x`;
+- artifact SHA-256: `6f28b59694c35b2c18791be761cac92112116482345f6be133950a06228e72df`;
+- Drive Core migráció: `0.9.1 / 8` → `0.9.2 / 9`;
+- migráció SHA-256: `83602b0efa7a22854db26dc10160d2716fb78421f7a717098f53f2ada7719553`;
+- migráció backup: `/srv/dimpro-dev/backups/drive-trash-v092/20261007T132230Z`;
+- migráció előtt/után védett sorok száma változatlan;
+- aktív DEV runtime: `dimpro-drive-v0920-trash-password-f17d3f48a-p3398`;
+- publikus upstream: `127.0.0.1:3398`;
+- rollback runtime: `dimpro-drive-v0919-folder-delete-4bb76ee58-p3397`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0920/dimpro-dev.conf.before-f17d3f48a-20261007T152319`;
+- Nginx backup SHA-256: `743da7de15f7f31045879bc557bf2d879b5dae294894c3b41aa4dcb640dfe933`;
+- cutover: 2026-10-07 15:23:38 Europe/Budapest;
+- public smoke PASS: SSO redirect; Trash API unauth 401; AUTH migrationCount 10; runtime restart 0; error log 0 byte;
+- Drive Core V0.9.2 verify PASS: 4 RPC, service-role execute, anon/authenticated direct execute DENY;
+- read-only projekt Lomtár ellenőrzés: 1 archivált mappa, 0 külön törölt dokumentum;
+- PROD DENY.

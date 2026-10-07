@@ -3843,3 +3843,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Drive V0.9.20 contract: 24/24 PASS; V0.9.19 regresszió PASS; TypeScript és célzott ESLint PASS.
 - Migráció read-only DEV preflight PASS: Drive Core 0.9.1 / migrationCount 8 → V0.9.2 candidate, PROD DENY.
 - Teljes repository lint baseline: 25 error / 107 warning, változatlan; a V0.9.20 módosított fájlok között nincs lint error.
+
+#### Drive V0.9.20 DEV aktiválás
+
+- Source `f17d3f48a4a419aa3f3fb97c5482f207c48045f8`; BUILD-02 PASS.
+- Build ID `yyS_m5_wouYrecU19S90x`; artifact SHA-256 `6f28b59694c35b2c18791be761cac92112116482345f6be133950a06228e72df`.
+- Drive Core `0.9.2 / migrationCount 9` migráció PASS; backup `/srv/dimpro-dev/backups/drive-trash-v092/20261007T132230Z`; sor darabszámok változatlanok.
+- Aktív DEV runtime `dimpro-drive-v0920-trash-password-f17d3f48a-p3398`; V0.9.19 / 3397 online rollback.
+- Public smoke PASS; Trash API fail-closed; runtime restart 0; error log 0 byte.
+- Szekszárd projekt read-only Lomtár backend ellenőrzés: 1 archivált mappa.
+- PROD DENY.
