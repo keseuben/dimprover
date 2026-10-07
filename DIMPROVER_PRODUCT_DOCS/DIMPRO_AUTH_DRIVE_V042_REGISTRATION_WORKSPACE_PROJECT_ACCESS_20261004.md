@@ -795,3 +795,7 @@ A fájl- és mappaikonok közvetlen áthúzása támogatott a bal mappafában é
 A projekt Drive fájlsor egy kattintása a metaadat/részletező panelt frissíti; dupla kattintás nyitja a nagy jobb oldali fájlmegjelenítőt. A tervellenőrzési jóváhagyási vizualizáció három jóváhagyásnál kék/fehér, a beruházási projektvezető végső jóváhagyásával mind a négy jel zöld körös/fehér állapotba vált.
 
 Drive UI target `0.9.22`; Drive Core target `0.9.4 / migrationCount 11`. V0.9.4 read-only DEV migration preflight PASS; APPLY csak sikeres build után. PROD DENY.
+
+#### V0.9.22 DEV aktiválási státusz – 2026-10-07
+
+A V0.9.22 source `8e08ebec9aca89b1b9d10362604e7909e6daba66` DEV-en aktiválva. Build ID `LFZZhRApSnIF8yOlN7W8y`, artifact SHA-256 `ed61b2676b6bb4da7ca0749f340d48aaab16655cca5855129a466d93dd1a274b`. A Drive Core V0.9.4 migráció koordinált migration lock alatt sikeresen alkalmazva és visszaellenőrizve; backup `/srv/dimpro-dev/backups/drive-v094-folder-move-acl/20261007T181057Z`. Az aktív Drive runtime a 3400-as porton fut, a 3399-es V0.9.21 online rollback. Publikus DEV header V0.9.22 / PROD DENY. Bejelentkezett böngészős UX E2E még szükséges.

@@ -3907,3 +3907,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Drive UI target: `0.9.22`. Drive Core target: `0.9.4`, migrationCount `11`, bootstrap `drive-core-v094-folder-move-20261007`.
 - V0.9.22 contract: 41/41 PASS. V0.9.21: 42/42 PASS; V0.9.20: 24/24 PASS; V0.9.19: 15/15 PASS; V0.9.18: 26/26 PASS; ProjectGate rich view: 15/15 PASS. Érintett fájlok célzott ESLintje 0 error; TypeScript PASS.
 - Drive Core V0.9.4 végleges read-only DEV migrációs preflight PASS. Source checkpoint készítésekor a migráció még nincs alkalmazva. PROD DENY.
+
+#### Drive V0.9.22 DEV aktiválás – 2026-10-07
+
+- Source commit: `8e08ebec9aca89b1b9d10362604e7909e6daba66` (`feat(drive): add personal delete folder access and drag moves`).
+- BUILD-02 run: `drive-v0922-8e08ebec9-20261007-manual-b1`; build ID: `LFZZhRApSnIF8yOlN7W8y`; artifact SHA-256: `ed61b2676b6bb4da7ca0749f340d48aaab16655cca5855129a466d93dd1a274b`.
+- A build runner a teljes artifactot és metadata-t elkészítette, de `result.json` nem keletkezett; ezért az artifact külön SHA + `.next/BUILD_ID` + `.next/.dimpro-release.json` egyezéssel manuálisan ellenőrzött buildként lett elfogadva. A release provenance a source commitot és branchet pontosan visszaigazolta.
+- Drive Core V0.9.4 migráció SHA-256: `ab2fa88d0e588e0aab62c70854e3c6af9a9fa5a946461f5d3608605e1fa1622e`. Koordinált `migration` lock alatt APPLY PASS. Backup: `/srv/dimpro-dev/backups/drive-v094-folder-move-acl/20261007T181057Z`.
+- Migráció után: schema `0.9.4`, migrationCount `11`, bootstrap `drive-core-v094-folder-move-20261007`; `drive_core_move_folder_atomic`, `drive_core_set_folder_visibility_atomic`, `dimpro_personal_drive_soft_remove_refs_atomic` aktív és service-role-only. Védett táblák sorszámai változatlanok.
+- A DEV szerver kritikus RAM-terhelése miatt a régi 3391–3397 Drive candidate PM2 processzek le lettek állítva, de fájljaik és PM2 bejegyzéseik megmaradtak. A 3398 V0.9.20 és 3399 V0.9.21 rollback processzek online maradtak.
+- Új runtime: `dimpro-drive-v0922-core094-8e08ebec9-p3400`, port `3400`, restart `0`, error log `0 byte`.
+- Nginx cutover: `3399 → 3400`. Backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0922/dimpro-dev.conf.before-8e08ebec-20261007T181422Z`, SHA-256 `c182f963238aa682a0385f6b18857723d50a807bbfda30d63faad5b4bd6cb27b`.
+- Publikus smoke: `/drive` 307 → központi AUTH start; `X-DIMPRO-Drive-Candidate` V0.9.22; `X-DIMPRO-Production-Access: DENY`; személyes bulk-delete auth nélkül 401; migration verify PASS.
+- A repository teljes lint baseline továbbra is 25 error / 107 warning más, korábban is hibás modulokban. A V0.9.22 által módosított fájlok célzott ESLintje 0 error, TypeScript PASS.
+- A felhasználói, bejelentkezett böngészős E2E még szükséges a Saját Drive törlés, single/double click preview, mappamegosztás, drag&drop és tervellenőrzési pipaszínek végleges UX-ellenőrzéséhez. PROD DENY.
