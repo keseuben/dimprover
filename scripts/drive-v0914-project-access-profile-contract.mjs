@@ -11,11 +11,24 @@ const dbRepo = read("app/lib/project-core/databaseRepository.ts");
 const fileRepo = read("app/lib/project-core/fileRepository.ts");
 
 const tests = [
-  ["project access UI version", () => assert.match(ui, /data-project-access-menu="0\.3\.0"/)],
+  ["project access UI version", () => assert.match(ui, /data-project-access-menu="0\.3\.2"/)],
   ["invite UI requires and sends name", () => {
     assert.match(ui, /<span>Név \*<\/span>/);
     assert.match(ui, /displayName: inviteName\.trim\(\)/);
     assert.match(ui, /inviteName\.trim\(\)\.length < 2/);
+  }],
+  ["active members sort by descending role hierarchy", () => {
+    assert.match(ui, /OWNER: 5/);
+    assert.match(ui, /PROJECT_MANAGER: 4/);
+    assert.match(ui, /CONTRIBUTOR: 3/);
+    assert.match(ui, /REVIEWER: 2/);
+    assert.match(ui, /VIEWER: 1/);
+    assert.match(ui, /projectAccessRoleRank\[b\.role\] - projectAccessRoleRank\[a\.role\]/);
+  }],
+  ["same-role members use Hungarian name ordering", () => {
+    assert.match(ui, /localeCompare\(/);
+    assert.match(ui, /"hu"/);
+    assert.match(ui, /sensitivity: "base"/);
   }],
   ["self membership remains explicitly identified", () => {
     assert.match(ui, /data-self=\{isSelf \? "true" : undefined\}/);

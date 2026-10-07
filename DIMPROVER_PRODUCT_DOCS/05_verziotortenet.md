@@ -3664,3 +3664,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Nginx configtest/reload PASS; public `/drive` central SSO 307, profile unauth 401, AUTH ready migrationCount 8, runtime restart 0, error log 0 byte.
 - Nginx backup SHA-256 `aed4e57ae20c95a5b3e2ad0ab1e62ff1949c4e9e52fafd2b4b664e913714a8da`.
 - PROD DENY.
+
+### Drive Project Access UX V0.3.2 – tipográfia + szerepkör-rendezés
+
+- A Projekt-hozzáférések panel szövegei mérsékelten nagyobb betűméretet kaptak a jobb olvashatóságért.
+- Az aktív taglista csökkenő jogosultsági hierarchia szerint rendeződik: Beruházási projektvezető → Projektvezető → Közreműködő → Ellenőrző → Megtekintő.
+- Azonos szerepkörön belül magyar névsorrend érvényesül.
+- A saját kártya türkizzöld kiemelése megmarad, de nem módosítja a szerepkör-alapú rendezést.
+- DEV ONLY · PROD DENY.

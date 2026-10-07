@@ -70,6 +70,14 @@ const editableRoles: Array<{ value: EditableRole; label: string; hint: string }>
   { value: "VIEWER", label: "Megtekintő", hint: "Csak olvasási és megtekintési jogosultság." },
 ];
 
+const projectAccessRoleRank: Record<ProjectMembershipRole, number> = {
+  OWNER: 5,
+  PROJECT_MANAGER: 4,
+  CONTRIBUTOR: 3,
+  REVIEWER: 2,
+  VIEWER: 1,
+};
+
 const permissionGroups: Array<{ label: string; permissions: ProjectPermission[] }> = [
   { label: "Projektkezelés", permissions: ["project.update", "project.manage_members", "project.manage_lifecycle"] },
   { label: "Dokumentumok", permissions: ["document.write", "document.comment", "document.approve", "document.issue", "document.delete"] },
@@ -216,7 +224,17 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   }, [open]);
 
   const activeMembers = useMemo(
-    () => memberships.filter((membership) => membership.status === "ACTIVE"),
+    () => memberships
+      .filter((membership) => membership.status === "ACTIVE")
+      .sort((a, b) => {
+        const roleDifference = projectAccessRoleRank[b.role] - projectAccessRoleRank[a.role];
+        if (roleDifference !== 0) return roleDifference;
+        return (a.displayName || a.email || a.userId).localeCompare(
+          b.displayName || b.email || b.userId,
+          "hu",
+          { sensitivity: "base" },
+        );
+      }),
     [memberships],
   );
   const invitedMemberships = useMemo(
@@ -381,7 +399,7 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   }
 
   return (
-    <div className={styles.root} ref={rootRef} data-project-access-menu="0.3.0">
+    <div className={styles.root} ref={rootRef} data-project-access-menu="0.3.2">
       <button
         type="button"
         className={`${styles.trigger} ${compact ? styles.triggerCompact : ""} ${open ? styles.triggerOpen : ""}`}

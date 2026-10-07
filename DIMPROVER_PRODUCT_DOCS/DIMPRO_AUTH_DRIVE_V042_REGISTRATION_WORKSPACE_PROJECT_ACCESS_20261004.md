@@ -470,3 +470,16 @@ DEV ONLY · PROD DENY.
 - `X-DIMPRO-Production-Access: DENY`.
 
 A build első manual fallback próbája (`...manual-b1`) `SOURCE_BUNDLE_VERIFY_FAILED` eredménnyel zárult, mert a BUILD-02 régi `build-runner-executor-v1` példánya repository-kontextus nélkül futtatta a bundle verify-t. A sikeres `manual-b2` a telepített újabb `dimpro-build-runner-executor-v1` executort használta, amely explicit BUILD repositoryval végzi ugyanazt az ellenőrzést. A sikertelen run eredménye auditcélból megmaradt.
+
+### Projekt-hozzáférések olvashatóság és szerepkör-rendezés – 2026-10-07
+
+A Projekt-hozzáférések panel olvashatósági finomhangolást kapott: a fejléc, fülek, tagnevek, másodlagos adatok, szerepkörök, jogosultság-leírások, függő meghívások és vezérlők betűmérete mérsékelten nőtt, a panel meglévő kompakt elrendezésének megtartásával.
+
+Az aktív taglista authoritative megjelenítési sorrendje most jogosultsági hierarchia szerint csökkenő:
+1. `OWNER` – Beruházási projektvezető;
+2. `PROJECT_MANAGER` – Projektvezető;
+3. `CONTRIBUTOR` – Közreműködő;
+4. `REVIEWER` – Ellenőrző;
+5. `VIEWER` – Megtekintő.
+
+Azonos szerepkörön belül a rendezés a megjelenített név szerint, magyar locale használatával történik. A saját felhasználó türkizzöld kiemelése ettől független; nem írja felül a jogosultsági sorrendet.
