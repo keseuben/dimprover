@@ -285,7 +285,7 @@ export async function listAccessibleProjects(userAliases: string[]): Promise<Pro
   }).filter((item): item is ProjectListItem => Boolean(item));
 }
 
-export async function createProject(input: Record<string, unknown>, actor: { userId: string; displayName: string }) {
+export async function createProject(input: Record<string, unknown>, actor: { userId: string; displayName: string; email?: string | null; organizationName?: string | null; actingIdentityId?: string | null; identityType?: "PERSONAL" | "WORK" | null }) {
   const client = await requireReadyClient();
   const name = normalizeText(input.name);
   if (!name) return { ok: false as const, error: "A projekt neve kötelező." };
@@ -310,9 +310,9 @@ export async function createProject(input: Record<string, unknown>, actor: { use
     id: `membership-${randomUUID().slice(0, 12)}`,
     project_id: projectId,
     user_id: actor.userId,
-    email: null,
+    email: normalizeText(actor.email) || null,
     display_name: actor.displayName,
-    organization_name: null,
+    organization_name: normalizeText(actor.organizationName) || null,
     role: "OWNER",
     status: "ACTIVE",
     invited_at: now,
@@ -327,7 +327,12 @@ export async function createProject(input: Record<string, unknown>, actor: { use
     entity_type: "project",
     entity_id: projectId,
     summary: `Projekt létrehozva: ${name}`,
-    metadata: {},
+    metadata: {
+      actingIdentityId: actor.actingIdentityId || null,
+      identityType: actor.identityType || null,
+      contactEmail: actor.email || null,
+      organizationName: actor.organizationName || null,
+    },
     created_at: now,
   };
   const { data, error } = await client.rpc("project_core_create_project_atomic", { p_project: project, p_membership: membership, p_audit: audit });

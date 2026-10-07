@@ -178,7 +178,8 @@
 }
 
 .formGrid input,
-.formGrid textarea {
+.formGrid textarea,
+.formGrid select {
   width: 100%;
   border: 1px solid var(--pg-list-line);
   border-radius: 8px;
@@ -190,7 +191,8 @@
 }
 
 .formGrid input:focus,
-.formGrid textarea:focus {
+.formGrid textarea:focus,
+.formGrid select:focus {
   border-color: var(--pg-list-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pg-list-accent) 18%, transparent);
 }
@@ -444,3 +446,10 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.identityHint { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #a9d4c8; border-radius: 8px; background: #eff9f5; color: #527267; padding: 10px 12px; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.identityHint button { flex: 0 0 auto; min-height: 34px; border: 1px solid #8fc3b5; border-radius: 8px; background: #fff; color: #237a69; padding: 0 11px; font: inherit; font-size: 11px; font-weight: 900; cursor: pointer; }
+.identityHint button:hover { background: #e6f6f0; }
+.page[data-theme="dark"] .identityHint { border-color: #37695e; background: #173931; color: #aad4c9; }
+.page[data-theme="dark"] .identityHint button { border-color: #4a8074; background: #122d28; color: #a8e1d4; }
+@media (max-width: 760px) { .identityHint { align-items: stretch; flex-direction: column; } .identityHint button { width: 100%; } }

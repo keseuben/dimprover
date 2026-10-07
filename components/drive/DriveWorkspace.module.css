@@ -5642,3 +5642,15 @@
 .deterministicCompareTextDiff > div > small { color: #8796a4; font-size: var(--drive-font-xs); }
 .visualCompare:fullscreen .deterministicCompareDetails { max-height: 220px; overflow: auto; }
 @media (max-width: 1100px) { .deterministicCompareMetrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .deterministicCompareChecks { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Multi-identity project creation */
+.userPillButton { border: 0; border-left: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.userPillButton:hover { background: #f3f7fa; border-radius: 8px; }
+.projectIdentityHint { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #cfe3dd; border-radius: 8px; background: #f2faf7; color: #567367; padding: 8px 10px; font-size: var(--drive-font-xs); line-height: 1.4; }
+.projectIdentityHint span { min-width: 0; }
+.projectIdentityHint button { flex: 0 0 auto; border: 1px solid #9bcdbf; border-radius: 7px; background: #fff; color: #237a69; min-height: 29px; padding: 0 9px; font: inherit; font-size: var(--drive-font-xs); font-weight: 900; cursor: pointer; }
+.projectIdentityHint button:hover { background: #e9f7f2; }
+:global(html[data-drive-theme="dark"]) .userPillButton:hover { background: rgba(255,255,255,.06); }
+:global(html[data-drive-theme="dark"]) .projectIdentityHint { border-color: #315f56; background: #153630; color: #abd5ca; }
+:global(html[data-drive-theme="dark"]) .projectIdentityHint button { border-color: #3f756b; background: #102b27; color: #9ee0d1; }
+@media (max-width: 720px) { .projectIdentityHint { align-items: stretch; flex-direction: column; } .projectIdentityHint button { width: 100%; } }

@@ -5,6 +5,7 @@ import { getDimproAuthConfig } from "./config";
 export const DIMPRO_AUTH_SESSION_COOKIE = "__Host-dimpro_auth";
 export const DIMPRO_AUTH_PURPOSE_LOGIN = "LOGIN";
 export const DIMPRO_AUTH_PURPOSE_DRIVE_REGISTRATION = "DRIVE_REGISTRATION";
+export const DIMPRO_AUTH_PURPOSE_USER_IDENTITY = "USER_IDENTITY_VERIFY";
 
 export function normalizeDimproAuthEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";

@@ -175,6 +175,10 @@ export async function updateAuthUserDisplayName(input: {
        RETURNING id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at`,
       [input.userId, displayName],
     );
+    await client.query(
+      `UPDATE auth_user_identities SET display_name=$2,updated_at=now() WHERE user_id=$1 AND is_primary=true AND status<>'DISABLED'`,
+      [input.userId, displayName],
+    );
     const next = updated.rows[0];
     if (!next) {
       throw new DimproAuthError(

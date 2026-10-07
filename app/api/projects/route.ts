@@ -7,6 +7,7 @@ import { DRIVE_PROJECT_PROVISIONING_VERSION, provisionProjectDrive } from "@/app
 import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 import { hasPersonalDriveAccess } from "@/app/lib/dimpro-auth/repository";
+import { getVerifiedAuthUserIdentity } from "@/app/lib/dimpro-auth/user-identities";
 
 export async function GET(request: NextRequest) {
   const authResult = await resolveProjectCoreAuth(request);
@@ -44,9 +45,31 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const actingIdentityId = typeof input.actingIdentityId === "string" ? input.actingIdentityId.trim() : "";
+    if (actingIdentityId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(actingIdentityId)) {
+      return NextResponse.json({
+        ok: false,
+        error: "PROJECT_CREATE_IDENTITY_INVALID",
+        message: "A projektindítási identitás azonosítója érvénytelen.",
+      }, { status: 400, headers: { "cache-control": "no-store" } });
+    }
+    const actingIdentity = await getVerifiedAuthUserIdentity(authResult.actor.userId, actingIdentityId || null);
+    if (!actingIdentity) {
+      return NextResponse.json({
+        ok: false,
+        error: "PROJECT_CREATE_IDENTITY_REQUIRED",
+        message: actingIdentityId
+          ? "A kiválasztott projektindítási identitás nem hitelesített vagy nem ehhez a fiókhoz tartozik."
+          : "A projekt létrehozásához legalább egy hitelesített e-mail-identitás szükséges.",
+      }, { status: 400, headers: { "cache-control": "no-store" } });
+    }
     const result = await createProject(input, {
       userId: authResult.actor.userId,
-      displayName: authResult.actor.displayName,
+      displayName: actingIdentity.displayName || authResult.actor.displayName,
+      email: actingIdentity.email,
+      organizationName: actingIdentity.organizationName,
+      actingIdentityId: actingIdentity.id,
+      identityType: actingIdentity.identityType,
     });
     if (!result.ok) return NextResponse.json(result, { status: 400 });
 
@@ -118,7 +141,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    return NextResponse.json({ ...result, driveProvisioning, identityProvisioning }, { status: 201 });
+    return NextResponse.json({ ...result, actingIdentity, driveProvisioning, identityProvisioning }, { status: 201 });
   } catch (error) {
     return projectCoreErrorResponse(error);
   }

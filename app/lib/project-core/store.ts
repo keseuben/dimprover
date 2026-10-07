@@ -13,7 +13,16 @@ export function listAccessibleProjects(userAliases: string[]) {
   return getProjectCoreRepository().listAccessibleProjects(userAliases);
 }
 
-export function createProject(input: Record<string, unknown>, actor: { userId: string; displayName: string }) {
+export type ProjectCreationActor = {
+  userId: string;
+  displayName: string;
+  email?: string | null;
+  organizationName?: string | null;
+  actingIdentityId?: string | null;
+  identityType?: "PERSONAL" | "WORK" | null;
+};
+
+export function createProject(input: Record<string, unknown>, actor: ProjectCreationActor) {
   return getProjectCoreRepository().createProject(input, actor);
 }
 

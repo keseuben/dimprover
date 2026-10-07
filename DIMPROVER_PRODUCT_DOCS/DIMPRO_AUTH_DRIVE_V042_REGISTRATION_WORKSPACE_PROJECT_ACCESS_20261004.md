@@ -501,3 +501,84 @@ Azonos szerepkörön belül a rendezés a megjelenített név szerint, magyar lo
 - public smoke: `/drive` 307 central SSO, profile unauth 401 `AUTH_REQUIRED`, AUTH readiness PASS, migrationCount 8, új runtime restart 0, error log 0 byte;
 - Project Access contract: `14/14 PASS`;
 - `X-DIMPRO-Production-Access: DENY`.
+
+## AUTH V0.6.9 – Több hitelesített e-mail- és munkahelyi identitás – 2026-10-07
+
+A DIMPRO-fiók és a projektben használt kapcsolattartási/szervezeti identitás különválik. A felhasználónak továbbra is egy authoritative DIMPRO `user_id` azonosítója van, ehhez azonban több hitelesített e-mail-identitás kapcsolható.
+
+### Adatmodell
+
+Új AUTH tábla: `auth_user_identities`.
+
+Fő mezők:
+- `user_id`: a központi DIMPRO-felhasználó; minden ACL és jogosultsági principal továbbra is ehhez kötődik;
+- `identity_type`: `PERSONAL` vagy `WORK`;
+- `email_original` / `email_normalized`;
+- `display_name`;
+- `organization_name`;
+- `status`: `PENDING`, `VERIFIED`, `DISABLED`;
+- `is_primary`;
+- `verified_at`;
+- `challenge_id`.
+
+Biztonsági szabályok:
+- egy e-mail-cím globálisan csak egy DIMPRO userhez kapcsolható;
+- userenként legfeljebb egy `is_primary=true` identitás lehet;
+- a meglévő `auth_users.email_*` címek migrációkor automatikusan elsődleges identitásként kerülnek be;
+- másodlagos identitás csak e-mail OTP igazolás után lesz `VERIFIED` és projektindításra használható;
+- a runtime szerepkörnek nincs `DELETE` joga és a `user_id` mezőt nem módosíthatja;
+- az új OTP purpose `USER_IDENTITY_VERIFY`, a meglévő cooldown/email/IP rate-limit szabályokkal;
+- egy másik DIMPRO-fiók elsődleges vagy már kapcsolt e-mail-címe nem vehető át automatikusan. Ilyen esetben külön account-merge folyamat szükséges; V0.6.9 nem végez automatikus fiókösszevonást.
+
+### Projektindítási identitás
+
+Új projekt létrehozásakor a Saját Drive és a Projektkapu felületén megjelenik a `Projektindítási identitás` választó. Csak `VERIFIED` identitás választható.
+
+A projektgazda jogosultság authoritative principalja változatlanul a központi `user_id`. A kiválasztott identitás a Project Core OWNER tagságban az alábbi megjelenítési/kapcsolattartási adatokat adja:
+- `email`;
+- `display_name`;
+- `organization_name`.
+
+A `PROJECT_CREATED` audit metadata rögzíti:
+- `actingIdentityId`;
+- `identityType`;
+- `contactEmail`;
+- `organizationName`.
+
+A projektlétrehozási API továbbra is megköveteli a külön Saját Drive entitlementet (`drive.personal.access`). A projekt-only meghívotti hozzáférés változatlanul nem jogosít új projekt létrehozására.
+
+Ha a kliens nem küld `actingIdentityId` értéket, a backend a felhasználó hitelesített elsődleges identitását használja. Emiatt a meglévő belső projektlétrehozó fogyasztók backward-compatible módon működnek.
+
+### Önkiszolgáló identitáskezelés
+
+Új API-k:
+- `GET /api/dimpro-auth/identities` – saját identitások listázása;
+- `POST /api/dimpro-auth/identities` – új személyes/munkahelyi e-mail hitelesítésének indítása;
+- `POST /api/dimpro-auth/identities/verify` – 6 jegyű OTP ellenőrzése.
+
+A mutációk aktív DIMPRO sessionhöz és same-origin böngésző-kéréshez kötöttek. Munkahelyi identitásnál a szervezet neve kötelező.
+
+A Saját Drive fejlécének felhasználói kártyája megnyitja az `E-mail-címek és munkahelyek` panelt. Ugyanez a panel elérhető közvetlenül az új projekt ablak `+ E-mail / munkahely hozzáadása` műveletével. A panel kezeli a PENDING OTP-bevitelt és a hitelesített identitások megjelenítését.
+
+A self-service saját névmódosítás az elsődleges `auth_user_identities.display_name` értéket is szinkronban tartja az `auth_users.display_name` mezővel.
+
+### Szervezeti tulajdon – V1 határ
+
+V0.6.9-ben a `WORK` identitás a felhasználó hitelesített munkahelyi kontextusa. Ez még nem jelenti azt, hogy a projekt jogi/üzleti tulajdonosa automatikusan az adott vállalat. A Project Core `organization_id` és a canonical DIMPRO Organization ownership külön későbbi enterprise workflow lesz, így munkahelyváltás, szervezeti adminisztráció és projekt-tulajdon átruházása explicit szabályokkal kezelhető.
+
+### AUTH migration 009
+
+- fájl: `009_auth_v046_user_identities.sql`;
+- SHA-256: `7eb7cb6de5222db0967d18bdf5e0cdcc0eef3f6eac8f2b0f1da5de79f151343b`;
+- migráció előtti teljes DEV backup: `/var/backups/dimpro-auth/dimpro_auth_dev_before_009_20261007T085012Z.dump`;
+- backup méret: `168518` byte;
+- backup SHA-256: `3f3c805b026f8e1647e59df0db9b58e9aed45e19e039430c9a079505e331059d`;
+- DEV migrationCount: `9`;
+- runtime privilege audit: SELECT igen, INSERT igen, DELETE nem, `status` UPDATE igen, `user_id` UPDATE nem;
+- `keseruben@gmail.com` meglévő elsődleges e-mail backfillje `PERSONAL / VERIFIED / primary` állapotban PASS;
+- migration checksum replay: `009 ... SKIP`, checksum egyezés PASS.
+
+Contract: `auth-v046-user-identities-contract.mjs` → `27/27 PASS`.
+Regressziók: AUTH security 56/56 PASS, Drive registration 11/11 PASS, atomic project role 8/8 PASS, external guest 9/9 PASS, Project Access 14/14 PASS, TypeScript és célzott ESLint PASS.
+
+Fizikai acceptance még szükséges egy valódi másodlagos céges e-maillel: OTP kézbesítés → hitelesítés → projektindítási identitás kiválasztása → OWNER tagság e-mail/szervezet ellenőrzése. DEV ONLY · PROD DENY.

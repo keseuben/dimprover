@@ -3462,7 +3462,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A letöltési repository szerveroldalról oldja fel a tervszámot, export aliast, revíziót és műszaki státuszkódot; a kliens nem adhat meg tetszőleges exportnevet.
 - A digitális dokumentációjegyzék továbbra is megőrzi a teljes emberi megjelenítési nevet, a tényleges ZIP exportútvonalat, verziót, revíziókódot és SHA-256 hash-t.
 - Futási példa PASS: `G-101_Foldszinti-gep-alaprajz_V07_R01_KIV.pdf`; fallback PASS: `DOK_Altalanos-terv_V01_R00_NA.pdf`.
-- V0.8.3 contract 24/24 PASS; folder ZIP/download 26/26 PASS; dokumentációjegyzék 15/15 PASS; CsomagBOX ZIP 31/31 PASS; lifecycle 29/29 PASS; history 18/18 PASS; Box ACL 14/14 PASS; célzott TypeScript PASS; git diff --check PASS.
+- V0.8.3 contract 24/24 PASS; folder ZIP/download 27/27 PASS; dokumentációjegyzék 15/15 PASS; CsomagBOX ZIP 31/31 PASS; lifecycle 29/29 PASS; history 18/18 PASS; Box ACL 14/14 PASS; célzott TypeScript PASS; git diff --check PASS.
 - DEV ONLY · PROD DENY. DB-migráció és runtime-aktiválás ebben a source blokkban nem történt.
 
 ### DIMPRO Drive V0.8.4 – Verzió/revízió eredet, kézi korrekció és projekt metaadat-listák
@@ -3680,3 +3680,19 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Aktív DEV runtime `dimpro-drive-v0914-projectaccess-v032-15ab8d6f7-p3392`; előző V0.6.8 `5fd99bab...` / 3391 online rollback.
 - Projekt-hozzáférések: nagyobb tipográfia + jogosultsági sorrend Beruházási projektvezető → Projektvezető → Közreműködő → Ellenőrző → Megtekintő.
 - Project Access contract 14/14 PASS; public smoke PASS; PROD DENY.
+
+### AUTH V0.6.9 / Drive Multi-Identity – 2026-10-07
+
+- Új `auth_user_identities` authoritative tábla: egy DIMPRO-felhasználóhoz több hitelesített személyes vagy munkahelyi e-mail kapcsolható.
+- A jogosultság principalja továbbra is a központi `user_id`; az új e-mail nem kap külön Saját Drive-ot vagy külön DIMPRO-fiókot.
+- Migration 009 automatikusan elsődleges identitássá backfill-eli a meglévő `auth_users` e-mailt; `keseruben@gmail.com` backfill PASS.
+- Új OTP purpose és self-service API: identitáslista, e-mail-hitelesítés indítása és OTP-megerősítés.
+- Munkahelyi identitásnál szervezet szükséges; csak VERIFIED identitás használható projektindításra.
+- Drive és Projektkapu újprojekt-felületen `Projektindítási identitás` választó és `+ E-mail / munkahely hozzáadása` funkció készült.
+- A Project Core OWNER `user_id` változatlan marad, miközben a kiválasztott identitás e-mailje, neve és szervezete kerül a tagságba; a választás audit metadata része.
+- Saját Drive entitlement továbbra is kötelező projektlétrehozáshoz; projekt-only külsős nem hozhat létre projektet.
+- V0.6.9 nem automatikus account merge és még nem vállalati projekt-tulajdon átruházási modell; ezek külön későbbi enterprise workflow-k.
+- AUTH backup: `/var/backups/dimpro-auth/dimpro_auth_dev_before_009_20261007T085012Z.dump`, SHA-256 `3f3c805b026f8e1647e59df0db9b58e9aed45e19e039430c9a079505e331059d`.
+- Migration 009 SHA-256 `7eb7cb6de5222db0967d18bdf5e0cdcc0eef3f6eac8f2b0f1da5de79f151343b`; DEV migrationCount 9.
+- Multi-identity contract 27/27 PASS; AUTH/Drive regressziók, TypeScript és célzott ESLint PASS. A teljes repository lint 25 korábban meglévő errort jelez kizárólag a `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban; az új V0.6.9 fájlok között nincs lint error.
+- PROD DENY.

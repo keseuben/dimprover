@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import type { ProjectListItem } from "@/app/lib/project-core/types";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
+import DriveIdentityDialog from "@/components/drive/DriveIdentityDialog";
+import { driveIdentityLabel, type DriveUserIdentitiesPayload, type DriveUserIdentity } from "@/components/drive/driveIdentityTypes";
 import styles from "./ProjectListClient.module.css";
 
 type ProjectsResponse = {
@@ -44,6 +46,7 @@ type CreateProjectResponse = {
     error?: string;
   };
   error?: string;
+  message?: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -64,6 +67,9 @@ export default function ProjectListClient() {
   const [notice, setNotice] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [identities, setIdentities] = useState<DriveUserIdentity[]>([]);
+  const [selectedIdentityId, setSelectedIdentityId] = useState("");
+  const [identityDialogOpen, setIdentityDialogOpen] = useState(false);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -83,12 +89,27 @@ export default function ProjectListClient() {
     }
   }, []);
 
+  const loadIdentities = useCallback(async () => {
+    try {
+      const response = await fetch("/api/dimpro-auth/identities", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
+      const payload = await response.json().catch(() => ({})) as DriveUserIdentitiesPayload;
+      if (!response.ok || !payload.ok) return;
+      const next = payload.identities || [];
+      setIdentities(next);
+      const verified = next.filter((identity) => identity.status === "VERIFIED");
+      setSelectedIdentityId((current) => verified.some((identity) => identity.id === current) ? current : verified.find((identity) => identity.isPrimary)?.id || verified[0]?.id || "");
+    } catch {
+      // Project creation remains fail-closed server side when no verified identity is available.
+    }
+  }, []);
+
   useEffect(() => {
     const stored = window.localStorage.getItem("dimpro-projectgate-theme");
     if (stored === "dark" || stored === "light") setTheme(stored);
     else setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     void loadProjects();
-  }, [loadProjects]);
+    void loadIdentities();
+  }, [loadIdentities, loadProjects]);
 
   function toggleTheme() {
     setTheme((current) => {
@@ -117,10 +138,11 @@ export default function ProjectListClient() {
           currentPhase: String(form.get("currentPhase") || "Előkészítés"),
           startsAt: String(form.get("startsAt") || ""),
           endsAt: String(form.get("endsAt") || ""),
+          actingIdentityId: selectedIdentityId,
         }),
       });
       const payload = await response.json() as CreateProjectResponse;
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt nem hozható létre.");
+      if (!response.ok || !payload.ok) throw new Error(payload.message || payload.error || "A projekt nem hozható létre.");
       event.currentTarget.reset();
       setShowCreate(false);
       if (payload.driveProvisioning?.ready && payload.identityProvisioning?.ready) {
@@ -173,6 +195,12 @@ export default function ProjectListClient() {
               </div>
             </div>
             <div className={styles.formGrid}>
+              <label className={styles.wideField}>Projektindítási identitás
+                <select required value={selectedIdentityId} onChange={(event) => setSelectedIdentityId(event.target.value)}>
+                  {identities.filter((identity) => identity.status === "VERIFIED").map((identity) => <option key={identity.id} value={identity.id}>{driveIdentityLabel(identity)}</option>)}
+                </select>
+              </label>
+              <div className={`${styles.identityHint} ${styles.wideField}`}><span>A projektgazda jogosultság a DIMPRO-fiókodhoz tartozik; itt a projektben használt e-mailt és szervezeti identitást választod.</span><button type="button" onClick={() => setIdentityDialogOpen(true)}>+ E-mail / munkahely hozzáadása</button></div>
               <label>Projekt neve<input name="name" required maxLength={120} placeholder="Például: Szekszárd szarvasmarhatelep" /></label>
               <label>Projektkód<input name="code" maxLength={40} placeholder="Például: SZEKSZ-01" /></label>
               <label>Aktuális fázis<input name="currentPhase" maxLength={80} defaultValue="Előkészítés" /></label>
@@ -182,7 +210,7 @@ export default function ProjectListClient() {
             </div>
             <div className={styles.formActions}>
               <button type="button" onClick={() => setShowCreate(false)} className={styles.secondaryButton}>Mégsem</button>
-              <button type="submit" disabled={saving} className={styles.primaryButton}>
+              <button type="submit" disabled={saving || !selectedIdentityId} className={styles.primaryButton}>
                 {saving ? <Loader2 size={17} className={styles.spin} /> : <Plus size={17} />}
                 Projekt létrehozása
               </button>
@@ -228,6 +256,15 @@ export default function ProjectListClient() {
           </section>
         )}
       </div>
+      <DriveIdentityDialog
+        open={identityDialogOpen}
+        onClose={() => setIdentityDialogOpen(false)}
+        onChanged={(next) => {
+          setIdentities(next);
+          const verified = next.filter((identity) => identity.status === "VERIFIED");
+          setSelectedIdentityId((current) => verified.some((identity) => identity.id === current) ? current : verified.find((identity) => identity.isPrimary)?.id || verified[0]?.id || "");
+        }}
+      />
     </main>
   );
 }

@@ -6,8 +6,10 @@ import DriveNavigationRail from "./DriveNavigationRail";
 import DriveWorkspace from "./DriveWorkspace";
 import PersonalDriveWorkspace from "./PersonalDriveWorkspace";
 import FloatingProjectBoard from "./FloatingProjectBoard";
+import DriveIdentityDialog from "./DriveIdentityDialog";
 import type { DriveProject, DriveStorageQuota } from "./driveTypes";
 import type { DriveWorkspaceOption, DriveWorkspaceRecord, DriveWorkspacesPayload } from "./driveWorkspaceTypes";
+import { driveIdentityLabel, type DriveUserIdentitiesPayload, type DriveUserIdentity } from "./driveIdentityTypes";
 import { type DriveNavigationRequest, type DriveNavigationTarget } from "./driveBuildInfo";
 import { DRIVE_THEME_STORAGE_KEY, normalizeDriveTheme, type DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
@@ -33,6 +35,7 @@ type DriveProvisioningPayload = {
 type CreateProjectPayload = {
   ok?: boolean;
   error?: string;
+  message?: string;
   project?: DriveProject;
   driveProvisioning?: {
     ready?: boolean;
@@ -51,6 +54,9 @@ export default function DriveShell({
   const [workspaces, setWorkspaces] = useState<DriveWorkspaceRecord[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [workspaceUserEmail, setWorkspaceUserEmail] = useState<string | null>(null);
+  const [userIdentities, setUserIdentities] = useState<DriveUserIdentity[]>([]);
+  const [selectedProjectIdentityId, setSelectedProjectIdentityId] = useState("");
+  const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [boardOpen, setBoardOpen] = useState(false);
@@ -111,6 +117,20 @@ export default function DriveShell({
     }
   }, []);
 
+  const loadUserIdentities = useCallback(async () => {
+    try {
+      const response = await fetch("/api/dimpro-auth/identities", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
+      const payload = await response.json().catch(() => ({})) as DriveUserIdentitiesPayload;
+      if (!response.ok || !payload.ok) return;
+      const next = payload.identities || [];
+      setUserIdentities(next);
+      const verified = next.filter((identity) => identity.status === "VERIFIED");
+      setSelectedProjectIdentityId((current) => verified.some((identity) => identity.id === current) ? current : verified.find((identity) => identity.isPrimary)?.id || verified[0]?.id || "");
+    } catch {
+      // Identity management remains optional for workspace loading; project creation API still fails closed.
+    }
+  }, []);
+
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canCreateProject) {
@@ -132,11 +152,12 @@ export default function DriveShell({
           code: String(form.get("code") || "").trim(),
           description: String(form.get("description") || "").trim(),
           currentPhase: String(form.get("currentPhase") || "Előkészítés").trim(),
+          actingIdentityId: selectedProjectIdentityId,
         }),
       });
       const payload = await response.json() as CreateProjectPayload;
       if (!response.ok || !payload.ok || !payload.project) {
-        throw new Error(payload.error || "A Drive projekt nem hozható létre.");
+        throw new Error(payload.message || payload.error || "A Drive projekt nem hozható létre.");
       }
       await loadWorkspaces();
       setSelectedWorkspaceId(`project:${payload.project.id}`);
@@ -151,6 +172,7 @@ export default function DriveShell({
   }
 
   useEffect(() => { void loadWorkspaces(); }, [loadWorkspaces]);
+  useEffect(() => { void loadUserIdentities(); }, [loadUserIdentities]);
 
   useEffect(() => () => {
     if (boardOpenTimer.current) clearTimeout(boardOpenTimer.current);
@@ -274,6 +296,7 @@ export default function DriveShell({
     [workspaces],
   );
 
+  const verifiedUserIdentities = userIdentities.filter((identity) => identity.status === "VERIFIED");
   const canCreateProject = workspaces.some((workspace) => workspace.type === "PERSONAL");
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
 
@@ -462,6 +485,16 @@ export default function DriveShell({
                 <button type="button" onClick={() => setShowCreateProject(false)} aria-label="Bezárás"><X size={16} /></button>
               </header>
               <label>
+                Projektindítási identitás
+                <select value={selectedProjectIdentityId} onChange={(event) => setSelectedProjectIdentityId(event.target.value)} required>
+                  {verifiedUserIdentities.map((identity) => <option key={identity.id} value={identity.id}>{driveIdentityLabel(identity)}</option>)}
+                </select>
+              </label>
+              <div className={styles.projectIdentityHint}>
+                <span>A projektgazda jogosultság a központi DIMPRO-fiókodhoz tartozik. A kiválasztott e-mail, név és szervezet lesz a projektben használt identitás.</span>
+                <button type="button" onClick={() => setShowIdentityDialog(true)}>+ E-mail / munkahely hozzáadása</button>
+              </div>
+              <label>
                 Projekt neve
                 <input name="name" required maxLength={120} defaultValue={pilotProjectName} placeholder="Projekt neve" />
               </label>
@@ -482,7 +515,7 @@ export default function DriveShell({
               {pilotMode && <div className={styles.projectPilotHint}>A projekt létrehozásakor a Drive automatikusan létrehozza a külön PILOT mappát.</div>}
               <footer>
                 <button type="button" onClick={() => setShowCreateProject(false)}>Mégsem</button>
-                <button type="submit" disabled={savingProject}>
+                <button type="submit" disabled={savingProject || !selectedProjectIdentityId}>
                   {savingProject ? <Loader2 className={styles.spin} size={16} /> : <Plus size={16} />}
                   Projekt létrehozása
                 </button>
@@ -505,6 +538,7 @@ export default function DriveShell({
             workspaceOptions={workspaceOptions}
             selectedWorkspaceId={selectedWorkspace.id}
             onWorkspaceChange={handleWorkspaceChange}
+            onManageIdentities={() => setShowIdentityDialog(true)}
           />
         ) : selectedProject ? (
           <DriveWorkspace
@@ -524,6 +558,15 @@ export default function DriveShell({
           <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>A projektmunkatér nem tölthető be</strong><span>A munkatér projektkapcsolata hiányos.</span></div></div>
         )}
       </main>
+      <DriveIdentityDialog
+        open={showIdentityDialog}
+        onClose={() => setShowIdentityDialog(false)}
+        onChanged={(identities) => {
+          setUserIdentities(identities);
+          const verified = identities.filter((identity) => identity.status === "VERIFIED");
+          setSelectedProjectIdentityId((current) => verified.some((identity) => identity.id === current) ? current : verified.find((identity) => identity.isPrimary)?.id || verified[0]?.id || "");
+        }}
+      />
     </div>
   );
 }

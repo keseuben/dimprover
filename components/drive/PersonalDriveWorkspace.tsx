@@ -51,6 +51,7 @@ type Props = {
   workspaceOptions: DriveWorkspaceOption[];
   selectedWorkspaceId: string;
   onWorkspaceChange: (workspaceId: string) => void;
+  onManageIdentities?: () => void;
 };
 
 function formatBytes(value: number) {
@@ -132,7 +133,7 @@ function itemToDocument(item: PersonalDriveItem): DriveDocument {
   };
 }
 
-export default function PersonalDriveWorkspace({ workspaceName, userEmail, workspaceOptions, selectedWorkspaceId, onWorkspaceChange }: Props) {
+export default function PersonalDriveWorkspace({ workspaceName, userEmail, workspaceOptions, selectedWorkspaceId, onWorkspaceChange, onManageIdentities }: Props) {
   const [items, setItems] = useState<PersonalDriveItem[]>([]);
   const [folders, setFolders] = useState<PersonalDriveFolder[]>([]);
   const [folderCoreReady, setFolderCoreReady] = useState(false);
@@ -591,7 +592,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
           <div><h1>{workspaceName}</h1><div className={styles.projectMeta}><span>Személyes DIMPRO tárhely</span><span className={styles.activeBadge}>Aktív</span><span>{items.length} fájl · {formatBytes(totalBytes)}</span></div></div>
         </div>
         {workspaceOptions.length > 0 && selectedWorkspaceId ? <div className={styles.workspaceSelectorWrap}><label className={styles.workspaceSelectorLabel} htmlFor="drive-personal-workspace-selector">Munkatér</label><select id="drive-personal-workspace-selector" className={styles.workspaceSelector} value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)}>{workspaceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}{option.code ? " · " + option.code : ""}</option>)}</select></div> : null}
-        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><div className={styles.userPill}><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>Saját Drive tulajdonos</span></div></div><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
+        <div className={styles.headerActions}><button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button><button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button><button type="button" className={`${styles.userPill} ${styles.userPillButton}`} onClick={onManageIdentities} title="E-mail-címek és munkahelyek kezelése"><span className={styles.avatar}>{(userEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span><div><strong>{userEmail || "DIMPRO felhasználó"}</strong><span>E-mail-címek és munkahelyek</span></div></button><HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} /></div>
       </header>
 
       {folderRenameDialog && (

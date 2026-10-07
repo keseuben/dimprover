@@ -298,7 +298,7 @@ function auditEvent(input: Omit<ProjectAuditEvent, "id" | "createdAt">): Project
   };
 }
 
-export async function createProject(input: Record<string, unknown>, actor: { userId: string; displayName: string }) {
+export async function createProject(input: Record<string, unknown>, actor: { userId: string; displayName: string; email?: string | null; organizationName?: string | null; actingIdentityId?: string | null; identityType?: "PERSONAL" | "WORK" | null }) {
   const state = await getProjectCoreState();
   const name = normalizeText(input.name);
   if (!name) return { ok: false as const, error: "A projekt neve kötelező." };
@@ -329,7 +329,9 @@ export async function createProject(input: Record<string, unknown>, actor: { use
     id: `membership-${randomUUID().slice(0, 12)}`,
     projectId: project.id,
     userId: actor.userId,
+    email: normalizeText(actor.email) || undefined,
     displayName: actor.displayName,
+    organizationName: normalizeText(actor.organizationName) || undefined,
     role: "OWNER",
     status: "ACTIVE",
     invitedAt: now,
@@ -346,6 +348,12 @@ export async function createProject(input: Record<string, unknown>, actor: { use
     entityType: "project",
     entityId: project.id,
     summary: `Projekt létrehozva: ${project.name}`,
+    metadata: {
+      actingIdentityId: actor.actingIdentityId || null,
+      identityType: actor.identityType || null,
+      contactEmail: actor.email || null,
+      organizationName: actor.organizationName || null,
+    },
   }));
   state.updatedAt = now;
   await writeState(state);
