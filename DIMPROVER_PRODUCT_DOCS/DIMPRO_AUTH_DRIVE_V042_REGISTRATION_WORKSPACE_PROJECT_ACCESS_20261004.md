@@ -724,3 +724,17 @@ A Projektvezető és Beruházási projektvezető szerepkör mappatörlési UI-ja
 A bal oldali mappafában a kijelölt mappán `⋮` műveletgomb jelenik meg, és jobb kattintással is megnyitható a mappaművelet menü. A `Lomtárba helyezés` ugyanazt a megerősítő dialógust és soft-delete folyamatot használja, mint a dokumentumtár táblázatos mappatörlése.
 
 Contract: V0.9.19 15/15 PASS; TypeScript és célzott ESLint PASS. PROD DENY.
+
+### Drive V0.9.19 DEV aktiválás – 2026-10-07
+
+- runtime source: `4bb76ee58be1cc582551fa83e8d3305195cbb896`;
+- BUILD-02 run: `drive-v0919-folder-delete-4bb76ee58-20261007-b1`;
+- build ID: `8xyC6Iwo4SKO7cZoeB4HN`;
+- artifact SHA-256: `e66a4dca3a2e10ef32dc95978a592feaeea586facef4d7130dfc2e5f2f362970`;
+- aktív DEV runtime: `dimpro-drive-v0919-folder-delete-4bb76ee58-p3397`;
+- publikus upstream: `127.0.0.1:3397`;
+- rollback runtime: `dimpro-drive-v0918-columns-bottom-776fb4031-p3396`, online, restart 0;
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0919/dimpro-dev.conf.before-4bb76ee58-20261007T143828`;
+- Nginx backup SHA-256: `ad31fec9e7ec61ed910554c93cf241f88dbcca2996b4766e3e0266d38e8f6400`;
+- cutover: 2026-10-07 14:38:38 Europe/Budapest;
+- public smoke PASS: AUTH migrationCount 10; runtime restart 0; error log 0 byte; PROD DENY.

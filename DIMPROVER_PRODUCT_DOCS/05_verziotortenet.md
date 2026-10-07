@@ -3818,3 +3818,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - ESC és külső kattintás bezárja a mappafa műveletmenüt.
 - Drive V0.9.19 folder delete UX contract: 15/15 PASS; TypeScript + célzott ESLint PASS.
 - PROD DENY.
+
+#### Drive V0.9.19 DEV aktiválás
+
+- Source `4bb76ee58be1cc582551fa83e8d3305195cbb896`; BUILD-02 PASS.
+- Build ID `8xyC6Iwo4SKO7cZoeB4HN`; artifact SHA-256 `e66a4dca3a2e10ef32dc95978a592feaeea586facef4d7130dfc2e5f2f362970`.
+- Aktív DEV runtime `dimpro-drive-v0919-folder-delete-4bb76ee58-p3397`; előző V0.9.18 / 3396 online rollback.
+- Public smoke PASS; AUTH migrationCount 10; restart 0; error log 0 byte; PROD DENY.
