@@ -537,9 +537,9 @@ def delete_candidate(item: dict[str, Any], root: Path, repo: Path) -> None:
             raise Deny("WORKTREE_PATH_MISMATCH")
         cp = run(["git", f"--git-dir={repo}", "worktree", "remove", "--force", str(path)], check=False)
         if cp.returncode != 0:
-            raise Deny(f"WORKTREE_REMOVE_FAILED:{item[runId]}:{cp.stderr.strip()[:180]}")
+            raise Deny(f"WORKTREE_REMOVE_FAILED:{item["runId"]}:{cp.stderr.strip()[:180]}")
     elif kind == "temp-bundle":
-        expected = (root / "temp" / f"{item[runId]}.bundle").resolve(strict=False)
+        expected = (root / "temp" / f"{item["runId"]}.bundle").resolve(strict=False)
         if path != expected:
             raise Deny("TEMP_PATH_MISMATCH")
         path.unlink()
@@ -549,7 +549,7 @@ def delete_candidate(item: dict[str, Any], root: Path, repo: Path) -> None:
             raise Deny("ARTIFACT_PATH_MISMATCH")
         path.unlink()
     elif kind == "log":
-        expected = (root / "logs" / f"{item[runId]}.log").resolve(strict=False)
+        expected = (root / "logs" / f"{item["runId"]}.log").resolve(strict=False)
         if path != expected:
             raise Deny("LOG_PATH_MISMATCH")
         path.unlink()
@@ -591,6 +591,7 @@ def main() -> int:
             raise Deny("RETENTION_LOCK_BUSY")
 
         build_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o640)
+        build_lock_held = False
         try:
             try:
                 fcntl.flock(build_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -600,6 +601,11 @@ def main() -> int:
             active = current_run(state_root)
             if active:
                 raise Deny(f"CURRENT_RUN_ACTIVE:{active}")
+
+            if args.apply:
+                build_lock_held = True
+            else:
+                fcntl.flock(build_fd, fcntl.LOCK_UN)
 
             before = disk_state(root)
             groups: dict[str, list[dict[str, Any]]] = {}
@@ -619,6 +625,18 @@ def main() -> int:
             candidates = [item for items in groups.values() for item in items]
             candidate_bytes = sum(int(x["allocatedBytes"]) for x in candidates)
             actions: list[dict[str, Any]] = []
+
+            if not args.apply:
+                try:
+                    fcntl.flock(build_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Deny("FULL_BUILD_STATE_CHANGED_DURING_DRY_RUN")
+                try:
+                    active_after = current_run(state_root)
+                    if active_after:
+                        raise Deny(f"CURRENT_RUN_APPEARED_DURING_DRY_RUN:{active_after}")
+                finally:
+                    fcntl.flock(build_fd, fcntl.LOCK_UN)
 
             if args.apply:
                 for item in candidates:
@@ -667,6 +685,7 @@ def main() -> int:
                 "deletedCount": len(actions),
                 "destructiveActionsPerformed": bool(actions),
                 "actualAvailableBytesDelta": after["availableBytes"] - before["availableBytes"],
+                "fullBuildLockHeldDuringScan": bool(args.apply),
             }
             report_path = Path(args.report_file)
             report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -678,7 +697,8 @@ def main() -> int:
             return 0
         finally:
             try:
-                fcntl.flock(build_fd, fcntl.LOCK_UN)
+                if build_lock_held:
+                    fcntl.flock(build_fd, fcntl.LOCK_UN)
             finally:
                 os.close(build_fd)
     finally:
