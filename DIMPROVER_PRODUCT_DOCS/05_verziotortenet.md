@@ -3875,3 +3875,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Régi Drive Jazmin acceptance suite: az új viewer-ellenőrzés PASS; 204/206 PASS, a két megmaradt FAIL régi CsomagBOX contract-adósság (`08`, `25`), nem V0.9.21 regresszió.
 - Drive Core V0.9.3 teljes read-only DEV migrációs preflight PASS. A migráció a source checkpoint elkészítésekor még nincs alkalmazva. PROD DENY.
 - Teljes repository lint baseline: 25 error / 107 warning, változatlan; a V0.9.21 módosított fájlok között 0 lint error, csak a `DetailsPanel.tsx` két korábbi hook-warningja maradt.
+
+#### Drive V0.9.21 DEV aktiválás – 2026-10-07
+
+- Source commit: `f8eb69d877edd072ec362ac5be1798eb93c048a1` (`feat(drive): guard linked deletes and add preview drawer`).
+- BUILD-02 manual safe fallback PASS: run `drive-v0921-f8eb69d87-20261007-manual-b2`, build ID `LPUmPU1eomidEdY8lL9Ck`, artifact SHA-256 `936d5d89bd3fb3d225ddf7b1b6f304c5179996c7c8c2b452bf1a2a211ee98601`.
+- Drive Core V0.9.3 migration APPLY + VERIFY PASS. Automatikus pre-migration backup: `/srv/dimpro-dev/backups/drive-v093-link-guard-password/20261007T151543Z`. Védett táblák sorszámai változatlanok maradtak.
+- Valódi, aktív CsomagBOX-kapcsolatú dokumentummal tranzakciósan visszagörgetett DB-trigger teszt PASS: `DRIVE_DOCUMENT_DELETE_BOX_LINK_BLOCKED`; adatváltozás nem maradt vissza.
+- DEV runtime: `dimpro-drive-v0921-linkguard-preview-f8eb69d87-p3399`, port `3399`, PM2 online, restart `0`, error log `0 B`.
+- Nginx cutover: `drive.dev.dimpro.hu` → `127.0.0.1:3399`. Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0921/dimpro-dev.conf.before-f8eb69d87-20261007T171855`, SHA-256 `b8d1e8eeb40ca7f53c0812c856af1e29eafd14fefc537c51ec82dc2b941a6a86`.
+- Rollback runtime érintetlenül online maradt: `dimpro-drive-v0920-trash-password-f17d3f48a-p3398`, restart `0`.
+- Publikus smoke PASS: `/drive` 307 a central auth startra; profil- és delete-dependency API auth nélkül 401; `X-DIMPRO-Production-Access: DENY`; V0.9.21 candidate header aktív.
+- PM2 state mentve.
+- Full repository lint baseline: 25 error / 107 warning, nem a V0.9.21 által módosított fájlokban. A V0.9.21 által érintett Drive/ProjectGate fájlok célzott lintje 0 error.
+- DEV host erőforrásfigyelmeztetés az aktiváláskor: root disk ~96%, RAM ~7.3/7.8 GiB, swap gyakorlatilag teljes. Safe Delete policy miatt automatikus takarítás nem történt; külön retention/cleanup preflight szükséges. PROD DENY.

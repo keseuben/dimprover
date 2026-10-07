@@ -779,3 +779,7 @@ A mappajelszó továbbra is 8–128 karakteres, de a minimum 8 karakter és az i
 A fő Drive fájlmegjelenítő elkülönült a metaadat részletezőtől. Fájlsor egy kattintására jobb oldali, nagy `DrivePreviewDrawer` nyílik, amely háttérkattintással, `Esc` billentyűvel vagy bezárógombbal becsukható. A `Részletek`, `Tervellenőrzés`, `Verziók`, `Megjegyzések` és `Listák` továbbra is közös metaadatpanelen maradnak. A drawer a meglévő, jogosultságvédett `DriveDocumentViewer` motort használja. A ProjectGate saját Tervnéző módja külön megőrzött viewer-komponenssel változatlanul működik.
 
 Drive UI target `0.9.21`; Drive Core target `0.9.3 / migrationCount 10`. V0.9.21 contract 42/42 PASS; regressziós contractok PASS; teljes migrációs read-only DEV preflight PASS; PROD DENY.
+
+#### Drive V0.9.21 aktivált DEV állapot – 2026-10-07
+
+A V0.9.21 fejlesztés DEV-en aktiválva. Source `f8eb69d877edd072ec362ac5be1798eb93c048a1`; BUILD-02 build ID `LPUmPU1eomidEdY8lL9Ck`; artifact SHA-256 `936d5d89bd3fb3d225ddf7b1b6f304c5179996c7c8c2b452bf1a2a211ee98601`. Drive Core V0.9.3 migration APPLY/VERIFY PASS, backup: `/srv/dimpro-dev/backups/drive-v093-link-guard-password/20261007T151543Z`. Aktív runtime `3399`; rollback `3398` online maradt. Publikus smoke PASS, PROD DENY.
