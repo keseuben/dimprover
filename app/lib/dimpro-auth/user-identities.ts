@@ -124,13 +124,15 @@ export async function beginAuthUserIdentityVerification(input: {
       );
     }
 
-    const existingResult = await client.query<IdentityRow>(
+    const activeResult = await client.query<IdentityRow>(
       `SELECT id,user_id,identity_type,email_original,email_normalized,display_name,organization_name,status,is_primary,verified_at,challenge_id,created_at
-         FROM auth_user_identities WHERE email_normalized=$1 LIMIT 1 FOR UPDATE`,
+         FROM auth_user_identities
+        WHERE email_normalized=$1 AND status<>'DISABLED'
+        LIMIT 1 FOR UPDATE`,
       [input.email],
     );
-    const existing = existingResult.rows[0] || null;
-    if (existing && existing.user_id !== input.userId) {
+    const activeIdentity = activeResult.rows[0] || null;
+    if (activeIdentity && activeIdentity.user_id !== input.userId) {
       throw new DimproAuthError(
         "Identity email belongs to another DIMPRO user.",
         "AUTH_USER_IDENTITY_EMAIL_IN_USE",
@@ -138,13 +140,26 @@ export async function beginAuthUserIdentityVerification(input: {
         "Ez az e-mail-cím már egy másik DIMPRO-fiókhoz van kapcsolva.",
       );
     }
-    if (existing?.status === "VERIFIED") {
+    if (activeIdentity?.status === "VERIFIED") {
       throw new DimproAuthError(
         "Identity is already verified.",
         "AUTH_USER_IDENTITY_ALREADY_VERIFIED",
         409,
         "Ez az e-mail-cím már hitelesítve van a DIMPRO-fiókodban.",
       );
+    }
+
+    let reusableIdentity = activeIdentity;
+    if (!reusableIdentity) {
+      const disabledOwnResult = await client.query<IdentityRow>(
+        `SELECT id,user_id,identity_type,email_original,email_normalized,display_name,organization_name,status,is_primary,verified_at,challenge_id,created_at
+           FROM auth_user_identities
+          WHERE email_normalized=$1 AND user_id=$2 AND status='DISABLED' AND is_primary=false
+          ORDER BY updated_at DESC
+          LIMIT 1 FOR UPDATE`,
+        [input.email, input.userId],
+      );
+      reusableIdentity = disabledOwnResult.rows[0] || null;
     }
 
     const cooldown = await client.query<{ id: string }>(
@@ -191,13 +206,13 @@ export async function beginAuthUserIdentityVerification(input: {
     const challengeId = challenge.rows[0]!.id;
 
     let identity: IdentityRow;
-    if (existing) {
+    if (reusableIdentity) {
       const updated = await client.query<IdentityRow>(
         `UPDATE auth_user_identities
             SET identity_type=$2,display_name=$3,organization_name=$4,status='PENDING',verified_at=NULL,challenge_id=$5,updated_at=now()
-          WHERE id=$1
+          WHERE id=$1 AND user_id=$6 AND is_primary=false
           RETURNING id,user_id,identity_type,email_original,email_normalized,display_name,organization_name,status,is_primary,verified_at,challenge_id,created_at`,
-        [existing.id, input.identityType, input.displayName || null, input.organizationName || null, challengeId],
+        [reusableIdentity.id, input.identityType, input.displayName || null, input.organizationName || null, challengeId, input.userId],
       );
       identity = updated.rows[0]!;
     } else {

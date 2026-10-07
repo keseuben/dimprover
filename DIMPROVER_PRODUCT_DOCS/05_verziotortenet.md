@@ -3730,3 +3730,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Public smoke PASS: central SSO 307, identitáslista és lifecycle endpoint unauth 401, AUTH migrationCount 9, restart 0, error log 0 byte.
 - Valódi másodlagos e-mailes OTP/lifecycle E2E még függő.
 - PROD DENY.
+
+### AUTH V0.6.11 – Identity release + Outlook-safe OTP – 2026-10-07
+
+- Migration 010 lehetővé teszi a `DISABLED` másodlagos e-mail-identitások biztonságos újrafelvételét új OTP-hitelesítéssel; aktív/PENDING e-mail uniqueness megmarad.
+- AUTH migrationCount 10, checksum replay PASS.
+- OTP rendszerlevelek Outlook-kompatibilis, table-based inline HTML sablont kaptak; a kód kikerült a tárgyból.
+- Belépési, Saját Drive regisztrációs és e-mail-identitás OTP sablon egységesítve.
+- Outlook fizikai megjelenítési minta megérkezett és elfogadva.
+- Multi-identity contract 43/43 PASS; TypeScript és célzott ESLint PASS.
+- PROD DENY.

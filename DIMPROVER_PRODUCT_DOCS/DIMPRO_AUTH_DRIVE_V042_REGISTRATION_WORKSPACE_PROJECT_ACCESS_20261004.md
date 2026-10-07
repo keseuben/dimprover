@@ -650,3 +650,15 @@ TypeScript PASS, lifecycle + identity célzott ESLint PASS. PROD DENY.
 - `X-DIMPRO-Production-Access: DENY`.
 
 A következő fizikai acceptance továbbra is valódi másodlagos e-mailt igényel: hozzáadás → OTP → szükség esetén újraküldés → hitelesítés → projektindítás → leválasztás → projekt-hozzáférés változatlanságának ellenőrzése.
+
+## AUTH V0.6.11 – Identity release + Outlook-safe OTP template – 2026-10-07
+
+- Migration 010 (`010_auth_v047_identity_release.sql`) az identitás e-mail uniqueness szabályt aktív státuszokra korlátozza: `PENDING` és `VERIFIED` cím továbbra is globálisan egyedi, `DISABLED` cím viszont új OTP-hitelesítéssel újra felvehető.
+- Saját korábban `DISABLED` másodlagos identitás reaktiválásakor a meglévő rekord kerül vissza `PENDING` állapotba; a művelet user-scoped és primary identitásra nem alkalmazható.
+- AUTH readiness migrationCount: `10`; migration replay checksum PASS.
+- Az AUTH OTP e-mailek Outlook-kompatibilis, táblázatos 600 px-es inline HTML sablont kaptak.
+- Az OTP nem szerepel a levél tárgyában; a kód `123 456` jellegű, jól olvasható monospace blokkban jelenik meg.
+- Egységes sablon érinti: belépési OTP, Saját Drive regisztrációs OTP, e-mail-identitás OTP.
+- Valódi Outlook megjelenítési teszt a `keseru.benjamin@nagisz.hu` címen PASS: a levél megérkezett és a táblázatos sablon helyesen jelent meg.
+- Contract: `43/43 PASS`; TypeScript és célzott ESLint PASS.
+- PROD DENY.
