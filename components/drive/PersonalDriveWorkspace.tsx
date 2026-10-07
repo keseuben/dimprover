@@ -519,6 +519,95 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     await moveItem(item, targetFolderId === "all" ? null : targetFolderId);
   }, [itemById, moveItem]);
 
+  const deletePersonalDocuments = useCallback(async (documentIds: string[]) => {
+    const refIds = [...new Set(documentIds.filter((id) => itemById.has(id)))];
+    if (!refIds.length || busy) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const preflightResponse = await fetch("/api/drive/personal/content/bulk-delete", {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refIds, mode: "preflight" }),
+      });
+      const preflight = await preflightResponse.json() as { ok?: boolean; error?: string; blocked?: boolean; dependencies?: Array<{ displayName: string; reference: string; status: string }> };
+      if (!preflightResponse.ok || !preflight.ok) throw new Error(preflight.error || "A törlési előellenőrzés sikertelen.");
+      if (preflight.blocked) {
+        const lines = (preflight.dependencies || []).map((dependency) => `${dependency.displayName} → ${dependency.reference} (${dependency.status})`);
+        setError(`A fájl nem törölhető, mert aktív CsomagBOX-kapcsolata van.${lines.length ? ` ${lines.join(" · ")}` : ""}`);
+        return;
+      }
+      const names = refIds.map((id) => itemById.get(id)?.name || id);
+      const approved = window.confirm(refIds.length === 1
+        ? `Biztosan eltávolítod a Saját Drive-ból?\n\n${names[0]}\n\nA fizikai fájl nem törlődik azonnal.`
+        : `Biztosan eltávolítod ezt a ${refIds.length} fájlt a Saját Drive-ból?\n\nA fizikai fájlok nem törlődnek azonnal.`);
+      if (!approved) return;
+      const response = await fetch("/api/drive/personal/content/bulk-delete", {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refIds }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; removedIds?: string[]; removedCount?: number; dependencies?: Array<{ displayName: string; reference: string }> };
+      if (!response.ok || !payload.ok) {
+        if (response.status === 409 && payload.dependencies?.length) {
+          throw new Error(`A fájl időközben kapcsolódott CsomagBOX-hoz: ${payload.dependencies.map((dependency) => `${dependency.displayName} → ${dependency.reference}`).join(" · ")}`);
+        }
+        throw new Error(payload.error || "A Saját Drive törlés sikertelen.");
+      }
+      const removed = new Set(payload.removedIds || refIds);
+      setItems((current) => current.filter((item) => !removed.has(item.id)));
+      setSelectedDocumentIds((current) => current.filter((id) => !removed.has(id)));
+      setSelectedDocumentId((current) => removed.has(current) ? "" : current);
+      setNotice(`${payload.removedCount || removed.size} fájl eltávolítva a Saját Drive-ból.`);
+      await refreshBoxes();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A Saját Drive törlés sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, itemById, refreshBoxes]);
+
+  const moveDocumentsToFolder = useCallback(async (documentIds: string[], targetFolderId: string) => {
+    if (!folderCoreReady || busy) return;
+    const refIds = [...new Set(documentIds)].filter((id) => itemById.has(id));
+    if (!refIds.length) return;
+    const folderId = targetFolderId === "all" ? null : targetFolderId;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      let moved = 0;
+      for (const refId of refIds) {
+        const item = itemById.get(refId);
+        if (!item || (item.folderId || null) === folderId) continue;
+        const response = await fetch(`/api/drive/personal/content/${encodeURIComponent(refId)}`, {
+          method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ folderId }),
+        });
+        const payload = await response.json() as { ok?: boolean; error?: string };
+        if (!response.ok || !payload.ok) throw new Error(payload.error || `${item.name} áthelyezése sikertelen.`);
+        moved += 1;
+      }
+      await load();
+      setSelectedDocumentIds([]);
+      setNotice(`${moved} fájl áthelyezve.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A fájlok áthelyezése sikertelen."); }
+    finally { setBusy(false); }
+  }, [busy, folderCoreReady, itemById, load]);
+
+  const moveFolderToFolder = useCallback(async (folderId: string, targetFolderId: string) => {
+    if (!folderCoreReady || busy) return;
+    const targetParentId = targetFolderId === "all" ? null : targetFolderId;
+    const folder = folders.find((entry) => entry.id === folderId);
+    if (!folder || folder.parentId === targetParentId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/drive/personal/folders/${encodeURIComponent(folderId)}`, {
+        method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentId: targetParentId }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa áthelyezése sikertelen.");
+      await load();
+      setSelectedFolderId(folderId);
+      setNotice(`Mappa áthelyezve: ${folder.name}.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A mappa áthelyezése sikertelen."); }
+    finally { setBusy(false); }
+  }, [busy, folderCoreReady, folders, load]);
+
   const downloadItem = useCallback(async (item: PersonalDriveDetailsItem) => {
     setError("");
     const response = await fetch(`/api/drive/personal/content/${encodeURIComponent(item.id)}/download`, { credentials: "same-origin", cache: "no-store" });
@@ -570,11 +659,14 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     dragPanEnabled
     selectedDocumentIds={selectedDocumentIds}
     onSelectionChange={setSelectedDocumentIds}
-    canDelete={false}
+    canDelete
     canDeleteFolder={false}
+    onDeleteSelected={deletePersonalDocuments}
     onOpenBrowserDocument={(document) => void openDocument(document)}
     onOpenBoxDocument={openDocumentBox}
     onDownloadDocument={(document) => { const item = itemById.get(document.id); if (item) void downloadItem(item).catch((caught) => setError(caught instanceof Error ? caught.message : "A fájl nem tölthető le.")); }}
+    onMoveDocumentsToFolder={moveDocumentsToFolder}
+    onMoveFolderToFolder={moveFolderToFolder}
     newFolderEditorOpen={newFolderEditorOpen}
     newFolderName={newFolderName}
     newFolderSaving={newFolderSaving}
@@ -708,8 +800,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : layoutMode === "folders" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` } : undefined}>
         {compareActive ? (
           <CompareWorkspace projectId="personal" workspaceType="PERSONAL" documents={documents} boxes={boxes} seedItems={compareSeedItems} onClose={() => setCompareActive(false)} />
-        ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete={false} /> : <>
-          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
+        ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete onDeleteSelected={deletePersonalDocuments} /> : <>
+          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} onMoveDocumentsToFolder={moveDocumentsToFolder} onMoveFolderToFolder={moveFolderToFolder} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
           {layoutMode === "split" || layoutMode === "folders" ? <div className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`} role="separator" aria-orientation="horizontal" onDoubleClick={() => { const height = browserRef.current?.getBoundingClientRect().height || 660; const half = Math.max(150, Math.floor((height - 10) / 2)); if (layoutMode === "folders") setFoldersDetailsHeight(half); else setSplitDetailsHeight(Math.max(250, half)); }} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => { const delta = startY - moveEvent.clientY; if (layoutMode === "folders") { const height = browserRef.current?.getBoundingClientRect().height || 660; const max = Math.max(150, Math.floor((height - 10) / 2)); setFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + delta))); } else setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + delta))); }; const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
           <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />

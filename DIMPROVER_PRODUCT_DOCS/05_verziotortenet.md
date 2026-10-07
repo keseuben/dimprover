@@ -3889,3 +3889,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - PM2 state mentve.
 - Full repository lint baseline: 25 error / 107 warning, nem a V0.9.21 által módosított fájlokban. A V0.9.21 által érintett Drive/ProjectGate fájlok célzott lintje 0 error.
 - DEV host erőforrásfigyelmeztetés az aktiváláskor: root disk ~96%, RAM ~7.3/7.8 GiB, swap gyakorlatilag teljes. Safe Delete policy miatt automatikus takarítás nem történt; külön retention/cleanup preflight szükséges. PROD DENY.
+
+### Drive V0.9.22 – Saját Drive törlés + kattintás/preview + mappahozzáférés + drag&drop + tervellenőrzési jóváhagyás – 2026-10-07
+
+- A Saját Drive fájlok törlése külön személyes tulajdonosi művelet lett; nem a projektes `document.delete` jogosultságból öröklődik. A saját, aktív USER scope-ú fájlok sorvégi törlése és többszörös kijelöléses törlése engedélyezett.
+- A Saját Drive törlés soft-remove: a `dimpro_content_refs` hivatkozás `REMOVED` állapotba kerül, a fizikai objektumot a művelet nem törli. Aktív személyes CsomagBOX-hivatkozás blokkolja a törlést.
+- A személyes többfájlos törlés DB-szinten atomikus `dimpro_personal_drive_soft_remove_refs_atomic` RPC-t használ: tulajdonosi scope + aktív állapot + CsomagBOX-kapcsolat egy tranzakcióban ellenőrződik; részleges törlés nem megengedett.
+- Projekt Drive fájlsor: egy kattintás csak kijelöl, így a közös `Részletek / Tervellenőrzés / Verziók / Megjegyzések / Listák` panel frissül. Dupla kattintás nyitja meg a külön jobb oldali fájlmegjelenítő drawert.
+- Jelszóvédett mappák vizuális jelölése erősebb: sötétvörös ikon/szín és halvány vörös teljes mappasor-háttér. Korlátozott ACL mappa vöröses/narancsos, egyedi személyi ACL mappa lila háttérjelölést kap. A jelölés a bal mappafában és a táblázat mappasoraiban is megjelenik.
+- Elkészült a felhasználói `Mappahozzáférés` kezelő a meglévő Folder ACL Core fölé. Projektvezető/projektgazda választhat `Projektjogosultság öröklése` és `Csak kiválasztott projekttagok` mód között. Egyedi módban aktív projekttagok jelölhetők ki; a projektgazda és a módosítást végző felhasználó kötelezően megmarad a listában.
+- A mappahozzáférés atomikus `drive_core_set_folder_visibility_atomic` RPC-n keresztül állítja az `acl_inherit` értéket és a lokális USER `folder.view ALLOW` ACL-bejegyzéseket. A változás audit- és Drive change eseményt kap.
+- Fájl drag&drop: a fájlikon `copyMove` payloadot használ. CsomagBOX-ra ejtve továbbra is hivatkozásként kerül a boxba; projekt-/Saját Drive mappára ejtve a fájl áthelyeződik.
+- Mappa drag&drop: a mappaikon külön `application/x-dimpro-drive-folder` payloadot kap. A bal oldali mappafában és a táblázatban is másik mappára ejthető. Saját Drive-ban gyökérre is visszahúzható; projekt Drive-ban projektmappák között mozgatható, illetve a Dokumentumtár gyökerére helyezhető.
+- Projektmappa-mozgatás új atomikus `drive_core_move_folder_atomic` RPC-t használ. Megőrzi a mappaazonosítót, a teljes almappa `path` struktúrát egy tranzakcióban írja át, és tiltja a saját mappába/saját leszármazottba mozgatást és a célútvonal-ütközést.
+- Saját Drive mappamozgatás tulajdonosi scope-ban működik és cél-ős lánc ellenőrzéssel tiltja a ciklust.
+- Tervellenőrzési nézet jóváhagyási lánc: ha `Ellenőrzés + Megrendelő + Projektvezető` mind jóváhagyott, a három jelölés kék hátterű fehér pipává válik. Ha a `Beruházási projektvezető` is jóváhagyja, mind a négy fehér pipa zöld körben jelenik meg.
+- Drive UI target: `0.9.22`. Drive Core target: `0.9.4`, migrationCount `11`, bootstrap `drive-core-v094-folder-move-20261007`.
+- V0.9.22 contract: 41/41 PASS. V0.9.21: 42/42 PASS; V0.9.20: 24/24 PASS; V0.9.19: 15/15 PASS; V0.9.18: 26/26 PASS; ProjectGate rich view: 15/15 PASS. Érintett fájlok célzott ESLintje 0 error; TypeScript PASS.
+- Drive Core V0.9.4 végleges read-only DEV migrációs preflight PASS. Source checkpoint készítésekor a migráció még nincs alkalmazva. PROD DENY.

@@ -296,6 +296,45 @@ export async function listDriveFolderAclEntries(projectId: string) {
   }));
 }
 
+export async function getDriveFolderAclConfiguration(projectId: string, folderId: string) {
+  const client = await requireReadyClient();
+  const [folderResult, entriesResult] = await Promise.all([
+    client.from("drive_core_folders").select("id,project_id,acl_inherit,status").eq("project_id", projectId).eq("id", folderId).eq("status", "ACTIVE").maybeSingle(),
+    client.from("drive_core_folder_acl_entries").select("id,project_id,folder_id,principal_type,membership_id,role,permission,effect").eq("project_id", projectId).eq("folder_id", folderId),
+  ]);
+  if (folderResult.error) databaseError("A mappa ACL beállítása nem olvasható.", folderResult.error);
+  if (!folderResult.data) throw new DriveCoreRepositoryError("A DRIVE mappa nem található.", "DRIVE_FOLDER_NOT_FOUND", 404);
+  if (entriesResult.error) databaseError("A mappa ACL bejegyzései nem olvashatók.", entriesResult.error);
+  const entries = (entriesResult.data || []) as DbFolderAclEntry[];
+  return {
+    folderId,
+    aclInherit: folderResult.data.acl_inherit === true,
+    entries: entries.map((row) => ({
+      id: row.id, projectId: row.project_id, folderId: row.folder_id, principalType: row.principal_type,
+      membershipId: row.membership_id, role: row.role, permission: row.permission, effect: row.effect,
+    })),
+  };
+}
+
+export async function setDriveFolderAclConfiguration(projectId: string, folderId: string, aclInherit: boolean, allowedMembershipIds: string[], actorUserId: string) {
+  const client = await requireReadyClient();
+  const ids = [...new Set(allowedMembershipIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  const { data, error } = await client.rpc("drive_core_set_folder_visibility_atomic", {
+    p_project_id: projectId,
+    p_folder_id: folderId,
+    p_acl_inherit: aclInherit,
+    p_allowed_membership_ids: ids,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    const message = String(error.message || "");
+    if (message.includes("DRIVE_FOLDER_ACL_ALLOW_REQUIRED")) throw new DriveCoreRepositoryError("Egyedi mappahozzáféréshez legalább egy engedélyezett projekttag szükséges.", "DRIVE_FOLDER_ACL_ALLOW_REQUIRED", 400);
+    if (message.includes("DRIVE_FOLDER_ACL_MEMBERSHIP_INVALID")) throw new DriveCoreRepositoryError("Az engedélyezett listában érvénytelen vagy inaktív projekttag szerepel.", "DRIVE_FOLDER_ACL_MEMBERSHIP_INVALID", 409);
+    databaseError("A mappa hozzáférési szabálya nem menthető.", error);
+  }
+  return data as { ok: true; folderId: string; aclInherit: boolean; allowedMembershipIds: string[]; entryCount: number };
+}
+
 export async function getDriveDocumentFolderAccessRecord(projectId: string, documentId: string) {
   const client = await requireReadyClient();
   const { data, error } = await client
@@ -435,6 +474,33 @@ export async function updateDriveFolderDisplayName(
   });
   if (error) databaseError("A DRIVE mappa megjelenítési neve nem módosítható.", error);
   return { ok: true as const, folder: mapFolder(data as DbFolder) };
+}
+
+export async function moveDriveFolder(projectId: string, folderId: string, targetParentId: string | null, actorUserId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client.rpc("drive_core_move_folder_atomic", {
+    p_project_id: projectId,
+    p_folder_id: folderId,
+    p_target_parent_id: targetParentId || "",
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    const message = String(error.message || "");
+    if (message.includes("DRIVE_FOLDER_MOVE_SELF_BLOCKED") || message.includes("DRIVE_FOLDER_MOVE_DESCENDANT_BLOCKED")) {
+      throw new DriveCoreRepositoryError("A mappa nem helyezhető saját magába vagy a saját almappájába.", "DRIVE_FOLDER_MOVE_CYCLE_BLOCKED", 409);
+    }
+    if (message.includes("DRIVE_FOLDER_MOVE_TARGET_PATH_EXISTS") || error.code === "23505") {
+      throw new DriveCoreRepositoryError("A célhelyen már létezik ilyen nevű mappa.", "DRIVE_FOLDER_MOVE_TARGET_EXISTS", 409);
+    }
+    if (message.includes("DRIVE_FOLDER_MOVE_TARGET_NOT_FOUND")) {
+      throw new DriveCoreRepositoryError("A célmappa nem található.", "DRIVE_FOLDER_MOVE_TARGET_NOT_FOUND", 404);
+    }
+    if (message.includes("DRIVE_FOLDER_NOT_FOUND")) {
+      throw new DriveCoreRepositoryError("A mozgatandó mappa nem található.", "DRIVE_FOLDER_NOT_FOUND", 404);
+    }
+    databaseError("A DRIVE mappa áthelyezése sikertelen.", error);
+  }
+  return data as { ok: true; idempotent: boolean; folderId: string; previousParentId: string | null; parentId: string | null; previousPath: string; path: string; updatedCount: number };
 }
 
 export async function createDriveDocument(projectId: string, input: Record<string, unknown>, actorUserId: string) {

@@ -783,3 +783,15 @@ Drive UI target `0.9.21`; Drive Core target `0.9.3 / migrationCount 10`. V0.9.21
 #### Drive V0.9.21 aktivált DEV állapot – 2026-10-07
 
 A V0.9.21 fejlesztés DEV-en aktiválva. Source `f8eb69d877edd072ec362ac5be1798eb93c048a1`; BUILD-02 build ID `LPUmPU1eomidEdY8lL9Ck`; artifact SHA-256 `936d5d89bd3fb3d225ddf7b1b6f304c5179996c7c8c2b452bf1a2a211ee98601`. Drive Core V0.9.3 migration APPLY/VERIFY PASS, backup: `/srv/dimpro-dev/backups/drive-v093-link-guard-password/20261007T151543Z`. Aktív runtime `3399`; rollback `3398` online maradt. Publikus smoke PASS, PROD DENY.
+
+### Drive V0.9.22 – személyes törlés, mappaszintű megosztás és mozgatás – 2026-10-07
+
+A Saját Drive törlési jogosultsága levált a projektes `document.delete` permissionről: a központi DIMPRO-fiók saját USER scope-ú fájlhivatkozásait a tulajdonos soft-remove művelettel törölheti. Aktív személyes CsomagBOX-hivatkozás blokkol. A többszörös törlés az új `dimpro_personal_drive_soft_remove_refs_atomic` RPC miatt minden-vagy-semmi tranzakció.
+
+A projektmappákhoz elkészült a Folder ACL Core felhasználói kezelője. Kijelölt mappán a `Mappahozzáférés` gombbal választható a projektjogosultság öröklése vagy a csak kiválasztott aktív projekttagok számára látható mód. Egyedi módban USER `folder.view ALLOW` ACL-ek készülnek; a projektgazda és a módosítást végző tagság kötelező hozzáférést kap. A mappaállapot `CUSTOM/RESTRICTED` vizuális jelölése erősebb lett; a jelszóvédett mappa külön sötétvörös jelölést kap.
+
+A fájl- és mappaikonok közvetlen áthúzása támogatott a bal mappafában és a fájltáblában. A fájl ugyanazzal a payload-dal továbbra is húzható CsomagBOX-ba; mappára ejtéskor mozgatás történik. A projektmappa-mozgatást a V0.9.4 `drive_core_move_folder_atomic` RPC végzi teljes almappapath-frissítéssel és ciklusvédelemmel.
+
+A projekt Drive fájlsor egy kattintása a metaadat/részletező panelt frissíti; dupla kattintás nyitja a nagy jobb oldali fájlmegjelenítőt. A tervellenőrzési jóváhagyási vizualizáció három jóváhagyásnál kék/fehér, a beruházási projektvezető végső jóváhagyásával mind a négy jel zöld körös/fehér állapotba vált.
+
+Drive UI target `0.9.22`; Drive Core target `0.9.4 / migrationCount 11`. V0.9.4 read-only DEV migration preflight PASS; APPLY csak sikeres build után. PROD DENY.

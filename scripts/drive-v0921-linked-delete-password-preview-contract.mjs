@@ -17,7 +17,7 @@ const schema=read("app/lib/drive-core/schema.ts");
 const databaseRepository=read("app/lib/drive-core/databaseRepository.ts");
 const build=read("components/drive/driveBuildInfo.ts");
 let pass=0; const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive UI version is 0.9.21",()=>assert.match(build,/"0\.9\.21"/));
+check("Drive UI remains 0.9.21 or successor",()=>assert.match(build,/"0\.9\.(?:21|22)"/));
 check("delete dependency repository reads project issue attachments",()=>{assert.match(depRepo,/project_issue_attachments/);assert.match(depRepo,/drive_document_id/)});
 check("delete dependency repository returns exact issue reference/title/status",()=>{assert.match(depRepo,/reference:/);assert.match(depRepo,/title:/);assert.match(depRepo,/status:/);assert.match(depRepo,/documentName:/)});
 check("delete dependency repository reads active formal issues",()=>{assert.match(depRepo,/drive_core_document_issues/);assert.match(depRepo,/\.eq\("status", "ISSUED"\)/)});
@@ -58,5 +58,5 @@ check("row controls do not accidentally open preview",()=>assert.match(grid,/clo
 check("details metadata pane uses full card width",()=>{assert.match(css,/\.detailsWorkspace \{[\s\S]*?display: block/);assert.match(css,/\.detailsFieldsPane \{[\s\S]*?width: 100%/)});
 check("preview drawer is a large right side panel",()=>{assert.match(css,/\.previewDrawerOverlay[\s\S]*?justify-content: flex-end/);assert.match(css,/width: min\(68vw, 1120px\)/)});
 check("race-created linked delete is mapped to HTTP conflict semantics",()=>{assert.match(databaseRepository,/DRIVE_DOCUMENT_DELETE_BOX_LINK_BLOCKED/);assert.match(databaseRepository,/409/)});
-check("Drive Core target is 0.9.3 migration 10",()=>{assert.match(schema,/"0\.9\.3"/);assert.match(schema,/MIGRATION_COUNT = 10/)});
+check("Drive Core remains 0.9.3 or successor",()=>{assert.match(schema,/"0\.9\.[34]"/);assert.match(schema,/MIGRATION_COUNT = (?:10|11)/)});
 console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.21 linked-delete guard + password TTL + preview drawer",pass,fail:0,productionAccess:"DENY"},null,2));

@@ -1,6 +1,6 @@
-export const DRIVE_CORE_SCHEMA_VERSION = "0.9.3";
-export const DRIVE_CORE_MIGRATION_COUNT = 10;
-export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v093-link-guard-password-ttl-20261007";
+export const DRIVE_CORE_SCHEMA_VERSION = "0.9.4";
+export const DRIVE_CORE_MIGRATION_COUNT = 11;
+export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v094-folder-move-20261007";
 
 export const DRIVE_CORE_TABLES = [
   "drive_core_schema_meta",

@@ -54,6 +54,8 @@ type Props = {
   onOpenWindowsDocument?: (document: DriveDocument) => void;
   onOpenBoxDocument?: (document: DriveDocument) => void;
   onDownloadDocument?: (document: DriveDocument) => void;
+  onMoveDocumentsToFolder?: (documentIds: string[], targetFolderId: string) => Promise<void> | void;
+  onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => Promise<void> | void;
   newFolderEditorOpen?: boolean;
   newFolderName?: string;
   newFolderSaving?: boolean;
@@ -375,6 +377,25 @@ function isApprovedReviewValue(value: string) {
   return ["igen", "jóváhagyva", "jóváhagyott", "approved", "elfogadva", "elfogadott"].includes(normalized);
 }
 
+type ReviewApprovalChain = {
+  checked: string;
+  customer: string;
+  projectManager: string;
+  investorProjectManager: string;
+};
+
+function reviewApprovalSymbolClass(row: ReviewApprovalChain, step: "checked" | "customer" | "projectManager" | "investorProjectManager") {
+  const checked = isApprovedReviewValue(row.checked);
+  const customer = isApprovedReviewValue(row.customer);
+  const manager = isApprovedReviewValue(row.projectManager);
+  const investor = isApprovedReviewValue(row.investorProjectManager);
+  const firstThreeApproved = checked && customer && manager;
+  const finalApproved = firstThreeApproved && investor;
+  if (finalApproved) return `${styles.reviewSymbol} ${styles.reviewApprovalFinal}`;
+  if (firstThreeApproved && step !== "investorProjectManager") return `${styles.reviewSymbol} ${styles.reviewApprovalProgress}`;
+  return styles.reviewSymbol;
+}
+
 function reviewMetadataValue(metadata: DriveEngineeringMetadata | undefined, key: string) {
   const value = metadata?.extra?.[key];
   return typeof value === "string" ? value.trim() : "";
@@ -504,16 +525,17 @@ function folderSecurityPresentation(folder: DriveFolder) {
     case "PASSWORD":
       return {
         className: styles.folderSecurityPassword,
+        rowClassName: styles.folderSecurityRowPassword,
         title: folder.passwordUnlocked
           ? "Jelszóval védett mappa · feloldva ebben a munkamenetben"
           : "Jelszóval védett mappa · feloldás szükséges",
       };
     case "CUSTOM":
-      return { className: styles.folderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
+      return { className: styles.folderSecurityCustom, rowClassName: styles.folderSecurityRowCustom, title: "Egyedi felhasználói mappajogosultság" };
     case "RESTRICTED":
-      return { className: styles.folderSecurityRestricted, title: "Korlátozott mappajogosultság" };
+      return { className: styles.folderSecurityRestricted, rowClassName: styles.folderSecurityRowRestricted, title: "Korlátozott mappajogosultság" };
     default:
-      return { className: styles.folderSecurityNormal, title: "Normál mappa – projektjogosultság öröklése" };
+      return { className: styles.folderSecurityNormal, rowClassName: "", title: "Normál mappa – projektjogosultság öröklése" };
   }
 }
 
@@ -529,6 +551,8 @@ function FolderTableRow({
   onToggleActionMenu,
   onDownload,
   onDelete,
+  onMoveDocumentsToFolder,
+  onMoveFolderToFolder,
   collapsedColumnIds = [],
 }: {
   folder: DriveFolder;
@@ -542,6 +566,8 @@ function FolderTableRow({
   onToggleActionMenu?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
+  onMoveDocumentsToFolder?: (documentIds: string[], targetFolderId: string) => Promise<void> | void;
+  onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => Promise<void> | void;
   collapsedColumnIds?: string[];
 }) {
   const security = folderSecurityPresentation(folder);
@@ -553,12 +579,24 @@ function FolderTableRow({
     </td>
   );
   const icon = (
-    <span className={`${styles.tableFolderIcon} ${security.className}`} title={security.title}>
+    <span
+      className={`${styles.tableFolderIcon} ${security.className} ${onMoveFolderToFolder ? styles.folderDragHandle : ""}`}
+      title={onMoveFolderToFolder ? `${security.title} · Húzd másik mappába` : security.title}
+      draggable={Boolean(onMoveFolderToFolder)}
+      onPointerDown={(event) => event.stopPropagation()}
+      onDragStart={(event) => {
+        if (!onMoveFolderToFolder) return;
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-dimpro-drive-folder", JSON.stringify({ folderId: folder.id }));
+        event.dataTransfer.setData("text/plain", name);
+      }}
+    >
       <Folder size={16} />
     </span>
   );
   const commonProps = {
-    className: `${styles.tableFolderRow} ${active ? styles.tableFolderRowSelected : ""}`,
+    className: `${styles.tableFolderRow} ${security.rowClassName} ${active ? styles.tableFolderRowSelected : ""}`,
     onClick: onSelect,
     onDoubleClick: onOpen,
     onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
@@ -567,8 +605,31 @@ function FolderTableRow({
         onOpen();
       }
     },
+    onDragOver: (event: ReactDragEvent<HTMLTableRowElement>) => {
+      if (!onMoveDocumentsToFolder && !onMoveFolderToFolder) return;
+      if (!event.dataTransfer.types.includes("application/x-dimpro-drive-document") && !event.dataTransfer.types.includes("application/x-dimpro-drive-folder")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    },
+    onDrop: (event: ReactDragEvent<HTMLTableRowElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const folderRaw = event.dataTransfer.getData("application/x-dimpro-drive-folder");
+      if (folderRaw && onMoveFolderToFolder) {
+        try { const payload = JSON.parse(folderRaw) as { folderId?: string }; if (payload.folderId && payload.folderId !== folder.id) void onMoveFolderToFolder(payload.folderId, folder.id); } catch { /* foreign payload */ }
+        return;
+      }
+      const documentRaw = event.dataTransfer.getData("application/x-dimpro-drive-document");
+      if (documentRaw && onMoveDocumentsToFolder) {
+        try {
+          const payload = JSON.parse(documentRaw) as { documentId?: string; documentIds?: string[] };
+          const ids = Array.isArray(payload.documentIds) && payload.documentIds.length ? payload.documentIds : payload.documentId ? [payload.documentId] : [];
+          if (ids.length) void onMoveDocumentsToFolder([...new Set(ids)], folder.id);
+        } catch { /* foreign payload */ }
+      }
+    },
     tabIndex: 0,
-    "aria-label": name + " mappa. " + security.title + ". Enter vagy dupla kattintás: megnyitás.",
+    "aria-label": name + " mappa. " + security.title + ". Enter vagy dupla kattintás: megnyitás. A mappára fájl vagy mappa ejthető.",
   };
 
   if (view === "simple") {
@@ -942,6 +1003,8 @@ export default function FileGridPanel({
   onOpenWindowsDocument,
   onOpenBoxDocument,
   onDownloadDocument,
+  onMoveDocumentsToFolder,
+  onMoveFolderToFolder,
   newFolderEditorOpen = false,
   newFolderName = "",
   newFolderSaving = false,
@@ -1306,7 +1369,7 @@ export default function FileGridPanel({
     const documentIds = selectedSet.has(document.id) && selectedIds.length > 1
       ? selectedIds
       : [document.id];
-    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.effectAllowed = "copyMove";
     event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({
       documentId: document.id,
       documentIds,
@@ -1618,6 +1681,8 @@ export default function FileGridPanel({
                     onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
                     onDownload={onDownloadFolder ? () => onDownloadFolder(folder) : undefined}
                     onDelete={() => void onDeleteFolder?.(folder)}
+                    onMoveDocumentsToFolder={onMoveDocumentsToFolder}
+                    onMoveFolderToFolder={onMoveFolderToFolder}
                   />
                 ))}
                 {sortedReviewRows.map((row) => (
@@ -1643,8 +1708,8 @@ export default function FileGridPanel({
                           draggable
                           onPointerDown={(event) => event.stopPropagation()}
                           onDragStart={(event) => beginDocumentDrag(event, row.document)}
-                          title="Húzd a fájlt CsomagBOX-ba"
-                          aria-label={`${row.displayName} CsomagBOX-ba húzása`}
+                          title="Húzd mappába vagy CsomagBOX-ba"
+                          aria-label={`${row.displayName} húzása mappába vagy CsomagBOX-ba`}
                         >
                           <FileKindIcon extension={row.document.extension} />
                         </span>
@@ -1662,17 +1727,17 @@ export default function FileGridPanel({
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
                     <td><OverflowTooltipText text={row.effectiveDiscipline || "—"} /></td>
                     <td><OverflowTooltipText text={row.effectiveTopic || "—"} /></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
+                    <td><button type="button" className={reviewApprovalSymbolClass(row, "checked")} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openDetail(row.document, "result")}>{reviewMark(row.result)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.workflow || "Nincs workflow állapot"} onClick={() => openDetail(row.document, "workflow")}>{reviewMark(row.workflow)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.internalNote || "Nincs belső megjegyzés"} onClick={() => openDetail(row.document, "internal")}>{row.internalNote ? "●" : "—"}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.revisionChange || "Nincs revízióváltozás"} onClick={() => openDetail(row.document, "revision")}>{revisionMark(row.revisionChange)}</button></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs jóváhagyás"} onClick={() => openDetail(row.document, "customer")}>{reviewMark(row.customer)}</button></td>
+                    <td><button type="button" className={reviewApprovalSymbolClass(row, "customer")} title={row.customer || "Nincs jóváhagyás"} onClick={() => openDetail(row.document, "customer")}>{reviewMark(row.customer)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.customerObservations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "customer-observations")}>{row.customerObservationCount || "—"}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs belső megjegyzés"} onClick={() => openDetail(row.document, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.projectManager || "Nincs projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "project-manager")}>{reviewMark(row.projectManager)}</button></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.investorProjectManager || "Nincs beruházói projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "investor-project-manager")}>{reviewMark(row.investorProjectManager)}</button></td>
+                    <td><button type="button" className={reviewApprovalSymbolClass(row, "projectManager")} title={row.projectManager || "Nincs projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "project-manager")}>{reviewMark(row.projectManager)}</button></td>
+                    <td><button type="button" className={reviewApprovalSymbolClass(row, "investorProjectManager")} title={row.investorProjectManager || "Nincs beruházói projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "investor-project-manager")}>{reviewMark(row.investorProjectManager)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.lifecycle || "Nincs életciklus állapot"} onClick={() => openDetail(row.document, "lifecycle")}>{row.lifecycle === "Aktuális" ? "✓" : row.lifecycle === "Archív" ? "▣" : row.lifecycle === "Munkaközi" ? "◷" : "—"}</button></td>
                   </tr>
                 ))}
@@ -1740,6 +1805,8 @@ export default function FileGridPanel({
                     onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
                     onDownload={onDownloadFolder ? () => onDownloadFolder(folder) : undefined}
                     onDelete={() => void onDeleteFolder?.(folder)}
+                    onMoveDocumentsToFolder={onMoveDocumentsToFolder}
+                    onMoveFolderToFolder={onMoveFolderToFolder}
                   />
                 ))}
                 {sortedDocuments.map((document) => {
@@ -1756,11 +1823,11 @@ export default function FileGridPanel({
                           <ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} />
                           <span
                             className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
-                            draggable={boxActionsEnabled}
+                            draggable={boxActionsEnabled || Boolean(onMoveDocumentsToFolder)}
                             onPointerDown={(event) => event.stopPropagation()}
                             onDragStart={(event) => beginDocumentDrag(event, document)}
-                            title="Húzd a fájlt CsomagBOX-ba"
-                            aria-label={`${displayName.value} CsomagBOX-ba húzása`}
+                            title="Húzd mappába vagy CsomagBOX-ba"
+                            aria-label={`${displayName.value} húzása mappába vagy CsomagBOX-ba`}
                           ><FileKindIcon extension={document.extension} /></span>
                           <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} />
                           <BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} />
@@ -1851,6 +1918,14 @@ export default function FileGridPanel({
                     active={activeFolderRowId === folder.id}
                     onSelect={() => selectFolderRow(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
+                    canDeleteFolder={canDeleteFolder}
+                    busy={busy}
+                    actionMenuOpen={rowActionMenu === `folder:${folder.id}`}
+                    onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
+                    onDownload={onDownloadFolder ? () => onDownloadFolder(folder) : undefined}
+                    onDelete={() => void onDeleteFolder?.(folder)}
+                    onMoveDocumentsToFolder={onMoveDocumentsToFolder}
+                    onMoveFolderToFolder={onMoveFolderToFolder}
                   />
                 ))}
                 {sortedDocuments.map((document) => {
@@ -1863,11 +1938,11 @@ export default function FileGridPanel({
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
-                        draggable={boxActionsEnabled}
+                        draggable={boxActionsEnabled || Boolean(onMoveDocumentsToFolder)}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => beginDocumentDrag(event, document)}
-                        title="Húzd a fájlt CsomagBOX-ba"
-                        aria-label={`${displayName.value} CsomagBOX-ba húzása`}
+                        title="Húzd mappába vagy CsomagBOX-ba"
+                        aria-label={`${displayName.value} húzása mappába vagy CsomagBOX-ba`}
                       ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
                       {renderColumnCell("engineering", "planNo", <button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? metadata?.planNo || "Tervszám megadása" : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button>)}
                       <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite && metadataActionsEnabled} onEdit={() => openDetail(document, "planTitle")} /></td>

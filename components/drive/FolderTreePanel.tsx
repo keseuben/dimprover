@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { ChevronDown, ChevronRight, EllipsisVertical, Folder, HardDrive, Link2, Pin, Plus, Trash2 } from "lucide-react";
 import type { DriveFolder } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
@@ -26,6 +26,8 @@ type Props = {
   canDeleteFolder?: boolean;
   busy?: boolean;
   onDeleteFolder?: (folder: DriveFolder) => void;
+  onMoveDocumentsToFolder?: (documentIds: string[], targetFolderId: string) => Promise<void> | void;
+  onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => Promise<void> | void;
   responsiveClassName?: string;
 };
 
@@ -40,16 +42,17 @@ function folderSecurityVisual(folder: DriveFolder) {
     case "PASSWORD":
       return {
         className: styles.folderSecurityPassword,
+        rowClassName: styles.folderSecurityRowPassword,
         title: folder.passwordUnlocked
           ? "Jelszóval védett mappa · feloldva ebben a munkamenetben"
           : "Jelszóval védett mappa · feloldás szükséges",
       };
     case "CUSTOM":
-      return { className: styles.folderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
+      return { className: styles.folderSecurityCustom, rowClassName: styles.folderSecurityRowCustom, title: "Egyedi felhasználói mappajogosultság" };
     case "RESTRICTED":
-      return { className: styles.folderSecurityRestricted, title: "Korlátozott mappajogosultság" };
+      return { className: styles.folderSecurityRestricted, rowClassName: styles.folderSecurityRowRestricted, title: "Korlátozott mappajogosultság" };
     default:
-      return { className: styles.folderSecurityNormal, title: "Normál mappa – projektjogosultság öröklése" };
+      return { className: styles.folderSecurityNormal, rowClassName: "", title: "Normál mappa – projektjogosultság öröklése" };
   }
 }
 
@@ -65,6 +68,8 @@ export default function FolderTreePanel({
   canDeleteFolder = false,
   busy = false,
   onDeleteFolder,
+  onMoveDocumentsToFolder,
+  onMoveFolderToFolder,
   responsiveClassName = "",
 }: Props) {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
@@ -188,6 +193,32 @@ export default function FolderTreePanel({
     });
   };
 
+  const acceptsDriveDrop = (event: ReactDragEvent<HTMLElement>) =>
+    event.dataTransfer.types.includes("application/x-dimpro-drive-document")
+    || event.dataTransfer.types.includes("application/x-dimpro-drive-folder");
+
+  const handleFolderDrop = (event: ReactDragEvent<HTMLElement>, targetFolderId: string) => {
+    if (!acceptsDriveDrop(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const folderRaw = event.dataTransfer.getData("application/x-dimpro-drive-folder");
+    if (folderRaw && onMoveFolderToFolder) {
+      try {
+        const payload = JSON.parse(folderRaw) as { folderId?: string };
+        if (payload.folderId && payload.folderId !== targetFolderId) void onMoveFolderToFolder(payload.folderId, targetFolderId);
+      } catch { /* foreign payload */ }
+      return;
+    }
+    const documentRaw = event.dataTransfer.getData("application/x-dimpro-drive-document");
+    if (documentRaw && onMoveDocumentsToFolder) {
+      try {
+        const payload = JSON.parse(documentRaw) as { documentId?: string; documentIds?: string[] };
+        const ids = Array.isArray(payload.documentIds) && payload.documentIds.length ? payload.documentIds : payload.documentId ? [payload.documentId] : [];
+        if (ids.length) void onMoveDocumentsToFolder([...new Set(ids)], targetFolderId);
+      } catch { /* foreign payload */ }
+    }
+  };
+
   return (
     <aside className={styles.panel + " " + responsiveClassName}>
       <header className={styles.panelHeader}>
@@ -204,6 +235,8 @@ export default function FolderTreePanel({
             type="button"
             className={styles.folderTreeSelect + (selectedFolderId === "all" ? " " + styles.folderActive : "")}
             onClick={() => onSelectFolder("all")}
+            onDragOver={(event) => { if (acceptsDriveDrop(event)) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+            onDrop={(event) => handleFolderDrop(event, "all")}
           >
             <HardDrive size={14} />
             <OverflowTooltipText text="Dokumentumtár" className={styles.folderTreeLabel} />
@@ -217,7 +250,7 @@ export default function FolderTreePanel({
           return (
             <div
               key={folder.id}
-              className={styles.folderTreeItem}
+              className={`${styles.folderTreeItem} ${security.rowClassName}`}
               style={{ paddingLeft: depth * 15 }}
               onContextMenu={(event) => {
                 event.preventDefault();
@@ -231,8 +264,27 @@ export default function FolderTreePanel({
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
               ) : <span className={styles.folderTreeTogglePlaceholder} aria-hidden="true" />}
-              <button type="button" className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")} onClick={() => onSelectFolder(folder.id)} aria-label={(folder.displayPath || folder.path) + ". " + security.title}>
-                <span className={styles.folderTreeSecurityIcon + " " + security.className}><Folder size={13} /></span>
+              <button
+                type="button"
+                className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")}
+                onClick={() => onSelectFolder(folder.id)}
+                onDragOver={(event) => { if (acceptsDriveDrop(event)) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+                onDrop={(event) => handleFolderDrop(event, folder.id)}
+                aria-label={(folder.displayPath || folder.path) + ". " + security.title}
+              >
+                <span
+                  className={`${styles.folderTreeSecurityIcon} ${security.className} ${onMoveFolderToFolder ? styles.folderDragHandle : ""}`}
+                  draggable={Boolean(onMoveFolderToFolder)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDragStart={(event) => {
+                    if (!onMoveFolderToFolder) return;
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("application/x-dimpro-drive-folder", JSON.stringify({ folderId: folder.id }));
+                    event.dataTransfer.setData("text/plain", folder.displayName || folder.name);
+                  }}
+                  title={`${security.title}${onMoveFolderToFolder ? " · Húzd másik mappába" : ""}`}
+                ><Folder size={13} /></span>
                 <OverflowTooltipText text={folder.displayName || folder.name} className={styles.folderTreeLabel} />
                 <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
               </button>

@@ -30,7 +30,7 @@ check("restore API requires folder.restore permission",()=>assert.match(restore,
 check("purge API requires folder.purge permission",()=>assert.match(purge,/requireProjectPermission\(request,projectId,"folder\.purge"\)/));
 check("purge queues or runs object cleanup",()=>assert.match(purge,/processDriveObjectCleanup/));
 check("trash repository aggregates archived roots and deleted documents",()=>{assert.match(repo,/status==="ARCHIVED"/);assert.match(repo,/status","DELETED/)});
-check("schema remains Drive Core 0.9.2 or successor",()=>{assert.match(schema,/"0\.9\.[23]"/);assert.match(schema,/MIGRATION_COUNT = (?:9|10)/)});
+check("schema remains Drive Core 0.9.2 or successor",()=>{assert.match(schema,/"0\.9\.[234]"/);assert.match(schema,/MIGRATION_COUNT = (?:9|10|11)/)});
 check("migration creates restore RPCs",()=>{assert.match(sql,/drive_core_restore_document_atomic/);assert.match(sql,/drive_core_restore_folder_tree_atomic/)});
 check("migration creates purge RPCs",()=>{assert.match(sql,/drive_core_purge_document_atomic/);assert.match(sql,/drive_core_purge_folder_tree_atomic/)});
 check("purge cleanup tasks survive version metadata deletion",()=>assert.match(sql,/drop constraint if exists drive_core_object_cleanup_tasks_version_id_fkey/));

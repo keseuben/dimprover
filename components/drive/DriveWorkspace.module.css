@@ -5988,3 +5988,95 @@
   .previewDrawerBody { padding: 6px; }
   .deleteDependencyList article { grid-template-columns: 1fr; }
 }
+
+/* Drive V0.9.22 – stronger folder security + staged review approvals */
+.folderSecurityPassword { color: #8f2026; }
+.folderSecurityRestricted { color: #a33a32; }
+.folderSecurityCustom { color: #5c46a2; }
+.folderSecurityRowPassword { background: #fff0f1 !important; }
+.folderSecurityRowRestricted { background: #fff4f0 !important; }
+.folderSecurityRowCustom { background: #f4f1ff !important; }
+.folderSecurityRowPassword:hover { background: #ffe4e6 !important; }
+.folderSecurityRowRestricted:hover { background: #ffebe5 !important; }
+.folderSecurityRowCustom:hover { background: #ece6ff !important; }
+.folderSecurityRowPassword .folderTreeSecurityIcon,
+.folderSecurityRowPassword .tableFolderIcon { color: #8f2026; }
+.folderSecurityRowRestricted .folderTreeSecurityIcon,
+.folderSecurityRowRestricted .tableFolderIcon { color: #a33a32; }
+.folderSecurityRowCustom .folderTreeSecurityIcon,
+.folderSecurityRowCustom .tableFolderIcon { color: #5c46a2; }
+.reviewApprovalProgress,
+.reviewApprovalFinal {
+  min-width: 22px;
+  width: 22px;
+  min-height: 22px;
+  height: 22px;
+  padding: 0;
+  color: #fff !important;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.24);
+}
+.reviewApprovalProgress { border-radius: 6px; border-color: #1559bb !important; background: #1765d7 !important; }
+.reviewApprovalFinal { border-radius: 50%; border-color: #167744 !important; background: #229653 !important; }
+.reviewApprovalProgress:hover { background: #1257be !important; color: #fff !important; }
+.reviewApprovalFinal:hover { background: #197f46 !important; color: #fff !important; }
+:global(html[data-drive-theme="dark"]) .folderSecurityRowPassword,
+:global([data-theme="dark"]) .folderSecurityRowPassword { background: #3a171d !important; }
+:global(html[data-drive-theme="dark"]) .folderSecurityRowRestricted,
+:global([data-theme="dark"]) .folderSecurityRowRestricted { background: #38211d !important; }
+:global(html[data-drive-theme="dark"]) .folderSecurityRowCustom,
+:global([data-theme="dark"]) .folderSecurityRowCustom { background: #241f3f !important; }
+.folderDragHandle { cursor: grab; }
+.folderDragHandle:active { cursor: grabbing; }
+.folderAccessButton {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; border: 1px solid #cabaf1;
+  border-radius: 7px; background: #f4f1ff; color: #5c46a2; padding: 5px 8px; font-size: var(--drive-font-xs); font-weight: 900; cursor: pointer;
+}
+.folderAccessButton:hover { background: #ece6ff; border-color: #a994df; }
+.folderAccessDialogPanel { width: min(620px, calc(100vw - 28px)); }
+.folderAccessModeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.folderAccessModeGrid > label { display: flex; align-items: flex-start; gap: 8px; border: 1px solid #d7e1ea; border-radius: 9px; padding: 10px; cursor: pointer; background: #fff; }
+.folderAccessModeGrid > label input { margin-top: 2px; }
+.folderAccessModeGrid span strong, .folderAccessModeGrid span small { display: block; }
+.folderAccessModeGrid span small { margin-top: 3px; color: #718397; line-height: 1.35; }
+.folderAccessModeActive { border-color: #8c73cf !important; background: #f5f2ff !important; box-shadow: 0 0 0 2px rgba(92,70,162,.08); }
+.folderAccessMemberList { display: grid; gap: 6px; max-height: 310px; overflow: auto; border: 1px solid #dce5ec; border-radius: 9px; padding: 7px; background: #f8fafc; }
+.folderAccessMemberList > label { display: grid; grid-template-columns: 22px minmax(0,1fr); align-items: center; gap: 8px; border: 1px solid #e0e7ee; border-radius: 7px; background: #fff; padding: 8px 9px; cursor: pointer; }
+.folderAccessMemberList span strong, .folderAccessMemberList span small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folderAccessMemberList span small { margin-top: 2px; color: #718397; font-size: 9px; }
+.folderAccessMemberRequired { background: #edf8f5 !important; border-color: #a9d9ce !important; }
+:global(html[data-drive-theme="dark"]) .folderAccessButton,
+:global([data-theme="dark"]) .folderAccessButton { background: #281f43; border-color: #5e4d91; color: #c7b9ef; }
+:global(html[data-drive-theme="dark"]) .folderAccessModeGrid > label,
+:global([data-theme="dark"]) .folderAccessModeGrid > label,
+:global(html[data-drive-theme="dark"]) .folderAccessMemberList > label,
+:global([data-theme="dark"]) .folderAccessMemberList > label { background: #142a3b; border-color: #365064; }
+:global(html[data-drive-theme="dark"]) .folderAccessMemberList,
+:global([data-theme="dark"]) .folderAccessMemberList { background: #0f2231; border-color: #365064; }
+@media (max-width: 700px) { .folderAccessModeGrid { grid-template-columns: 1fr; } }
+/* V0.9.22 security-state colors must also cover table cells and tree buttons. */
+.tableFolderRow.folderSecurityRowPassword td { background: #fff0f1 !important; }
+.tableFolderRow.folderSecurityRowRestricted td { background: #fff4f0 !important; }
+.tableFolderRow.folderSecurityRowCustom td { background: #f4f1ff !important; }
+.tableFolderRow.folderSecurityRowPassword:hover td { background: #ffe4e6 !important; }
+.tableFolderRow.folderSecurityRowRestricted:hover td { background: #ffebe5 !important; }
+.tableFolderRow.folderSecurityRowCustom:hover td { background: #ece6ff !important; }
+.folderTreeItem.folderSecurityRowPassword .folderTreeSelect { background: #fff0f1; color: #7c2026; }
+.folderTreeItem.folderSecurityRowRestricted .folderTreeSelect { background: #fff4f0; color: #8f3d32; }
+.folderTreeItem.folderSecurityRowCustom .folderTreeSelect { background: #f4f1ff; color: #534096; }
+.folderTreeItem.folderSecurityRowPassword .folderTreeSelect:hover { background: #ffe4e6; }
+.folderTreeItem.folderSecurityRowRestricted .folderTreeSelect:hover { background: #ffebe5; }
+.folderTreeItem.folderSecurityRowCustom .folderTreeSelect:hover { background: #ece6ff; }
+:global(html[data-drive-theme="dark"]) .tableFolderRow.folderSecurityRowPassword td,
+:global([data-theme="dark"]) .tableFolderRow.folderSecurityRowPassword td,
+:global(html[data-drive-theme="dark"]) .folderTreeItem.folderSecurityRowPassword .folderTreeSelect,
+:global([data-theme="dark"]) .folderTreeItem.folderSecurityRowPassword .folderTreeSelect { background: #3a171d !important; color: #f0a8ae; }
+:global(html[data-drive-theme="dark"]) .tableFolderRow.folderSecurityRowRestricted td,
+:global([data-theme="dark"]) .tableFolderRow.folderSecurityRowRestricted td,
+:global(html[data-drive-theme="dark"]) .folderTreeItem.folderSecurityRowRestricted .folderTreeSelect,
+:global([data-theme="dark"]) .folderTreeItem.folderSecurityRowRestricted .folderTreeSelect { background: #38211d !important; color: #e7ad9e; }
+:global(html[data-drive-theme="dark"]) .tableFolderRow.folderSecurityRowCustom td,
+:global([data-theme="dark"]) .tableFolderRow.folderSecurityRowCustom td,
+:global(html[data-drive-theme="dark"]) .folderTreeItem.folderSecurityRowCustom .folderTreeSelect,
+:global([data-theme="dark"]) .folderTreeItem.folderSecurityRowCustom .folderTreeSelect { background: #241f3f !important; color: #c8bdf2; }

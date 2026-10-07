@@ -9,6 +9,7 @@ import {
   Loader2,
   Lock,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import BoxShelf from "./BoxShelf";
 import BottomInspectorResizeHandle from "./BottomInspectorResizeHandle";
@@ -131,6 +132,17 @@ type TrashDialogState = {
   dependencies: DriveDeleteDependency[];
   busy: boolean;
   error: string;
+};
+
+type FolderAccessDialogState = {
+  folderId: string;
+  folderName: string;
+  aclInherit: boolean;
+  memberships: ProjectMembership[];
+  allowedMembershipIds: string[];
+  requiredMembershipIds: string[];
+  error: string;
+  busy: boolean;
 };
 
 type FolderPasswordDialogState = {
@@ -289,6 +301,7 @@ export default function DriveWorkspace({
   const [folderRenameDialog, setFolderRenameDialog] = useState<FolderRenameDialogState | null>(null);
   const [trashDialog, setTrashDialog] = useState<TrashDialogState | null>(null);
   const [folderPasswordDialog, setFolderPasswordDialog] = useState<FolderPasswordDialogState | null>(null);
+  const [folderAccessDialog, setFolderAccessDialog] = useState<FolderAccessDialogState | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
@@ -305,6 +318,7 @@ export default function DriveWorkspace({
   const canIssue = effectivePermissions.includes("document.issue");
   const canConfigureDataLists = effectivePermissions.includes("project.update");
   const canManageFolderPassword = effectivePermissions.includes("project.update");
+  const canManageFolderAccess = effectivePermissions.includes("project.manage_members");
   const canRestoreTrash = effectivePermissions.includes("folder.restore") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
   const canPurgeTrash = effectivePermissions.includes("folder.purge") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
   const securityReady = Boolean(health?.security?.ready);
@@ -943,6 +957,49 @@ export default function DriveWorkspace({
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "A mappavédelem törlése sikertelen.";
       setFolderPasswordDialog((current) => current ? { ...current, busy: false, error: message } : current);
+    }
+  }
+
+  async function openFolderAccessDialog(folder: DriveFolder) {
+    if (!canManageFolderAccess || busy) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(folder.id)}/access`, { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as {
+        ok?: boolean; error?: string; aclInherit?: boolean; allowedMembershipIds?: string[]; requiredMembershipIds?: string[]; memberships?: ProjectMembership[];
+      };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappahozzáférés nem tölthető be.");
+      setFolderAccessDialog({
+        folderId: folder.id, folderName: folder.displayName || folder.name, aclInherit: payload.aclInherit !== false,
+        memberships: payload.memberships || [], allowedMembershipIds: payload.allowedMembershipIds || [], requiredMembershipIds: payload.requiredMembershipIds || [],
+        error: "", busy: false,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappahozzáférés nem tölthető be.");
+    } finally { setBusy(false); }
+  }
+
+  async function saveFolderAccessDialog() {
+    const dialog = folderAccessDialog;
+    if (!dialog || dialog.busy) return;
+    const allowed = [...new Set([...dialog.allowedMembershipIds, ...dialog.requiredMembershipIds])];
+    if (!dialog.aclInherit && !allowed.length) {
+      setFolderAccessDialog((current) => current ? { ...current, error: "Legalább egy projekttagot engedélyezni kell." } : current);
+      return;
+    }
+    setFolderAccessDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.folderId)}/access`, {
+        method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ aclInherit: dialog.aclInherit, allowedMembershipIds: dialog.aclInherit ? [] : allowed }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappahozzáférés nem menthető.");
+      setFolderAccessDialog(null);
+      await load();
+      setNotice(dialog.aclInherit ? "A mappa ismét a projektjogosultságot örökli." : "Egyedi mappahozzáférés mentve.");
+    } catch (caught) {
+      setFolderAccessDialog((current) => current ? { ...current, busy: false, error: caught instanceof Error ? caught.message : "A mappahozzáférés nem menthető." } : current);
     }
   }
 
@@ -2107,6 +2164,57 @@ export default function DriveWorkspace({
     finally { setBusy(false); }
   }
 
+  async function moveDocumentsToFolder(documentIds: string[], targetFolderId: string) {
+    if (!canWrite || busy) return;
+    if (!targetFolderId || targetFolderId === "all") {
+      setError("Projektfájl csak konkrét projektmappába helyezhető. Válassz célmappát.");
+      return;
+    }
+    const ids = [...new Set(documentIds)].filter((id) => (tree?.documents || []).some((document) => document.id === id));
+    if (!ids.length) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      let moved = 0;
+      for (const documentId of ids) {
+        const document = tree?.documents.find((entry) => entry.id === documentId);
+        if (!document || document.folderId === targetFolderId) continue;
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(documentId)}/move`, {
+          method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ targetFolderId }),
+        });
+        const payload = await response.json() as { ok?: boolean; error?: string };
+        if (!response.ok || !payload.ok) throw new Error(payload.error || `${document.name} áthelyezése sikertelen.`);
+        moved += 1;
+      }
+      await load();
+      setSelectedDocumentIds([]);
+      const targetName = tree?.folders.find((folder) => folder.id === targetFolderId)?.displayName || tree?.folders.find((folder) => folder.id === targetFolderId)?.name || "célmappa";
+      setNotice(`${moved} fájl áthelyezve: ${targetName}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A fájlok áthelyezése sikertelen.");
+    } finally { setBusy(false); }
+  }
+
+  async function moveFolderToFolder(folderId: string, targetFolderId: string) {
+    if (!canWrite || busy) return;
+    const folder = tree?.folders.find((entry) => entry.id === folderId);
+    if (!folder) return;
+    const targetParentId = targetFolderId && targetFolderId !== "all" ? targetFolderId : null;
+    if (folder.parentId === targetParentId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(folderId)}`, {
+        method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ targetParentId }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; path?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa áthelyezése sikertelen.");
+      await load();
+      setSelectedFolderId(folderId);
+      setNotice(`Mappa áthelyezve: ${folder.displayName || folder.name}${payload.path ? ` → ${payload.path}` : ""}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappa áthelyezése sikertelen.");
+    } finally { setBusy(false); }
+  }
+
   function openCompare(seedItems?: DriveCompareSeed[]) {
     const validSeeds: DriveCompareSeed[] = [];
     for (const seed of seedItems || []) {
@@ -2509,6 +2617,63 @@ export default function DriveWorkspace({
               <button type="submit" className={styles.dangerButton} disabled={trashDialog.busy || trashDialog.dependencies.length > 0}>
                 {trashDialog.busy ? "Áthelyezés…" : "Lomtárba helyezés"}
               </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {folderAccessDialog && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Mappahozzáférés kezelése">
+          <form className={`${styles.projectCreatePanel} ${styles.folderAccessDialogPanel}`} onSubmit={(event) => { event.preventDefault(); void saveFolderAccessDialog(); }}>
+            <header>
+              <div>
+                <small>DIMPRO Drive · Mappahozzáférés</small>
+                <strong>Megosztás és láthatóság</strong>
+                <span>{folderAccessDialog.folderName}</span>
+              </div>
+              <button type="button" disabled={folderAccessDialog.busy} onClick={() => setFolderAccessDialog(null)} aria-label="Bezárás">×</button>
+            </header>
+            <div className={styles.folderAccessModeGrid}>
+              <label className={folderAccessDialog.aclInherit ? styles.folderAccessModeActive : ""}>
+                <input type="radio" name="folderAccessMode" checked={folderAccessDialog.aclInherit} onChange={() => setFolderAccessDialog((current) => current ? { ...current, aclInherit: true, error: "" } : current)} />
+                <span><strong>Projektjogosultság öröklése</strong><small>Minden projekttag a saját projektszerepköre szerint fér hozzá.</small></span>
+              </label>
+              <label className={!folderAccessDialog.aclInherit ? styles.folderAccessModeActive : ""}>
+                <input type="radio" name="folderAccessMode" checked={!folderAccessDialog.aclInherit} onChange={() => setFolderAccessDialog((current) => current ? { ...current, aclInherit: false, error: "" } : current)} />
+                <span><strong>Csak kiválasztott projekttagok</strong><small>A mappa és almappái csak az engedélyezett személyeknek láthatók.</small></span>
+              </label>
+            </div>
+            {!folderAccessDialog.aclInherit && (
+              <div className={styles.folderAccessMemberList}>
+                {folderAccessDialog.memberships.map((member) => {
+                  const required = folderAccessDialog.requiredMembershipIds.includes(member.id);
+                  const checked = required || folderAccessDialog.allowedMembershipIds.includes(member.id);
+                  return (
+                    <label key={member.id} className={required ? styles.folderAccessMemberRequired : ""}>
+                      <input
+                        type="checkbox" checked={checked} disabled={required || folderAccessDialog.busy}
+                        onChange={(event) => setFolderAccessDialog((current) => current ? {
+                          ...current,
+                          allowedMembershipIds: event.target.checked
+                            ? [...new Set([...current.allowedMembershipIds, member.id])]
+                            : current.allowedMembershipIds.filter((id) => id !== member.id),
+                          error: "",
+                        } : current)}
+                      />
+                      <span><strong>{member.displayName || member.email || "Projekttag"}</strong><small>{member.email || ""} · {projectRoleLabel(member.role)}{required ? " · kötelező hozzáférés" : ""}</small></span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <div className={styles.folderPasswordInfo}>
+              <Users size={18} />
+              <div><strong>Öröklődő láthatóság</strong><span>Ha egy szülőmappa nem látható valakinek, annak almappái sem lesznek láthatók. A projektgazda és a módosítást végző felhasználó nem zárható ki.</span></div>
+            </div>
+            {folderAccessDialog.error && <div className={`${styles.notice} ${styles.noticeError}`}>{folderAccessDialog.error}</div>}
+            <footer>
+              <button type="button" disabled={folderAccessDialog.busy} onClick={() => setFolderAccessDialog(null)}>Mégsem</button>
+              <button type="submit" disabled={folderAccessDialog.busy}>{folderAccessDialog.busy ? "Mentés…" : "Hozzáférés mentése"}</button>
             </footer>
           </form>
         </div>
@@ -2966,6 +3131,12 @@ export default function DriveWorkspace({
             Mappa átnevezése
           </button>
         )}
+        {!trashMode && canManageFolderAccess && selectedFolder && (
+          <button type="button" className={styles.folderAccessButton} onClick={() => void openFolderAccessDialog(selectedFolder)} disabled={busy}>
+            <Users size={13} />
+            Mappahozzáférés
+          </button>
+        )}
         {!trashMode && canManageFolderPassword && selectedFolder && (
           <button
             type="button"
@@ -3021,8 +3192,8 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
-              onOpenDocument={(document) => { closeTableFullscreen(); void openDocument(document); }}
+              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onOpenDocument={(document) => { closeTableFullscreen(); setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}
@@ -3058,6 +3229,8 @@ export default function DriveWorkspace({
               onOpenWindowsDocument={(document) => void openDocumentInWindows(document)}
               onOpenBoxDocument={openDocumentBox}
               onDownloadDocument={(document) => void downloadDocument(document)}
+              onMoveDocumentsToFolder={moveDocumentsToFolder}
+              onMoveFolderToFolder={moveFolderToFolder}
               newFolderEditorOpen={newFolderEditorOpen}
               newFolderName={newFolderName}
               newFolderSaving={newFolderSaving}
@@ -3160,8 +3333,8 @@ export default function DriveWorkspace({
             canWrite={canWrite}
             moveReady={Boolean(health?.workspace?.databaseReady)}
             busy={busy}
-            onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
-            onOpenDocument={(document) => void openDocument(document)}
+            onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+            onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
             onMoveDocument={moveDocument}
             tableZoom={tableZoom}
             selectedDocumentIds={selectedDocumentIds}
@@ -3180,6 +3353,8 @@ export default function DriveWorkspace({
               canDeleteFolder={canDeleteFolder}
               busy={busy}
               onDeleteFolder={deleteFolder}
+              onMoveDocumentsToFolder={moveDocumentsToFolder}
+              onMoveFolderToFolder={moveFolderToFolder}
               responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`}
             />
             <FileGridPanel
@@ -3189,8 +3364,8 @@ export default function DriveWorkspace({
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              onSelectDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
-              onOpenDocument={(document) => void openDocument(document)}
+              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}
@@ -3226,6 +3401,8 @@ export default function DriveWorkspace({
               onOpenWindowsDocument={(document) => void openDocumentInWindows(document)}
               onOpenBoxDocument={openDocumentBox}
               onDownloadDocument={(document) => void downloadDocument(document)}
+              onMoveDocumentsToFolder={moveDocumentsToFolder}
+              onMoveFolderToFolder={moveFolderToFolder}
               newFolderEditorOpen={newFolderEditorOpen}
               newFolderName={newFolderName}
               newFolderSaving={newFolderSaving}

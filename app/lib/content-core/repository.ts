@@ -150,6 +150,36 @@ export async function renameUserContentFolder(input: { userId: string; folderId:
   return result.data as PersonalContentFolderRow;
 }
 
+export async function moveUserContentFolder(input: { userId: string; folderId: string; parentId?: string | null }) {
+  const existing = await getUserContentFolder({ userId: input.userId, folderId: input.folderId });
+  if (!existing) throw new DimproIdentityError("A Saját Drive mappa nem található.", "CONTENT_PERSONAL_FOLDER_NOT_FOUND", 404);
+  const parentId = input.parentId || null;
+  if (parentId === input.folderId) throw new DimproIdentityError("A mappa nem helyezhető saját magába.", "CONTENT_PERSONAL_FOLDER_MOVE_SELF_BLOCKED", 409);
+  if (existing.parent_id === parentId) return existing;
+
+  if (parentId) {
+    let current = await getUserContentFolder({ userId: input.userId, folderId: parentId });
+    if (!current) throw new DimproIdentityError("A célmappa nem található a Saját Drive-ban.", "CONTENT_PERSONAL_FOLDER_TARGET_NOT_FOUND", 404);
+    const visited = new Set<string>();
+    while (current && !visited.has(current.id)) {
+      if (current.id === input.folderId) throw new DimproIdentityError("A mappa nem helyezhető a saját almappájába.", "CONTENT_PERSONAL_FOLDER_MOVE_DESCENDANT_BLOCKED", 409);
+      visited.add(current.id);
+      current = current.parent_id ? await getUserContentFolder({ userId: input.userId, folderId: current.parent_id }) : null;
+    }
+  }
+
+  const result = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_personal_folders")
+    .update({ parent_id: parentId, updated_at: new Date().toISOString() })
+    .eq("id", input.folderId)
+    .eq("owner_user_id", input.userId)
+    .eq("status", "ACTIVE")
+    .select(PERSONAL_FOLDER_SELECT)
+    .single();
+  if (result.error) personalFolderError(result.error.code === "23505" ? "A célmappában már létezik ilyen nevű mappa." : "A Saját Drive mappa nem helyezhető át.", result.error);
+  return result.data as PersonalContentFolderRow;
+}
+
 export async function moveUserContentRef(input: { userId: string; refId: string; folderId?: string | null }) {
   const folderId = input.folderId || null;
   if (folderId) {
@@ -192,6 +222,85 @@ export async function getContentCoreReadiness() {
     objectsReady: !objects.error,
     refsReady: !refs.error,
   };
+}
+
+
+export type PersonalContentDeleteDependency = {
+  refId: string;
+  displayName: string;
+  kind: "BOX";
+  reference: string;
+  title: string;
+  status: string;
+};
+
+export async function listUserContentDeleteDependencies(input: { userId: string; refIds: string[] }) {
+  const refIds = [...new Set(input.refIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!refIds.length) return [] as PersonalContentDeleteDependency[];
+  const db = getDimproIdentitySupabaseClient();
+  const refsResult = await db.from("dimpro_content_refs")
+    .select("id,display_name")
+    .eq("owner_type", "USER")
+    .eq("owner_user_id", input.userId)
+    .eq("status", "ACTIVE")
+    .in("id", refIds);
+  if (refsResult.error) dbError("A Saját Drive törlési előellenőrzése sikertelen.", refsResult.error);
+  const refName = new Map(((refsResult.data || []) as Array<{ id: string; display_name: string }>).map((row) => [row.id, row.display_name]));
+  if (!refName.size) return [] as PersonalContentDeleteDependency[];
+
+  const itemResult = await db.from("dimpro_personal_drive_box_items")
+    .select("id,box_id,content_ref_id")
+    .eq("owner_user_id", input.userId)
+    .in("content_ref_id", [...refName.keys()]);
+  if (itemResult.error) dbError("A Saját Drive CsomagBOX-kapcsolatai nem ellenőrizhetők.", itemResult.error);
+  const items = (itemResult.data || []) as Array<{ id: string; box_id: string; content_ref_id: string }>;
+  if (!items.length) return [] as PersonalContentDeleteDependency[];
+
+  const boxIds = [...new Set(items.map((item) => item.box_id))];
+  const boxResult = await db.from("dimpro_personal_drive_boxes")
+    .select("id,name,lifecycle_status,status")
+    .eq("owner_user_id", input.userId)
+    .eq("status", "ACTIVE")
+    .in("id", boxIds);
+  if (boxResult.error) dbError("A Saját Drive CsomagBOX állapota nem ellenőrizhető.", boxResult.error);
+  const boxes = new Map(((boxResult.data || []) as Array<{ id: string; name: string; lifecycle_status: string; status: string }>).map((row) => [row.id, row]));
+
+  return items.flatMap((item): PersonalContentDeleteDependency[] => {
+    const box = boxes.get(item.box_id);
+    if (!box) return [];
+    return [{
+      refId: item.content_ref_id,
+      displayName: refName.get(item.content_ref_id) || "Fájl",
+      kind: "BOX",
+      reference: box.name || box.id,
+      title: "Saját Drive CsomagBOX",
+      status: box.lifecycle_status || box.status || "ACTIVE",
+    }];
+  });
+}
+
+export async function softRemoveUserContentRefs(input: { userId: string; refIds: string[] }) {
+  const refIds = [...new Set(input.refIds.map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!refIds.length) throw new DimproIdentityError("Legalább egy Saját Drive fájl kijelölése kötelező.", "PERSONAL_DRIVE_DELETE_SELECTION_REQUIRED", 400);
+  if (refIds.length > 500) throw new DimproIdentityError("Egyszerre legfeljebb 500 Saját Drive fájl törölhető.", "PERSONAL_DRIVE_DELETE_LIMIT", 400);
+  const result = await getDimproIdentitySupabaseClient().rpc("dimpro_personal_drive_soft_remove_refs_atomic", {
+    p_owner_user_id: input.userId,
+    p_ref_ids: refIds,
+  });
+  if (result.error) {
+    const marker = [result.error.code, result.error.message, result.error.details, result.error.hint].filter(Boolean).join(" ");
+    if (marker.includes("PERSONAL_DRIVE_DELETE_DEPENDENCY_BLOCKED")) {
+      throw new DimproIdentityError("A fájl nem törölhető, mert aktív CsomagBOX-kapcsolata van.", "PERSONAL_DRIVE_DELETE_DEPENDENCY_BLOCKED", 409);
+    }
+    if (marker.includes("PERSONAL_DRIVE_DELETE_SCOPE_MISMATCH")) {
+      throw new DimproIdentityError("A kijelölt Saját Drive fájlok egy része nem található vagy nem a saját tárhelyedhez tartozik.", "PERSONAL_DRIVE_DELETE_SCOPE_MISMATCH", 403);
+    }
+    if (marker.includes("PERSONAL_DRIVE_DELETE_SELECTION_INVALID")) {
+      throw new DimproIdentityError("Egyszerre 1–500 Saját Drive fájl törölhető.", "PERSONAL_DRIVE_DELETE_SELECTION_INVALID", 400);
+    }
+    dbError("A Saját Drive fájlok nem távolíthatók el.", result.error);
+  }
+  return result.data as { ok: true; removedIds: string[]; removedCount: number; physicalObjectDeleted: false };
 }
 
 export async function findContentObjectByHash(input: { sha256: string; sizeBytes: number }) {
