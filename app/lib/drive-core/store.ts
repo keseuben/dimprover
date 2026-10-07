@@ -117,3 +117,10 @@ export type {
   DriveReviewDecision,
   DriveTechnicalAvailability,
 } from "./lifecycle";
+
+export {
+  listDriveTrash,
+  purgeDriveTrashItem,
+  restoreDriveTrashItem,
+  type DriveTrashItem,
+} from "./trashRepository";

@@ -26,6 +26,7 @@ type Props = {
   onHoverOpen: () => void;
   onHoverLeave: () => void;
   onNavigate: (target: DriveNavigationTarget) => void;
+  trashEnabled?: boolean;
 };
 
 export default function DriveNavigationRail({
@@ -35,6 +36,7 @@ export default function DriveNavigationRail({
   onHoverOpen,
   onHoverLeave,
   onNavigate,
+  trashEnabled = false,
 }: Props) {
   const itemClass = (target: DriveNavigationTarget) =>
     `${styles.railButton} ${activeTarget === target ? styles.railActive : ""}`;
@@ -82,7 +84,7 @@ export default function DriveNavigationRail({
       <button type="button" className={itemClass("boxes")} onClick={() => onNavigate("boxes")} title="CsomagBOX">
         <Box size={18} />
       </button>
-      <button type="button" className={`${styles.railButton} ${styles.railDisabled}`} disabled title="Lomtár nézet – hamarosan">
+      <button type="button" className={trashEnabled ? itemClass("trash") : `${styles.railButton} ${styles.railDisabled}`} disabled={!trashEnabled} onClick={() => trashEnabled && onNavigate("trash")} title={trashEnabled ? "Lomtár" : "Saját Drive Lomtár – későbbi fázis"}>
         <Archive size={18} />
       </button>
 

@@ -47,6 +47,7 @@ type Props = {
   selectedWorkspaceType: DriveWorkspaceType;
   pinned: boolean;
   activeTarget: DriveNavigationTarget;
+  trashEnabled?: boolean;
   theme: DriveTheme;
   onThemeChange: (theme: DriveTheme) => void;
   onWorkspaceChange: (workspaceId: string) => void;
@@ -83,6 +84,7 @@ export default function FloatingProjectBoard({
   selectedWorkspaceType,
   pinned,
   activeTarget,
+  trashEnabled = false,
   theme,
   onThemeChange,
   onWorkspaceChange,
@@ -255,8 +257,8 @@ export default function FloatingProjectBoard({
           <button type="button" className={projectMode ? navClass("boxes") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("boxes")} title={projectMode ? "CsomagBOX" : "A személyes CsomagBOX későbbi fázis"}>
             <Box size={16} /> CsomagBOX
           </button>
-          <button type="button" className={styles.boardNavDisabled} disabled title="Lomtár nézet – hamarosan">
-            <Archive size={16} /> <span>Lomtár</span><small>hamarosan</small>
+          <button type="button" className={projectMode && trashEnabled ? navClass("trash") : styles.boardNavDisabled} disabled={!projectMode || !trashEnabled} onClick={() => projectMode && trashEnabled && onNavigate("trash")} title={projectMode && trashEnabled ? "Lomtár" : projectMode ? "Nincs Lomtár-hozzáférés" : "Saját Drive Lomtár – későbbi fázis"}>
+            <Archive size={16} /> Lomtár
           </button>
         </div>
 

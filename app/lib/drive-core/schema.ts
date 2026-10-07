@@ -1,6 +1,6 @@
-export const DRIVE_CORE_SCHEMA_VERSION = "0.9.1";
-export const DRIVE_CORE_MIGRATION_COUNT = 8;
-export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v091-folder-trash-20261003";
+export const DRIVE_CORE_SCHEMA_VERSION = "0.9.2";
+export const DRIVE_CORE_MIGRATION_COUNT = 9;
+export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v092-trash-restore-purge-20261007";
 
 export const DRIVE_CORE_TABLES = [
   "drive_core_schema_meta",

@@ -3825,3 +3825,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Build ID `8xyC6Iwo4SKO7cZoeB4HN`; artifact SHA-256 `e66a4dca3a2e10ef32dc95978a592feaeea586facef4d7130dfc2e5f2f362970`.
 - Aktív DEV runtime `dimpro-drive-v0919-folder-delete-4bb76ee58-p3397`; előző V0.9.18 / 3396 online rollback.
 - Public smoke PASS; AUTH migrationCount 10; restart 0; error log 0 byte; PROD DENY.
+
+### Drive V0.9.20 – teljes projekt Lomtár + mappavédelem pontosítás + kontextusos törlés – 2026-10-07
+
+- A bal oldali Drive navigációban a `Lomtár` projektmunkatérben aktívvá vált, ha a felhasználónak `folder.restore` jogosultsága van. Saját Drive-ban a projekt-Lomtár funkció nem jelenik meg aktívként.
+- Új projekt Lomtár lista jeleníti meg a soft-delete állapotú gyökérmappákat és külön törölt dokumentumokat, eredeti útvonallal, törlési időponttal, elemszámmal és mérettel.
+- Lomtár visszaállítás: `folder.restore` jogosultság szükséges. Mappánál a teljes archivált almappafa és a benne soft-delete dokumentumok állnak vissza.
+- Végleges törlés: `folder.purge` jogosultság szükséges és a felhasználónak pontosan be kell írnia: `VÉGLEGES TÖRLÉS`.
+- Végleges törlésnél az S3 objektumok előbb takarítási queue-ba kerülnek, majd a Drive metaadat purging történik; a cleanup task a verzió-metaadat törlése után is megmarad és a meglévő objektumtakarítási motor feldolgozza.
+- Aktív vagy történeti Project Issue / hibajegy mellékletkapcsolat esetén a végleges törlés blokkolva van, hogy ne keletkezzen törött szakmai hivatkozás.
+- Drive Core új célállapot: `0.9.2`, migrationCount `9`, bootstrap `drive-core-v092-trash-restore-purge-20261007`.
+- Új atomic RPC-k: dokumentum visszaállítás, mappafa visszaállítás, dokumentum purge, mappafa purge.
+- A felső Dokumentumtár `Törlés` gomb kontextusérzékeny lett: dokumentum-checkbox kijelölés mellett a középső táblázatban külön kijelölt mappasort is Lomtárba tud helyezni. A pusztán megnyitott aktuális mappa nem törlődik véletlenül a felső gombbal.
+- A mappajelszó-védelem UI pontosítva: a védelem időtartama `Határozatlan · kikapcsolásig`.
+- A korábbi `Feloldás érvényessége` mező új neve `Feloldás megjegyzési ideje`; a 30 perc–24 óra érték csak azt szabályozza, sikeres jelszómegadás után meddig nem kérjük újra a jelszót az adott böngésző/munkamenetben.
+- A jelszó maga nem jár le 2 óra után. A backend továbbra is 5–1440 perces feloldási TTL-t használ, a jelszórekordnak nincs automatikus lejárati ideje.
+- Drive V0.9.20 contract: 24/24 PASS; V0.9.19 regresszió PASS; TypeScript és célzott ESLint PASS.
+- Migráció read-only DEV preflight PASS: Drive Core 0.9.1 / migrationCount 8 → V0.9.2 candidate, PROD DENY.
+- Teljes repository lint baseline: 25 error / 107 warning, változatlan; a V0.9.20 módosított fájlok között nincs lint error.

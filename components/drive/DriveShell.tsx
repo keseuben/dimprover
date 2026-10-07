@@ -301,6 +301,7 @@ export default function DriveShell({
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
 
   const handleDriveNavigation = useCallback((target: DriveNavigationTarget) => {
+    if (target === "trash" && selectedWorkspace?.type !== "PROJECT") return;
     setActiveNavigation(target);
     setNavigationRequest((current) => ({
       id: current.id + 1,
@@ -308,7 +309,7 @@ export default function DriveShell({
       folderId: target === "incoming" ? provisioning?.incomingDropFolder?.id : undefined,
     }));
     closeBoardImmediately();
-  }, [closeBoardImmediately, provisioning?.incomingDropFolder?.id]);
+  }, [closeBoardImmediately, provisioning?.incomingDropFolder?.id, selectedWorkspace?.type]);
 
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId);
@@ -435,6 +436,7 @@ export default function DriveShell({
         onHoverOpen={openBoardSoon}
         onHoverLeave={closeBoardSoon}
         onNavigate={handleDriveNavigation}
+        trashEnabled={Boolean(selectedProject?.permissions?.includes("folder.restore"))}
       />
       <FloatingProjectBoard
         workspaceOptions={workspaceOptions}
@@ -442,6 +444,7 @@ export default function DriveShell({
         selectedWorkspaceType={selectedWorkspace?.type || "PROJECT"}
         pinned={boardPinned}
         activeTarget={activeNavigation}
+        trashEnabled={Boolean(selectedProject?.permissions?.includes("folder.restore"))}
         theme={theme}
         onThemeChange={handleThemeChange}
         onWorkspaceChange={handleWorkspaceChange}

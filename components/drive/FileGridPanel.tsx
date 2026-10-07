@@ -1325,12 +1325,15 @@ export default function FileGridPanel({
     setInternalSelectedIds((current) => current.filter((id) => available.has(id)));
   }, [documents, selectedDocumentIds]);
 
+  const activeFolderRow = childFolders.find((folder) => folder.id === activeFolderRowId) || null;
+  const selectFolderRow = (folderId: string) => { setSelectedIds([]); setActiveFolderRowId(folderId); };
   const selectDocumentRow = (document: DriveDocument) => {
     setActiveFolderRowId("");
     onSelectDocument(document);
   };
 
   const toggleDocumentSelection = (documentId: string) => {
+    setActiveFolderRowId("");
     setSelectedIds((current) => current.includes(documentId)
       ? current.filter((id) => id !== documentId)
       : [...current, documentId]);
@@ -1349,8 +1352,9 @@ export default function FileGridPanel({
   };
 
   const deleteSelected = async () => {
-    if (!canDelete || !onDeleteSelected || !selectedIds.length || busy) return;
-    await onDeleteSelected(selectedIds);
+    if (busy) return;
+    if (selectedIds.length && canDelete && onDeleteSelected) { await onDeleteSelected(selectedIds); return; }
+    if (!selectedIds.length && activeFolderRow && canDeleteFolder && onDeleteFolder) await onDeleteFolder(activeFolderRow);
   };
 
   const resetBulkForm = () => setBulkForm({
@@ -1439,11 +1443,17 @@ export default function FileGridPanel({
             disabled={!visibleSelectionIds.length}
             aria-label="Látható fájlok kijelölése"
           />
-          <span>{selectedIds.length} kijelölt</span>
+          <span>{selectedIds.length ? `${selectedIds.length} fájl kijelölve` : activeFolderRow ? "1 mappa kijelölve" : "0 kijelölt"}</span>
         </label>
-        <button type="button" disabled={!selectedIds.length || busy} onClick={() => setSelectedIds([])} title="Kijelölés törlése">Kijelölés törlése</button>
-        {canDelete && onDeleteSelected && (
-          <button type="button" className={styles.fileDeleteSelected} disabled={!selectedIds.length || busy} onClick={() => void deleteSelected()} title="Kijelölt dokumentumok lomtárba helyezése">
+        <button type="button" disabled={(!selectedIds.length && !activeFolderRow) || busy} onClick={() => { setSelectedIds([]); setActiveFolderRowId(""); }} title="Kijelölés törlése">Kijelölés törlése</button>
+        {((canDelete && onDeleteSelected) || (canDeleteFolder && onDeleteFolder)) && (
+          <button
+            type="button"
+            className={styles.fileDeleteSelected}
+            disabled={(!selectedIds.length && !activeFolderRow) || busy || (selectedIds.length > 0 && (!canDelete || !onDeleteSelected)) || (!selectedIds.length && Boolean(activeFolderRow) && (!canDeleteFolder || !onDeleteFolder))}
+            onClick={() => void deleteSelected()}
+            title={selectedIds.length ? "Kijelölt dokumentumok Lomtárba helyezése" : activeFolderRow ? "Kijelölt mappa Lomtárba helyezése" : "Jelölj ki dokumentumot vagy mappasort"}
+          >
             <Trash2 size={12} /> Törlés
           </button>
         )}
@@ -1598,7 +1608,7 @@ export default function FileGridPanel({
                     view="review"
                     collapsedColumnIds={hiddenColumnsByView.review}
                     active={activeFolderRowId === folder.id}
-                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onSelect={() => selectFolderRow(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
                     canDeleteFolder={canDeleteFolder}
                     busy={busy}
@@ -1720,7 +1730,7 @@ export default function FileGridPanel({
                     view="simple"
                     collapsedColumnIds={hiddenColumnsByView.simple}
                     active={activeFolderRowId === folder.id}
-                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onSelect={() => selectFolderRow(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
                     canDeleteFolder={canDeleteFolder}
                     busy={busy}
@@ -1837,7 +1847,7 @@ export default function FileGridPanel({
                     view="engineering"
                     collapsedColumnIds={hiddenColumnsByView.engineering}
                     active={activeFolderRowId === folder.id}
-                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onSelect={() => selectFolderRow(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
                   />
                 ))}

@@ -19,6 +19,7 @@ import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
+import TrashPanel from "./TrashPanel";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
@@ -244,6 +245,7 @@ export default function DriveWorkspace({
   const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
   const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [trashMode, setTrashMode] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -287,6 +289,8 @@ export default function DriveWorkspace({
   const canIssue = effectivePermissions.includes("document.issue");
   const canConfigureDataLists = effectivePermissions.includes("project.update");
   const canManageFolderPassword = effectivePermissions.includes("project.update");
+  const canRestoreTrash = effectivePermissions.includes("folder.restore") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
+  const canPurgeTrash = effectivePermissions.includes("folder.purge") || membershipRole === "OWNER" || membershipRole === "PROJECT_MANAGER";
   const securityReady = Boolean(health?.security?.ready);
 
   const closeTableFullscreen = useCallback(() => {
@@ -575,6 +579,14 @@ export default function DriveWorkspace({
 
   useEffect(() => {
     if (!navigationRequest?.id) return;
+    if (navigationRequest.target === "trash") {
+      setTrashMode(true);
+      setFavoriteOnly(false);
+      setSelectedDocumentIds([]);
+      setQuery("");
+      return;
+    }
+    setTrashMode(false);
     if (navigationRequest.target === "favorites") {
       setFavoriteOnly(true);
       setSelectedFolderId("all");
@@ -2485,7 +2497,7 @@ export default function DriveWorkspace({
                     />
                   </label>
                   <label>
-                    Feloldás érvényessége
+                    Feloldás megjegyzési ideje
                     <select
                       value={folderPasswordDialog.unlockTtlMinutes}
                       onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, unlockTtlMinutes: Number(event.target.value) } : current)}
@@ -2496,7 +2508,13 @@ export default function DriveWorkspace({
                       <option value={480}>8 óra</option>
                       <option value={1440}>24 óra</option>
                     </select>
+                    <small className={styles.folderPasswordTtlHint}>Ez nem a jelszó érvényessége. Sikeres feloldás után ennyi ideig nem kérjük újra a jelszót ebben a böngészőben.</small>
                   </label>
+                </div>
+                <div className={styles.folderProtectionDuration}>
+                  <span>Védelem időtartama</span>
+                  <strong>Határozatlan · kikapcsolásig</strong>
+                  <small>A mappa jelszavas védelme nem jár le 2 óra után. Csak a sikeres feloldás megjegyzési ideje jár le.</small>
                 </div>
                 <div className={styles.revisionIssueHint}>
                   <strong>Biztonsági szabály</strong>
@@ -2832,14 +2850,14 @@ export default function DriveWorkspace({
 )}
 
       <div className={styles.breadcrumb}>
-        <span>Dokumentumtár</span>
-        {breadcrumbParts.map((part, index) => <span key={`${part}-${index}`}>› <strong>{part}</strong></span>)}
-        {canWrite && selectedFolder && (
+        <span>{trashMode ? "Lomtár" : "Dokumentumtár"}</span>
+        {!trashMode && breadcrumbParts.map((part, index) => <span key={`${part}-${index}`}>› <strong>{part}</strong></span>)}
+        {!trashMode && canWrite && selectedFolder && (
           <button type="button" className={styles.folderRenameButton} onClick={() => void renameSelectedFolder()} disabled={busy}>
             Mappa átnevezése
           </button>
         )}
-        {canManageFolderPassword && selectedFolder && (
+        {!trashMode && canManageFolderPassword && selectedFolder && (
           <button
             type="button"
             className={styles.folderProtectionButton}
@@ -3015,7 +3033,9 @@ export default function DriveWorkspace({
             ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` }
             : undefined}
       >
-        {compareActive ? (
+        {trashMode ? (
+          <TrashPanel projectId={projectId} canRestore={canRestoreTrash} canPurge={canPurgeTrash} onChanged={() => void load()} />
+        ) : compareActive ? (
           <CompareWorkspace
             projectId={projectId}
             documents={tree?.documents || []}

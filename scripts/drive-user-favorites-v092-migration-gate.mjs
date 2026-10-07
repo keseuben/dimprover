@@ -116,7 +116,7 @@ function favoriteCount() {
   if (query("select to_regclass('public.drive_core_user_favorites') is not null;") !== "t") return 0;
   return Number(query("select count(*) from public.drive_core_user_favorites;") || 0);
 }
-function coreReady(v){return v.schemaVersion==="0.9.1"&&Number(v.migrationCount)===8&&v.bootstrapId==="drive-core-v091-folder-trash-20261003";}
+function coreReady(v){return (v.schemaVersion==="0.9.1"&&Number(v.migrationCount)===8&&v.bootstrapId==="drive-core-v091-folder-trash-20261003")||(v.schemaVersion==="0.9.2"&&Number(v.migrationCount)===9&&v.bootstrapId==="drive-core-v092-trash-restore-purge-20261007");}
 function targetReady(core,tables,meta){
   return coreReady(core)
     && tables.favoritesTable===true
@@ -152,7 +152,7 @@ const beforeMeta=addonMeta();
 const beforeCounts=counts();
 
 if(mode==="preflight"){
-  if(!coreReady(beforeCore)) fail("CORE_V091_REQUIRED","Drive Core 0.9.1 must remain active",{core:beforeCore});
+  if(!coreReady(beforeCore)) fail("CORE_V091_REQUIRED","Drive Core 0.9.1+ must remain active",{core:beforeCore});
   console.log(JSON.stringify({ok:true,mode,databaseHost:db.host,projectRef:expectedRef,productionAccess:"DENY",migration:migrationRel,migrationSha256:actualSha,alreadyApplied:targetReady(beforeCore,beforeTables,beforeMeta),core:beforeCore,addonTables:beforeTables,addonMeta:beforeMeta,rowCounts:beforeCounts,favoriteRows:favoriteCount(),requiredApproval:approvalPhrase,destructiveActionsPerformed:false},null,2));
   process.exit(0);
 }
@@ -169,7 +169,7 @@ if(targetReady(beforeCore,beforeTables,beforeMeta)){
   console.log(JSON.stringify({ok:true,mode,alreadyApplied:true,core:beforeCore,addonMeta:beforeMeta,rowCounts:beforeCounts,favoriteRows:favoriteCount(),integrity,productionAccess:"DENY"},null,2));
   process.exit(0);
 }
-if(!coreReady(beforeCore)) fail("UNEXPECTED_CORE_SCHEMA","Migration start marker is not Drive Core 0.9.1",{core:beforeCore});
+if(!coreReady(beforeCore)) fail("UNEXPECTED_CORE_SCHEMA","Migration start marker is not a supported Drive Core baseline",{core:beforeCore});
 
 const backupDir=join(backupRoot,stamp());
 mkdirSync(backupDir,{recursive:true,mode:0o700}); chmodSync(backupDir,0o700);

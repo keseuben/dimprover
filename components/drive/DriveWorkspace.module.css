@@ -5745,3 +5745,45 @@
 :global(html[data-drive-theme="dark"]) .folderTreeActionButton:hover,:global([data-theme="dark"]) .folderTreeActionButton:hover { background: #24394b; color: #e5eef5; }
 :global(html[data-drive-theme="dark"]) .folderTreeActionMenu,:global([data-theme="dark"]) .folderTreeActionMenu { border-color: #334b5f; background: #13283a; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
 :global(html[data-drive-theme="dark"]) .folderTreeActionDanger,:global([data-theme="dark"]) .folderTreeActionDanger { color: #f0a0a0; }
+
+/* Drive V0.9.20 – Trash workspace */
+.trashWorkspace { grid-column: 1 / -1; grid-row: 1 / -1; min-width: 0; min-height: 0; overflow: auto; background: #fff; padding: 14px; }
+.trashHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.trashHeader > div { display:flex; align-items:center; gap:9px; min-width:0; }
+.trashHeader > div > span { width:34px; height:34px; display:grid; place-items:center; border-radius:9px; background:#edf3f8; color:#506a82; }
+.trashHeader strong { display:block; color:#203a53; font-size:14px; }
+.trashHeader small { display:block; margin-top:2px; color:#71869a; font-size:var(--drive-font-xs); }
+.trashHeader > button { border:1px solid #d4e0ea; background:#fff; color:#49637b; border-radius:7px; min-height:30px; padding:0 10px; display:inline-flex; align-items:center; gap:6px; font-weight:800; font-size:var(--drive-font-xs); cursor:pointer; }
+.trashWarning { display:flex; gap:9px; align-items:flex-start; border:1px solid #f0d9a4; background:#fff8e9; color:#6f531a; border-radius:8px; padding:9px 11px; margin-bottom:12px; }
+.trashWarning strong,.trashWarning span { display:block; } .trashWarning span { margin-top:2px; font-size:var(--drive-font-xs); color:#806832; }
+.trashList { display:grid; gap:7px; }
+.trashItem { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; align-items:center; gap:10px; border:1px solid #dfe7ee; border-radius:8px; background:#fbfdff; padding:8px 10px; }
+.trashItemIcon { width:30px; height:30px; display:grid; place-items:center; border-radius:7px; background:#edf3f8; color:#667f96; }
+.trashItemMain { min-width:0; } .trashItemMain strong,.trashItemMain span,.trashItemMain small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trashItemMain strong { color:#29445f; font-size:var(--drive-font-sm); } .trashItemMain span { margin-top:2px; color:#71869a; font-size:var(--drive-font-xs); } .trashItemMain small { margin-top:2px; color:#95a4b2; font-size:9px; }
+.trashItemMeta { display:flex; gap:5px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.trashItemMeta span { border:1px solid #dce5ed; border-radius:6px; background:#fff; color:#60758a; padding:4px 6px; font-size:9px; font-weight:800; white-space:nowrap; }
+.trashItemActions { display:flex; align-items:center; gap:5px; }
+.trashItemActions button { border:1px solid #cfdae4; background:#fff; color:#46627c; border-radius:6px; min-height:28px; padding:0 8px; display:inline-flex; align-items:center; gap:5px; font-size:var(--drive-font-xs); font-weight:800; cursor:pointer; }
+.trashItemActions button:disabled { opacity:.45; cursor:not-allowed; } .trashItemActions button:hover:not(:disabled) { background:#edf5ff; border-color:#9fbee0; }
+.trashItemActions .trashPurgeButton { color:#b13f3f; border-color:#e7c5c5; } .trashItemActions .trashPurgeButton:hover:not(:disabled) { background:#fff0f0; border-color:#e1a7a7; }
+.trashEmpty { min-height:220px; display:grid; place-items:center; align-content:center; gap:8px; color:#8091a2; text-align:center; } .trashEmpty strong { color:#536a80; } .trashEmpty span { font-size:var(--drive-font-xs); }
+.trashPurgeDialog { width:min(520px,calc(100vw - 28px)); }
+.trashPurgeDanger { display:flex; gap:9px; align-items:flex-start; border:1px solid #efb2b2; background:#fff1f1; color:#9f3030; border-radius:8px; padding:10px; }
+.trashPurgeDanger strong,.trashPurgeDanger span { display:block; } .trashPurgeDanger span { margin-top:3px; font-size:var(--drive-font-xs); color:#a65454; }
+:global(html[data-drive-theme="dark"]) .trashWorkspace,:global([data-theme="dark"]) .trashWorkspace { background:#0e2030; }
+:global(html[data-drive-theme="dark"]) .trashHeader strong,:global([data-theme="dark"]) .trashHeader strong { color:#e3edf5; }
+:global(html[data-drive-theme="dark"]) .trashHeader > div > span,:global([data-theme="dark"]) .trashHeader > div > span { background:#1d3446; color:#b6c9d9; }
+:global(html[data-drive-theme="dark"]) .trashHeader > button,:global([data-theme="dark"]) .trashHeader > button,:global(html[data-drive-theme="dark"]) .trashItemActions button,:global([data-theme="dark"]) .trashItemActions button { background:#132a3c; border-color:#334b5e; color:#bfd0de; }
+:global(html[data-drive-theme="dark"]) .trashItem,:global([data-theme="dark"]) .trashItem { background:#112638; border-color:#2f4557; }
+:global(html[data-drive-theme="dark"]) .trashItemMain strong,:global([data-theme="dark"]) .trashItemMain strong { color:#dce8f1; }
+:global(html[data-drive-theme="dark"]) .trashItemMeta span,:global([data-theme="dark"]) .trashItemMeta span { background:#162c3e; border-color:#354b5d; color:#b5c7d5; }
+
+/* Drive V0.9.20 – folder password wording */
+.folderPasswordTtlHint { display:block; margin-top:5px; color:#73879a; font-size:9px; font-weight:600; line-height:1.35; }
+.folderProtectionDuration { border:1px solid #cfe1d9; background:#f0faf5; border-radius:8px; padding:9px 11px; display:grid; gap:2px; }
+.folderProtectionDuration > span { color:#668378; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+.folderProtectionDuration > strong { color:#28644f; font-size:12px; }
+.folderProtectionDuration > small { color:#648175; font-size:var(--drive-font-xs); line-height:1.35; }
+:global(html[data-drive-theme="dark"]) .folderProtectionDuration,:global([data-theme="dark"]) .folderProtectionDuration { background:#14342c; border-color:#28594a; }
+:global(html[data-drive-theme="dark"]) .folderProtectionDuration > strong,:global([data-theme="dark"]) .folderProtectionDuration > strong { color:#8ed2b8; }

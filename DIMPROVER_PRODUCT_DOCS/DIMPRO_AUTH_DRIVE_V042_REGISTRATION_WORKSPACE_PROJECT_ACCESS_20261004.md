@@ -738,3 +738,13 @@ Contract: V0.9.19 15/15 PASS; TypeScript és célzott ESLint PASS. PROD DENY.
 - Nginx backup SHA-256: `ad31fec9e7ec61ed910554c93cf241f88dbcca2996b4766e3e0266d38e8f6400`;
 - cutover: 2026-10-07 14:38:38 Europe/Budapest;
 - public smoke PASS: AUTH migrationCount 10; runtime restart 0; error log 0 byte; PROD DENY.
+
+### Drive V0.9.20 – Lomtár és mappavédelem szemantika – 2026-10-07
+
+A projekt Drive Lomtár önálló, jogosultságvezérelt navigációs nézet. `folder.restore` jog szükséges már a törölt elemek listázásához is; `folder.purge` szükséges a visszavonhatatlan végleges törléshez. A végleges törlés erős szöveges megerősítést kér (`VÉGLEGES TÖRLÉS`), auditált, és S3 cleanup queue-val együtt működik. Aktív/történeti hibajegy-melléklet hivatkozás esetén purge tiltott.
+
+A jelszavas mappavédelem határozatlan idejű, kikapcsolásig aktív. Az `unlockTtlMinutes` nem a jelszó érvényessége, hanem a sikeres feloldás böngésző/munkamenet-szintű megjegyzési ideje. A UI ennek megfelelően `Feloldás megjegyzési ideje` megnevezést és külön `Védelem időtartama: Határozatlan · kikapcsolásig` információt jelenít meg.
+
+A Dokumentumtár felső Törlés gombja dokumentum-kijelölés vagy külön táblázatos mappasor-kijelölés esetén aktív. A navigációval megnyitott mappa önmagában nem tekintendő törlésre kijelölt elemnek.
+
+V0.9.20 contract 24/24 PASS; TypeScript/célzott lint PASS; DEV migration preflight PASS; PROD DENY.
