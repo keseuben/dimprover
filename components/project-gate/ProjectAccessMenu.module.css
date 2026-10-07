@@ -873,3 +873,39 @@
 @media (max-width: 640px) {
   .selfNameEditor { grid-template-columns: minmax(0, 1fr) 31px 31px; }
 }
+
+/* V0.3.1 - slightly larger project-access typography */
+.header > div:first-child > span { font-size: 11px; }
+.header > div:first-child > strong { font-size: 14px; }
+.headerActions .inviteTop { font-size: 11px; }
+.tabs button { font-size: 11px; }
+.tabs button b { font-size: 10px; }
+.inviteHeading strong { font-size: 13px; }
+.inviteHeading span { font-size: 11px; }
+.formGrid label > span { font-size: 10px; }
+.formGrid input,
+.formGrid select,
+.roleEditor select { font-size: 12px; }
+.rolePreview strong { font-size: 11px; }
+.rolePreview span { font-size: 10px; }
+.formActions button { font-size: 11px; }
+.alertError,
+.alertSuccess { font-size: 11px; }
+.memberTitle > strong { font-size: 13px; }
+.selfBadge,
+.ownerBadge { font-size: 9px; }
+.memberMain > small { font-size: 11px; }
+.role { font-size: 11px; }
+.memberMain > p { font-size: 10px; line-height: 1.4; }
+.roleEditor label > span { font-size: 9px; }
+.memberActions > span,
+.memberActions button { font-size: 10px; }
+.pendingTop strong { font-size: 12px; }
+.pendingTop small { font-size: 10px; }
+.pendingBadge,
+.expiredBadge { font-size: 9px; }
+.pendingMeta { font-size: 10px; }
+.pendingActions button { font-size: 10px; }
+.footer { font-size: 10px; }
+.selfNameEditor input { font-size: 12px; }
+.editSelfName { font-size: 10px; }
