@@ -691,3 +691,18 @@ Final integration pre-build validáció:
 - PROD: **DENY**.
 
 A korábbi 31de645e2... V0.9.22-alapú BUILD01 artifact superseded; deployra nem használható.
+
+### V0.1.9 runtime smoke FIX – proxy ticket redeem gate
+
+A 3402-es izolált candidate első HTTP-smoke-ja bizonyította, hogy a backend redeem route már nem igényel BENJADMIN Desktop tokent, de a központi Drive SSO proxy még a route előtt 401 AUTH_REQUIRED választ adott. Emiatt a normál meghívott Windows-felhasználó token nélküli Open Handler flow-ja nem jutott volna el az egyszer használatos ticket ellenőrzéséig.
+
+Javítás:
+
+- kizárólag a /api/drive/desktop-open/redeem endpoint kap külön isDriveDesktopTicketRedeemApi proxy-kivételt;
+- ez nem tesz más Drive API-t publikus Desktop API-vá;
+- a route továbbra is megköveteli az opaque 256 bites, rövid TTL-es, egyszer használható ticketet;
+- redeemkor a ticketben tárolt canonical user aliasok alapján ismét megtörténik az aktuális projekt document.read jogosultság ellenőrzése;
+- a ticket kiadás továbbra is csak hitelesített web-sessionből lehetséges;
+- PROD továbbra is DENY.
+
+A 3402 candidate emiatt superseded, publikus cutover nem történt.

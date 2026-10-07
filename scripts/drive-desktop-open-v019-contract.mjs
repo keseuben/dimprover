@@ -13,6 +13,7 @@ const files = {
   manager: read("scripts/dimpro-drive-desktop-open-handler-manager-v019.ps1"),
   installer: read("scripts/DIMPRO_Drive_Desktop_Install_V019.cmd"),
   uninstaller: read("scripts/DIMPRO_Drive_Desktop_Uninstall_V019.cmd"),
+  proxy: read("proxy.ts"),
 };
 const packagePath = "public/downloads/DIMPRO_Drive_Desktop_V019_WINDOWS_DEV.zip";
 
@@ -38,6 +39,10 @@ check("V0.1.9 ticket schema binds canonical actor aliases", () => {
   assert.match(files.issue, /actorUserAliases: access\.actor\.userAliases/);
 });
 check("browser still requires document.read before ticket issue", () => assert.match(files.issue, /requireProjectPermission\(request, projectId, "document\.read"\)/));
+check("proxy allows only the open-ticket redeem endpoint to use ticket capability without app session", () => {
+  assert.match(files.proxy, /isDriveDesktopTicketRedeemApi = isDriveHost && pathname === "\/api\/drive\/desktop-open\/redeem"/);
+  assert.match(files.proxy, /isDriveDesktopOwnAuthApi =[\s\S]*isDriveDesktopTicketRedeemApi[\s\S]*isDriveDesktopBearerApi/);
+});
 check("redeem no longer depends on BENJADMIN desktop-access token", () => {
   assert.doesNotMatch(files.redeem, /isDriveApiAuthorized/);
   assert.doesNotMatch(files.redeem, /driveAuth\.mode/);
