@@ -564,6 +564,8 @@ def main() -> int:
     parser.add_argument("--report-file", default=str(DEFAULT_REPORT))
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm-token", default="")
+    parser.add_argument("--approved-report")
+    parser.add_argument("--approved-report-sha256")
     args = parser.parse_args()
 
     node_id = validate_node_id(args.node_id)
@@ -582,6 +584,41 @@ def main() -> int:
     expected_token = f"APPLY:{cfg_sha}"
     if args.apply and args.confirm_token != expected_token:
         raise Deny("CONFIRM_TOKEN_MISMATCH")
+    if args.apply:
+        if not args.approved_report or not args.approved_report_sha256:
+            raise Deny("APPROVED_PREFLIGHT_REQUIRED")
+        if not SHA256.fullmatch(str(args.approved_report_sha256)):
+            raise Deny("APPROVED_PREFLIGHT_SHA_INVALID")
+    elif args.approved_report or args.approved_report_sha256:
+        raise Deny("APPROVED_PREFLIGHT_ONLY_WITH_APPLY")
+
+    approved_report = None
+    approved_report_sha = None
+    if args.apply:
+        approved_path = Path(args.approved_report).resolve(strict=True)
+        approved_root = (state_root / "retention").resolve(strict=True)
+        if approved_path.parent != approved_root:
+            raise Deny("APPROVED_PREFLIGHT_PATH_DENY")
+        raw = approved_path.read_bytes()
+        approved_report_sha = hashlib.sha256(raw).hexdigest()
+        if approved_report_sha != str(args.approved_report_sha256).lower():
+            raise Deny("APPROVED_PREFLIGHT_SHA_MISMATCH")
+        try:
+            approved_report = json.loads(raw)
+        except Exception:
+            raise Deny("APPROVED_PREFLIGHT_JSON_INVALID")
+        if (
+            approved_report.get("schemaVersion") != 1
+            or approved_report.get("environment") != "DEV"
+            or approved_report.get("productionAccess") != "DENY"
+            or approved_report.get("tool") != "DIMPRO_BUILD_NODE_RETENTION_V1"
+            or approved_report.get("nodeId") != node_id
+            or approved_report.get("mode") != "DRY_RUN"
+            or approved_report.get("destructiveActionsPerformed") is not False
+            or approved_report.get("fullBuildLockHeldDuringScan") is not False
+            or str(approved_report.get("configSha256") or "").lower() != cfg_sha
+        ):
+            raise Deny("APPROVED_PREFLIGHT_INVARIANT_DENY")
 
     retention_fd = os.open(retention_lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
@@ -625,6 +662,26 @@ def main() -> int:
             candidates = [item for items in groups.values() for item in items]
             candidate_bytes = sum(int(x["allocatedBytes"]) for x in candidates)
             actions: list[dict[str, Any]] = []
+
+            if args.apply:
+                def candidate_identity(item: dict[str, Any]) -> tuple[str, str, str, int]:
+                    return (
+                        str(item.get("kind") or ""),
+                        str(item.get("runId") or ""),
+                        str(item.get("path") or ""),
+                        int(item.get("allocatedBytes") or 0),
+                    )
+                approved_candidates = approved_report.get("candidates") if isinstance(approved_report, dict) else None
+                if not isinstance(approved_candidates, list):
+                    raise Deny("APPROVED_PREFLIGHT_CANDIDATES_INVALID")
+                approved_ids = sorted(candidate_identity(x) for x in approved_candidates)
+                current_ids = sorted(candidate_identity(x) for x in candidates)
+                if approved_ids != current_ids:
+                    raise Deny("APPROVED_PREFLIGHT_CANDIDATE_SET_CHANGED")
+                if int(approved_report.get("candidateCount") or -1) != len(candidates):
+                    raise Deny("APPROVED_PREFLIGHT_COUNT_CHANGED")
+                if int(approved_report.get("candidateBytes") or -1) != candidate_bytes:
+                    raise Deny("APPROVED_PREFLIGHT_BYTES_CHANGED")
 
             if not args.apply:
                 try:
@@ -686,6 +743,11 @@ def main() -> int:
                 "destructiveActionsPerformed": bool(actions),
                 "actualAvailableBytesDelta": after["availableBytes"] - before["availableBytes"],
                 "fullBuildLockHeldDuringScan": bool(args.apply),
+                "approvedPreflight": {
+                    "path": str(args.approved_report) if args.apply else None,
+                    "sha256": approved_report_sha if args.apply else None,
+                    "exactCandidateSetRequired": bool(args.apply),
+                },
             }
             report_path = Path(args.report_file)
             report_path.parent.mkdir(parents=True, exist_ok=True)
