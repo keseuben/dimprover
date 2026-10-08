@@ -355,7 +355,7 @@ export default function DriveWorkspace({
     fullscreenInspectTimerRef.current = window.setTimeout(() => {
       setFullTableInspectorOpen(true);
       fullscreenInspectTimerRef.current = null;
-    }, 320);
+    }, 500);
   }, [cancelFullscreenInspectTimer]);
 
   const openFullscreenPreview = useCallback((documentId: string) => {

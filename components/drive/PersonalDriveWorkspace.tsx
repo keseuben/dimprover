@@ -197,7 +197,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     fullscreenInspectTimerRef.current = window.setTimeout(() => {
       setFullTableInspectorOpen(true);
       fullscreenInspectTimerRef.current = null;
-    }, 320);
+    }, 500);
   }, [cancelFullscreenInspectTimer]);
 
   const closeTableFullscreen = useCallback(() => {
