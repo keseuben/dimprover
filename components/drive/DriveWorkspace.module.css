@@ -5,13 +5,22 @@
   --navy-2: #092641;
   --line: #dce6ef;
   --soft: #f5f8fb;
-  --muted: #64748b;
-  --ink: #13233a;
+  --muted: var(--dimpro-text-muted);
+  --ink: var(--dimpro-text-primary);
   --blue: #1167ee;
   --cyan: #0f91b6;
-  --drive-font-xs: 10px;
-  --drive-font-sm: 11px;
-  --drive-font-md: 12px;
+  --drive-font-2xs: var(--dimpro-text-2xs);
+  --drive-font-xs: var(--dimpro-text-xs);
+  --drive-font-sm: var(--dimpro-text-sm);
+  --drive-font-md: var(--dimpro-text-md);
+  --drive-font-lg: var(--dimpro-text-lg);
+  --drive-heading-sm: var(--dimpro-heading-sm);
+  --drive-text-primary: var(--dimpro-text-primary);
+  --drive-text-secondary: var(--dimpro-text-secondary);
+  --drive-text-muted: var(--dimpro-text-muted);
+  --drive-text-subtle: var(--dimpro-text-subtle);
+  --drive-text-disabled: var(--dimpro-text-disabled);
+  font-family: var(--dimpro-font-ui);
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
@@ -128,7 +137,7 @@
 .projectIdentity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .projectIcon { width: 34px; height: 34px; border-radius: 9px; border: 1px solid #dbe6ef; background: #f8fbfd; display: grid; place-items: center; color: #203550; }
 .projectIdentity h1 { margin: 0; font-size: 17px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.projectMeta { margin-top: 3px; display: flex; align-items: center; gap: 8px; color: #62748a; font-size: var(--drive-font-sm); }
+.projectMeta { margin-top: 3px; display: flex; align-items: center; gap: 8px; color: var(--drive-text-muted); font-size: var(--drive-font-sm); }
 .activeBadge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: #e7f8ef; color: #14804a; padding: 3px 7px; font-weight: 800; }
 .workspaceSelectorWrap {
   position: absolute;
@@ -190,7 +199,7 @@
 .userPill { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
 .avatar { width: 30px; height: 30px; border-radius: 50%; background: #176bff; color: white; display: grid; place-items: center; font-size: var(--drive-font-sm); font-weight: 900; }
 .userPill strong { font-size: var(--drive-font-sm); display: block; }
-.userPill span { font-size: var(--drive-font-xs); color: #697b8e; display: block; margin-top: 2px; }
+.userPill span { font-size: var(--drive-font-xs); color: var(--drive-text-muted); display: block; margin-top: 2px; }
 
 .toolbar { min-width: 0; min-height: 54px; background: white; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 8px 18px; overflow: visible; position: relative; z-index: 20; }
 .toolButton { flex: 0 0 auto; min-height: 34px; border: 1px solid #d6e0e8; background: white; color: #22344c; border-radius: 8px; padding: 7px 11px; display: inline-flex; align-items: center; gap: 7px; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; }
@@ -281,7 +290,7 @@
 .folderTreeToggle:focus-visible,
 .folderTreeSelect:focus-visible { outline: 2px solid #75a9e8; outline-offset: -2px; }
 .folderTreeTogglePlaceholder { pointer-events: none; }
-.folderTreeSelect { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; color: #31445c; min-height: 31px; border-radius: 7px; display: flex; align-items: center; gap: 7px; text-align: left; font-size: var(--drive-font-sm); font-weight: 700; cursor: pointer; padding: 0 8px 0 3px; }
+.folderTreeSelect { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; color: var(--drive-text-secondary); min-height: 31px; border-radius: 7px; display: flex; align-items: center; gap: 7px; text-align: left; font-size: var(--drive-font-sm); font-weight: 700; cursor: pointer; padding: 0 8px 0 3px; }
 .folderTreeSelect:hover { background: #f1f6fa; }
 .folderTreeLabel { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folderActive { background: #ddecff; color: #0f5dd5; }
@@ -291,9 +300,9 @@
 .filePanelTop { min-height: 42px; border-bottom: 1px solid #edf1f5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; }
 .filePanelTitle { min-width: 0; }
 .filePanelTitle strong { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.filePanelTitle span { display: block; margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
+.filePanelTitle span { display: block; margin-top: 2px; color: var(--drive-text-muted); font-size: var(--drive-font-xs); }
 .filePanelTitleMain { font-size: 11px; font-weight: 800; color: #263e57; }
-.filePanelSubtitle { margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
+.filePanelSubtitle { margin-top: 2px; color: var(--drive-text-muted); font-size: var(--drive-font-xs); }
 .fileFolderNav { min-height: 42px; display: grid; grid-template-columns: auto minmax(220px, 420px) 30px 1px 30px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #e6edf3; background: #fbfdff; }
 .fileFolderNavLabel { display: flex; align-items: center; gap: 6px; color: #35516d; white-space: nowrap; }
 .fileFolderNavLabel strong { font-size: var(--drive-font-xs); }
@@ -318,13 +327,13 @@
 .fileFolderUpButton { width: 30px; height: 30px; border: 1px solid #d1deea; border-radius: 7px; background: #fff; color: #1765c7; display: grid; place-items: center; cursor: pointer; }
 .fileFolderUpButton:hover:not(:disabled) { background: #edf5ff; border-color: #98bce4; }
 .fileFolderUpButton:disabled { color: #a8b5c2; background: #f5f7f9; cursor: default; }
-.fileFolderPath { min-width: 0; color: #718397; font-size: var(--drive-font-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fileFolderPath { min-width: 0; color: var(--drive-text-muted); font-size: var(--drive-font-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .viewToggle { display: flex; align-items: center; gap: 5px; }
 .viewToggle button { border: 1px solid #dbe4ec; background: white; color: #61758a; border-radius: 7px; padding: 5px 7px; font-size: var(--drive-font-xs); font-weight: 800; cursor: pointer; }
 .viewToggle .viewToggleActive { border-color: #8bb7ff; background: #eef5ff; color: #1765d7; }
 .fileTableWrap { min-height: 0; overflow: auto; flex: 1; }
 .fileTable { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--drive-font-sm); }
-.fileTable th { position: sticky; top: 0; z-index: 2; height: 31px; background: #fbfcfe; border-bottom: 1px solid #e6edf3; color: #6a7c8f; font-size: var(--drive-font-xs); text-transform: uppercase; letter-spacing: 0.03em; text-align: left; padding: 0 7px; }
+.fileTable th { position: sticky; top: 0; z-index: 2; height: 31px; background: #fbfcfe; border-bottom: 1px solid #e6edf3; color: var(--drive-text-secondary); font-size: var(--drive-font-xs); text-transform: uppercase; letter-spacing: 0.03em; text-align: left; padding: 0 7px; }
 .resizableTableHeader {
   overflow: visible;
   padding-right: 13px !important;
@@ -416,7 +425,7 @@
   padding: 0 !important;
   background-image: linear-gradient(90deg, transparent 0, transparent 48%, rgba(108,128,148,.10) 49%, rgba(108,128,148,.10) 51%, transparent 52%, transparent 100%);
 }
-.fileTable td { height: 34px; border-bottom: 1px solid #eef2f6; padding: 0 7px; color: #33465d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fileTable td { height: 34px; border-bottom: 1px solid #eef2f6; padding: 0 7px; color: var(--drive-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fileRow { cursor: pointer; }
 .fileRow:hover td { background: #f8fbfe; }
 .fileSelected td { background: #e8f2ff !important; }
@@ -440,7 +449,7 @@
 .fileNameCell strong { overflow: hidden; text-overflow: ellipsis; }
 .overflowTooltipText { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .displayNameValue { min-width: 0; max-width: 100%; flex: 1 1 auto; display: flex; align-items: center; gap: 4px; overflow: hidden; }
-.displayNameText { min-width: 0; flex: 1 1 auto; color: #33465d; font-weight: 600; }
+.displayNameText { min-width: 0; flex: 1 1 auto; color: var(--drive-text-primary); font-weight: 600; }
 .missingDisplayNameButton {
   width: 20px;
   height: 20px;
@@ -6458,4 +6467,48 @@
 @media (max-width: 620px) {
   .desktopOpenPromptPanel footer { flex-wrap: wrap; }
   .desktopOpenPromptPanel footer button { flex: 1 1 100%; justify-content: center; }
+}
+
+
+/* DIMPRO Typography V1 – Drive readability layer.
+   Standard tokens rise by +1 px; only formerly 8 px important labels rise to 10 px. */
+.shell {
+  font-size: var(--drive-font-sm);
+  color: var(--drive-text-primary);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+.fileTable { font-size: var(--drive-font-sm); }
+.fileTable th { font-size: var(--drive-font-xs); font-weight: 700; }
+.fileTable td { font-weight: 400; }
+.fileNameCell strong,
+.displayNameText,
+.tableFolderName { color: var(--drive-text-primary); font-weight: 600; }
+.folderTreeLabel,
+.commanderFolderNameText,
+.commanderFileNameText { color: var(--drive-text-secondary); }
+.filePanelTitle strong,
+.panelHeader strong { color: var(--drive-text-secondary); font-size: var(--drive-font-sm); }
+.filePanelTitle span,
+.filePanelSubtitle,
+.fileFolderPath,
+.folderCount,
+.newFolderHint,
+.newFolderSaving { color: var(--drive-text-muted); }
+.detailsTabs button,
+.detailsSubTabs button { font-size: var(--drive-font-2xs); }
+.versionHistoryHeading strong,
+.securityStatusCard strong { font-size: var(--drive-font-xs); }
+.versionHistoryHeading span,
+.securityStatusCard span { font-size: var(--drive-font-2xs); }
+.metaItem label,
+.numberingEditorHead small,
+.folderPasswordTtlHint,
+.folderProtectionDuration > span,
+.deleteDependencyList article span,
+.deleteDependencyBlock > small,
+.folderAccessMemberList span small { font-size: var(--drive-font-2xs); }
+.reviewProgressStep { color: var(--drive-text-secondary); }
+@media (max-width: 1050px) {
+  .detailsTabs button { font-size: 9px; }
 }

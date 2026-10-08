@@ -13,13 +13,35 @@
   --dimpro-paper: #f8fafc;
   --dimpro-paper-soft: #f3f6fa;
   --dimpro-paper-line: #e5eaf0;
+
+  /* DIMPRO Typography V1 – shared, readable application typography */
+  --dimpro-font-ui: var(--font-inter), "Inter", "Segoe UI", Arial, Helvetica, sans-serif;
+  --dimpro-text-2xs: 10px;
+  --dimpro-text-xs: 11px;
+  --dimpro-text-sm: 12px;
+  --dimpro-text-md: 13px;
+  --dimpro-text-lg: 14px;
+  --dimpro-heading-sm: 15px;
+  --dimpro-heading-md: 18px;
+  --dimpro-leading-tight: 1.25;
+  --dimpro-leading-normal: 1.42;
+  --dimpro-weight-regular: 400;
+  --dimpro-weight-medium: 500;
+  --dimpro-weight-semibold: 600;
+  --dimpro-weight-bold: 700;
+
+  --dimpro-text-primary: #202b36;
+  --dimpro-text-secondary: #3f5060;
+  --dimpro-text-muted: #5f7082;
+  --dimpro-text-subtle: #758494;
+  --dimpro-text-disabled: #9aa7b3;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--dimpro-font-ui);
   background: var(--dimpro-paper-soft);
 }
 

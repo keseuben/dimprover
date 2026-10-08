@@ -837,3 +837,7 @@ A teljes ablakos Drive táblázatban az adatpanel viselkedése projekt és Sajá
 ## AUTH V0.4.8 / Drive V0.9.26 – önkiszolgáló megjelenítési név
 
 A központi profilnév módosítása nem szélesíti az AUTH runtime tábla-jogosultságait. A `dimpro_auth_app_*` role továbbra sem kap általános `UPDATE` jogot az `auth_users` táblára. A `011_auth_v048_self_profile_display_name.sql` migráció csak a `public.auth_update_self_display_name(uuid,text)` SECURITY DEFINER függvény EXECUTE jogát adja a runtime szerepkörnek. A függvény kizárólag aktív, login-enabled userre fut, 2–160 karakteres nevet fogad, és egy tranzakcióban frissíti a központi usert és a primary e-mail-identitást. Az API a session user ID-ját adja át, same-origin védelemmel, majd a projekt-tagságok megjelenítési nevét is szinkronizálja. PROD DENY.
+
+### Drive V0.9.27 – közös DIMPRO Typography V1
+
+A Drive felület tipográfiája közös DIMPRO tokenrendszerre került. A rendszer elsődleges UI fontja Inter (`next/font`, latin + latin-ext), self-hostolt build-erőforrással; fallback Segoe UI / Arial / Helvetica. A Drive alapméretek jellemzően +1 px-szel nőttek, a korábban túl kicsi 8–9 px-es fontos feliratok legfeljebb +2 px-szel. A fő táblázati szöveg 12 px, a táblázatfejléc 11 px. Az elsődleges, másodlagos és meta szövegek külön közös színtokeneket használnak, hogy a Google Drive/Gmail-szerű olvashatóságot érjük el a DIMPRO saját arculatának megtartása mellett.

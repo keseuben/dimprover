@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import SessionGuardClient from "@/components/auth/SessionGuardClient";
 import LicenseHostBackButton from "@/components/license/LicenseHostBackButton";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-inter",
+  fallback: ["Segoe UI", "Arial", "Helvetica", "sans-serif"],
+});
 
 export const metadata: Metadata = {
   title: "DIMPRO",
@@ -26,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="hu" className="h-full antialiased">
+    <html lang="hu" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <SessionGuardClient />
         <LicenseHostBackButton />

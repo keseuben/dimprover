@@ -4011,3 +4011,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A `DIMPRO DRIVE · FÁJL MEGJELENÍTŐ` új Kéz/Pan gombot kapott. Bekapcsolva bal egérgombos húzással mozgatható a nagyított PDF vagy kép; pointer capture biztosítja a stabil húzást.
 - A viewer `Ctrl + egérgörgő` kezelése natív, `passive:false` wheel listenerre váltott. A viewer felett a böngésző oldalzoomja blokkolva van, és csak a megnyitott dokumentum zoomja változik.
 - V0.9.26 contract: `scripts/drive-v0926-profile-viewer-contract.mjs` – 24/24 PASS. TypeScript PASS, célzott ESLint 0 hiba, `git diff --check` PASS. PROD DENY.
+
+## 2026-10-08 – DIMPRO Drive V0.9.27 – DIMPRO Typography V1
+
+- Bevezetve a közös DIMPRO Typography V1 tokenrendszer az `app/globals.css` fájlban.
+- Elsődleges UI betűtípus: Inter, Next.js `next/font/google` self-hostolt betöltéssel, `latin` + `latin-ext` készlettel. Fallback sorrend: Segoe UI → Arial → Helvetica → sans-serif.
+- Közös méretskála: `2xs=10px`, `xs=11px`, `sm=12px`, `md=13px`, `lg=14px`, `heading-sm=15px`, `heading-md=18px`.
+- A Drive korábbi 10/11/12 px alap tokenjei 11/12/13 px-re emelkedtek. A fontos, korábban 8–9 px-es kiegészítő feliratok csak 10 px körüli méretre nőttek; a cél +1 px, indokolt helyen legfeljebb +2 px volt.
+- Közös szövegszínek: elsődleges `#202b36`, másodlagos `#3f5060`, meta/muted `#5f7082`, subtle `#758494`, disabled `#9aa7b3`.
+- A Drive táblázat főszövege 12 px, fejléc 11 px / 700 weight. A fájlnév és fontos adat elsődleges sötétebb színt és 600 weightet kapott; metaadatok külön muted tokenen maradtak.
+- A mappafa, jobb oldali részletpanel, fájlpanel, projekt-meta és fejléc felhasználói meta olvashatósága egységes tokenekre került.
+- Bekapcsolva `text-rendering: optimizeLegibility` és WebKit antialiasing a Drive shellen.
+- A V0.9.26 profilnév, fullscreen kattintás-arbitráció és fájlmegjelenítő Kéz/Pan + lokális Ctrl+görgő zoom funkciói változatlanul részei a V0.9.27-nek.
+- Contract: `scripts/drive-v0927-typography-v1-contract.mjs` – 23/23 PASS; V0.9.26 regressziós contract 24/24 PASS; TypeScript PASS; célzott ESLint PASS. A teljes repository lint 25 korábban meglévő hibát jelez kizárólag a `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban; a V0.9.27 által módosított TS/TSX/MJS fájlokban nincs lint hiba. PROD DENY.
