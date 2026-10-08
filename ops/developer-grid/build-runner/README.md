@@ -179,3 +179,47 @@ Also checked at 2026-10-08 around 10:00 Europe/Budapest:
 
 The additional unapproved 65-file exclusion inventory remains wholly
 outside the approved 65-entry manifest. Do NOT conflate the two sets.
+
+
+
+## 2026-10-08 R4 BUILD retention candidate drift
+
+The immutable R4 request on DEV remained unchanged:
+- /srv/dimpro-dev/coordination/checkpoints/BENJADMIN_EXECUTION_REQUEST_BUILD_NODE_RETENTION_R4_20261007.json
+- SHA256: 46309de368a67442eaf24aeb2236999040b998c1c05398a2a508d18087f592ea
+- environment=DEV, productionAccess=DENY, failClosed=true
+
+Updated automated hourly DRY_RUN snapshots from 2026-10-08 showed:
+- BUILD01: original 150 candidates / 5,381,902,336 bytes; observed 151 /
+  5,412,995,072 bytes. Only added candidate:
+  temp-bundle drive-v019-v0924-353fa3b01-inspect / 31,092,736 bytes.
+  The original 150 candidate identities remain unchanged.
+  Immutable read-only drift snapshot:
+  /srv/dimpro-build/state/retention/r4-drift-20261008-0917-build01.json
+  SHA256 f5bda506867a7f54dbae9ce4f7904c6615cf7cbd1d7826b1a1fef8bf08a780fa
+- BUILD02: original 92 candidates / 73,442,963,456 bytes; observed 93 /
+  73,535,688,704 bytes. Only added candidate:
+  artifact-tarball drive-auth-v034-fix3-6a80699e-b2 / 92,725,248 bytes.
+  The original 92 candidate identities remain unchanged.
+  Immutable read-only drift snapshot:
+  /srv/dimpro-build/state/retention/r4-drift-20261008-0919-build02.json
+  SHA256 6d181bfa60da0887413a5e1b89600409d0ffcab1b95ec0c985aad65dd0de38ab
+
+Because exact candidate sets differ, the original R4 approved report no longer
+matches the observed current policy candidate list. R4 APPLY is DENIED until
+a dedicated exact fresh preview confirms an approved set, or an independently
+reviewed R5 approval replaces it. The extra files are NOT implicitly
+approved for deletion.
+
+Immutable DEV-only read-only reconciliation record:
+- /srv/dimpro-dev/coordination/maintenance-tools/reports/build-retention-r4-drift-20261008-v1.json
+- SHA256: 2af0b07b88beaf83d12687e433621b8378ff1384c15c1c28a275ced433085841
+- approvedForApply=false, destructiveActionsPerformed=false, PROD DENY.
+
+MCP v2.3.3 server source registers 18 tools, including
+read_safe_delete_skill, preview_dev_retention, preview_build_retention,
+apply_dev_retention, and apply_build_retention. The current ChatGPT
+connector schema exposes only eight legacy tools. Do not compensate for
+a stale client schema through arbitrary remote shell apply calls.
+The connector's supported rebind/reconnect mechanism must refresh its
+advertised action set before any authorized guarded APPLY.
