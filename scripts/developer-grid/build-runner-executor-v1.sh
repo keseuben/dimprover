@@ -15,6 +15,12 @@ ARTIFACT_ROOT="${BUILD_ROOT}/artifacts"
 TEMP_ROOT="${BUILD_ROOT}/temp"
 WORKTREE_ROOT="${BUILD_ROOT}/worktrees"
 LOG_ROOT="${BUILD_ROOT}/logs"
+FREEZE_FILE="${STATE_ROOT}/dev-storage-freeze.json"
+DEV_STORAGE_HOST="dev.dimpro.hu"
+DEV_STORAGE_IDENTITY="${BUILD_ROOT}/keys/dev-storage-probe_ed25519"
+DEV_STORAGE_KNOWN_HOSTS="/home/dimproadmin/.ssh/known_hosts"
+DEV_STORAGE_MIN_FREE_BYTES=16106127360
+DEV_STORAGE_MAX_USED_PERCENT=90
 
 node_id="${1:-}"
 run_id="${2:-}"
@@ -79,6 +85,56 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+if [[ -f "${FREEZE_FILE}" ]]; then
+  freeze_reason="$(jq -r '.reason // "DEV storage freeze active"' "${FREEZE_FILE}" 2>/dev/null || true)"
+  freeze_reason="${freeze_reason:-DEV storage freeze active}"
+  fail_json "DEV_STORAGE_ADMISSION_BLOCKED" "${freeze_reason}"
+fi
+
+
+# Pure capacity policy: return 0=ALLOW, 10=BLOCKED, 11=UNKNOWN_DENY.
+dev_storage_policy() {
+  local raw="${1:-}"
+  [[ "${raw}" =~ ^[[:blank:]]*([0-9]{1,18})[[:blank:]]+([0-9]{1,18})[[:blank:]]+([0-9]{1,18})[[:blank:]]+([0-9]{1,3})%[[:blank:]]*$ ]] || return 11
+  local total=$((10#${BASH_REMATCH[1]}))
+  local used=$((10#${BASH_REMATCH[2]}))
+  local free=$((10#${BASH_REMATCH[3]}))
+  local pct=$((10#${BASH_REMATCH[4]}))
+  (( total > 0 && used <= total && free <= total && used + free <= total && pct <= 100 )) || return 11
+  if (( free < DEV_STORAGE_MIN_FREE_BYTES || pct >= DEV_STORAGE_MAX_USED_PERCENT )); then
+    return 10
+  fi
+  return 0
+}
+
+check_dev_storage_admission() {
+  local output rc
+  if [[ ! -r "${DEV_STORAGE_IDENTITY}" || ! -s "${DEV_STORAGE_KNOWN_HOSTS}" ]]; then
+    fail_json "DEV_STORAGE_ADMISSION_UNKNOWN_DENY" "DEV probe key or known hosts missing."
+  fi
+  if ! output="$(/usr/bin/timeout 12s /usr/bin/ssh \
+    -o BatchMode=yes \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=yes \
+    -o ConnectTimeout=5 \
+    -o UserKnownHostsFile="${DEV_STORAGE_KNOWN_HOSTS}" \
+    -i "${DEV_STORAGE_IDENTITY}" \
+    "dimproadmin@${DEV_STORAGE_HOST}" "dimpro-storage-probe-v1" 2>/dev/null)"; then
+    fail_json "DEV_STORAGE_ADMISSION_UNKNOWN_DENY" "DEV storage probe failed; build denied."
+  fi
+  if dev_storage_policy "${output}"; then
+    return 0
+  else
+    rc=$?
+    if (( rc == 10 )); then
+      fail_json "DEV_STORAGE_ADMISSION_BLOCKED" "DEV free below 15 GiB or used at least 90 percent."
+    fi
+    fail_json "DEV_STORAGE_ADMISSION_UNKNOWN_DENY" "DEV storage probe returned invalid metrics."
+  fi
+}
+
+check_dev_storage_admission
 
 [[ -f "${bundle}" ]] || fail_json "SOURCE_BUNDLE_MISSING" "A forrás Git bundle nem érkezett meg."
 [[ ! -e "${artifact_dir}" ]] || fail_json "ARTIFACT_RUN_ALREADY_EXISTS" "Ehhez a runId-hez már létezik artifact."

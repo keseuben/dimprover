@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+# Only invoke via a dedicated SSH authorized_keys forced command.
+[[ "${SSH_ORIGINAL_COMMAND:-}" == "dimpro-storage-probe-v1" ]] || exit 126
+/usr/bin/df -B1 --output=size,used,avail,pcent /srv/dimpro-dev | /usr/bin/tail -n 1

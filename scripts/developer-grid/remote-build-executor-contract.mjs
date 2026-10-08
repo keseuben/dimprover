@@ -13,6 +13,7 @@ const poolContract = read("scripts/developer-grid/build-runner-pool-contract.mjs
 const client = read("scripts/developer-grid/build-gateway-client.mjs");
 const refresh = read("scripts/developer-grid/refresh-build-gateway-snapshot.mjs");
 const runner = read("scripts/developer-grid/build-runner-executor-v1.sh");
+const deployedRunner = read("ops/developer-grid/build-runner/dimpro-build-runner-executor-v1");
 const dispatch = read("scripts/developer-grid/remote-build-dispatch.mjs");
 const gatewayServer = read("ops/developer-grid/build-gateway/server.mjs");
 const gatewayWorker = read("ops/developer-grid/build-gateway/worker.mjs");
@@ -35,6 +36,9 @@ check("gateway revalidates assigned runner immediately before execution",()=>{as
 check("gateway worker uses only build01/build02 SSH aliases",()=>{assert.match(gatewayWorker,/dimpro-build01/);assert.match(gatewayWorker,/dimpro-build02/);assert.match(gatewayWorker,/\^\(build01\|build02\)\$/);});
 check("gateway worker returns artifact to canonical DEV store",()=>{assert.match(gatewayWorker,/\/srv\/dimpro-dev\/artifacts\/build-runs/);assert.match(gatewayWorker,/copyToDev/);assert.match(gatewayWorker,/build-artifact\.tar\.gz/);assert.match(gatewayWorker,/metadata\.json/);});
 check("DEV BUILD health snapshot has a 30 second systemd refresh timer",()=>{assert.match(healthRefreshTimer,/OnUnitActiveSec=30s/);assert.match(healthRefreshTimer,/dimpro-build-health-refresh\.service/);assert.match(healthRefreshService,/refresh-build-gateway-snapshot\.mjs/);assert.match(healthRefreshService,/mcp\.dimprover\.hu\/build-gateway\/v1/);assert.match(healthRefreshService,/ReadWritePaths=\/srv\/dimpro-dev\/coordination\/health-snapshots/);assert.doesNotMatch(healthRefreshService,/\/usr\/bin\/ssh|BatchMode=yes/);});
+check("runner source equals deployment source",()=>{assert.equal(runner,deployedRunner);});
+check("runner preserves emergency DEV freeze",()=>{assert.match(deployedRunner,/dev-storage-freeze\.json/);assert.match(deployedRunner,/DEV_STORAGE_ADMISSION_BLOCKED/);});
+check("runner checks freeze before bundle validation and npm",()=>{const freeze=deployedRunner.indexOf('if [[ -f "${FREEZE_FILE}" ]]');assert.ok(freeze>0);assert.ok(freeze<deployedRunner.indexOf("SOURCE_BUNDLE_MISSING"));assert.ok(freeze<deployedRunner.indexOf("npm ci --no-audit --no-fund"));});
 check("runner verifies exact execution identity",()=>{for(const marker of ["dimproadmin","hostname -s","SOURCE_COMMIT_INVALID","SOURCE_BRANCH_INVALID","WORKER_CODE_INVALID"])assert.ok(runner.includes(marker));});
 check("runner uses hardened host-local flock",()=>{assert.match(runner,/STATE_ROOT.*full-build\.lock/);assert.match(runner,/flock -n 9/);});
 check("runner sources pinned toolchain",()=>{assert.match(runner,/toolchains\/node\.env/);for(const marker of ["v22.23.2","10.9.8","2.43.0"])assert.ok(runner.includes(marker));});
