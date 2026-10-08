@@ -134,3 +134,48 @@ NO deletion, runtime swap, freeze removal or PROD operation in this audit.
 Remaining release blockers: approved SSH forced-command enrollment on DEV,
 live probes from BUILD01/02, dedicated MCP preview/apply exposure, capacity
 recovery to >=15 GiB free and <90% used, and validated controlled rollout.
+
+
+## 2026-10-08 completed DEV Safe Delete preview recovery
+
+A previous SSH command wrapper reported an execution error and the report
+was initially marked as missing. A later authoritative on-disk inspection
+found that it did complete on 2026-10-08 08:54:28 Europe/Budapest.
+
+Read-only report:
+- /srv/dimpro-dev/coordination/maintenance-tools/reports/build-run-tarball-offsite-retirement-v2-fresh-20261008-0850.json
+- SHA-256: 3becc6309110605a4b421feca9208619fdc854f4f7f6fafd8262472c7e6df094
+- generatedAt: 2026-10-08T06:54:28.827046+00:00
+- mode=DRY_RUN, environment=DEV, productionAccess=DENY
+- selectedCount=65, distinct run IDs=65, eligible=65, ineligible=0
+- allSafe=true, candidateBytes=5794594816 (5.397 GiB)
+- offsite snapshot a89d5f96fb72be69c77d867b0092f5d2bb760d83c8aa8198014c1300401ac3c4
+- verifiedTarballPathCount=65
+- runtime/nginx reference hits=0, active build run IDs=0, locked build nodes=0
+- engineApproved=true, manifest SHA matches approved directive
+- deletedCount=0, destructiveActionsPerformed=false, failure=null
+
+This is a successful SAFE_DELETE preflight as of its generation time.
+It is NOT authorization to run physical APPLY from a generic shell
+command; the trusted, dedicated MCP apply action with fresh verification
+and Safe Delete acknowledgement must remain the only execution path.
+
+The current connector still exports only the original eight VPS MCP tools,
+despite extra preview/apply tools being registered in the live server code.
+The connector/tool schema must be refreshed through its supported
+configuration/reconnect process before guarded APPLY is possible.
+
+Two separate dedicated keys were generated on BUILD01/BUILD02 previously.
+The strict BatchMode/IdentitiesOnly/StrictHostKeyChecking=yes connectivity
+test with those keys currently fails Permission denied on both nodes.
+Neither key has been granted the DEV-side forced-command authorization,
+and no remote executor has been switched.
+
+Also checked at 2026-10-08 around 10:00 Europe/Budapest:
+- DEV total bytes 125697622016, available 2274144256 (~2.12 GiB),
+  df usage 99%; block device about 120 GiB, filesystem around 117 GiB.
+- BUILD01 and BUILD02 freeze ACTIVE, both IDLE.
+- PROD untouched.
+
+The additional unapproved 65-file exclusion inventory remains wholly
+outside the approved 65-entry manifest. Do NOT conflate the two sets.
