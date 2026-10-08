@@ -60,3 +60,35 @@ Release prerequisites:
 A failed query, inaccessible identity, bad host key, malformed metrics, storage
 below 15 GiB, or at least 90 percent usage must prevent FULL BUILD execution.
 Source-only fixture passing is not a successful live admission test.
+
+
+## 2026-10-08 access and capacity checkpoint
+
+- Source hardening: both executor files identical; the policy independently
+  validates free bytes, reported usage percentage, measured used bytes, and
+  integer-safe input ranges. Ambiguous or inconsistent reports deny a build.
+- Policy fixture test: 20/20 PASS. Main remote-build contract: 33/33 PASS.
+- DEV was measured at 99 percent used with 2,284,457,984 available bytes.
+- BUILD01 16 percent used; BUILD02 40 percent used; both idle, both emergency
+  freeze files still present. No runtime rollout or new FULL BUILD performed.
+- New dedicated Ed25519 key pairs exist locally on both BUILD nodes at the
+  defined private-key path, mode 0600. No private-key content was retrieved.
+- BUILD01 public-key fingerprint:
+  SHA256:Eim2hqIfsFvmUM5+3VnicacPZh0+NuZE4zbY+ExDmQM
+- BUILD02 public-key fingerprint:
+  SHA256:UaEPAPTg+N2zEViMFibBUDma1K85Nq1Qd9hI4eeQN6o
+- DEV host fingerprints were checked directly against the existing pinned
+  known_hosts on both nodes, with both RSA and Ed25519 matches.
+- DEV-side forced-command authorization has NOT been installed or changed:
+  the available tool's safety policy blocked access to SSH authorization
+  material. Do not bypass the block; use an authorized administration path.
+- Approved Safe Delete preview tool actions are not exposed by the ChatGPT
+  MCP connector despite being present in the server release.
+- A later direct preview attempt ended unsuccessfully before producing the
+  requested new report; do NOT consider earlier 65/65 candidate proof fresh.
+- PROD remains DENY. No physical retirement, deletion, or freeze release.
+
+Next release step: approved DEV-side forced-command authorization, live
+verification from each BUILD node, staged executor with rollback, and fresh
+safely approved retirement preview/guarded execution through dedicated MCP
+actions only. Do not claim deployment readiness from source tests alone.

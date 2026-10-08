@@ -96,13 +96,16 @@ fi
 # Pure capacity policy: return 0=ALLOW, 10=BLOCKED, 11=UNKNOWN_DENY.
 dev_storage_policy() {
   local raw="${1:-}"
-  [[ "${raw}" =~ ^[[:blank:]]*([0-9]{1,18})[[:blank:]]+([0-9]{1,18})[[:blank:]]+([0-9]{1,18})[[:blank:]]+([0-9]{1,3})%[[:blank:]]*$ ]] || return 11
+  # Bound numeric field widths to prevent Bash signed 64-bit arithmetic overflow.
+  [[ "${raw}" =~ ^[[:blank:]]*([0-9]{1,15})[[:blank:]]+([0-9]{1,15})[[:blank:]]+([0-9]{1,15})[[:blank:]]+([0-9]{1,3})%[[:blank:]]*$ ]] || return 11
   local total=$((10#${BASH_REMATCH[1]}))
   local used=$((10#${BASH_REMATCH[2]}))
   local free=$((10#${BASH_REMATCH[3]}))
   local pct=$((10#${BASH_REMATCH[4]}))
   (( total > 0 && used <= total && free <= total && used + free <= total && pct <= 100 )) || return 11
-  if (( free < DEV_STORAGE_MIN_FREE_BYTES || pct >= DEV_STORAGE_MAX_USED_PERCENT )); then
+  # Disk use percentage from df must never understate used/total.
+  (( used * 100 <= pct * total )) || return 11
+  if (( free < DEV_STORAGE_MIN_FREE_BYTES || pct >= DEV_STORAGE_MAX_USED_PERCENT || used * 100 >= DEV_STORAGE_MAX_USED_PERCENT * total )); then
     return 10
   fi
   return 0

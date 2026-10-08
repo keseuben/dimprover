@@ -38,7 +38,13 @@ const fixtures = [
   ["over percent", "100 80 20 101%",11],
   ["negative", "100 80 -20 80%",11],
   ["extra field", "100 80 20 80% EXTRA",11],
-  ["two lines", "100 80 20 80%\n100 80 20 80%",11]
+  ["two lines", "100 80 20 80%\n100 80 20 80%",11],
+  ["underreported actual usage", "200000000000 181000000000 19000000000 89%",11],
+  ["underreported percent", "200000000000 175000000000 25000000000 80%",11],
+  ["over limit field width", "1000000000000000 800000000000000 200000000000000 80%",11],
+  ["valid large report", "999999999999999 700000000000000 299999999999999 71%",0],
+  ["exact 90 percent raw usage", "200000000000 180000000000 20000000000 90%",10],
+  ["usage is 89 percent", "200000000000 178000000000 22000000000 89%",0]
 ];
 for(const [label,line,expected] of fixtures) {
   const result=spawnSync("bash",["-c",prefix,"policy-test",line],{encoding:"utf8"});

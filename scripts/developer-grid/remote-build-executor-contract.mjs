@@ -39,6 +39,9 @@ check("DEV BUILD health snapshot has a 30 second systemd refresh timer",()=>{ass
 check("runner source equals deployment source",()=>{assert.equal(runner,deployedRunner);});
 check("runner preserves emergency DEV freeze",()=>{assert.match(deployedRunner,/dev-storage-freeze\.json/);assert.match(deployedRunner,/DEV_STORAGE_ADMISSION_BLOCKED/);});
 check("runner checks freeze before bundle validation and npm",()=>{const freeze=deployedRunner.indexOf('if [[ -f "${FREEZE_FILE}" ]]');assert.ok(freeze>0);assert.ok(freeze<deployedRunner.indexOf("SOURCE_BUNDLE_MISSING"));assert.ok(freeze<deployedRunner.indexOf("npm ci --no-audit --no-fund"));});
+check("runner storage admission fixture suite stays green",()=>{
+  execFileSync(process.execPath,[path.join(root,"scripts/developer-grid/dev-storage-admission-contract.mjs")],{stdio:"ignore"});
+});
 check("runner verifies exact execution identity",()=>{for(const marker of ["dimproadmin","hostname -s","SOURCE_COMMIT_INVALID","SOURCE_BRANCH_INVALID","WORKER_CODE_INVALID"])assert.ok(runner.includes(marker));});
 check("runner uses hardened host-local flock",()=>{assert.match(runner,/STATE_ROOT.*full-build\.lock/);assert.match(runner,/flock -n 9/);});
 check("runner sources pinned toolchain",()=>{assert.match(runner,/toolchains\/node\.env/);for(const marker of ["v22.23.2","10.9.8","2.43.0"])assert.ok(runner.includes(marker));});
