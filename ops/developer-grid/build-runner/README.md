@@ -92,3 +92,45 @@ Next release step: approved DEV-side forced-command authorization, live
 verification from each BUILD node, staged executor with rollback, and fresh
 safely approved retirement preview/guarded execution through dedicated MCP
 actions only. Do not claim deployment readiness from source tests alone.
+
+
+## 2026-10-08 read-only DEV disk artifact audit
+
+Authoritative disk check: approximately 99% DEV usage, ~2.28 GB available;
+BUILD01 ~16% and BUILD02 ~40%, both idle with emergency FULL BUILD freeze
+ACTIVE. PROD DENY.
+
+Read-only file inventory:
+- /srv/dimpro-dev/artifacts: 16.477 GiB allocated, complete scan.
+- /srv/dimpro-dev/artifacts/build-runs: 11.466 GiB allocated, 130
+  existing build-artifact.tar.gz files across 291 run directories.
+- Approved V2 manifest includes 65 tarballs / 5,794,594,816 allocated bytes,
+  but earlier preflight proof must NOT be treated as fresh APPLY proof.
+- Another 65 tarballs / 6,515,343,360 allocated bytes are NOT in the approved
+  manifest. No unapproved tarball may be retired.
+- Unapproved classification by metadata and existing manifest protections:
+  - 47 older/equal to referenced snapshot, offsite proof NOT VERIFIED:
+    4,636,237,824 bytes.
+  - 3 explicitly hard-protected: 256,237,568 bytes.
+  - 7 newer than referenced snapshot: 870,928,384 bytes.
+  - 8 lack required metadata/result proof: 751,939,584 bytes.
+  An earlier creation date is NOT restic proof or a deletion permission.
+- New read-only, non-destructive, immutable-in-place report:
+  /srv/dimpro-dev/coordination/maintenance-tools/reports/dev-build-run-tarball-exclusion-inventory-20261008-v1.json
+  SHA256: 11066493873fa4a56fd8426b73bb94790b7ce2a7fcd450b206034eba8b2ce768
+  The report's category counts/bytes and all 65 deny flags were checked.
+
+Do not directly add the unapproved set to the current manifest: an R5 would
+need independent fresh offsite path/size/hash validation, all live reference
+guards, full Safe Delete skill verification, immutable manifest approval and
+the connector's dedicated guarded apply capability.
+
+The latest direct engine dry-run attempt did not generate a valid fresh
+report. MCP v2.3.3 server advertises additional preview/apply actions, but
+the ChatGPT connector schema still exposes only its original 8 tools.
+Physical deletion through the generic shell tool is forbidden. There was
+NO deletion, runtime swap, freeze removal or PROD operation in this audit.
+
+Remaining release blockers: approved SSH forced-command enrollment on DEV,
+live probes from BUILD01/02, dedicated MCP preview/apply exposure, capacity
+recovery to >=15 GiB free and <90% used, and validated controlled rollout.
