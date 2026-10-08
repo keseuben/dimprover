@@ -4024,3 +4024,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Bekapcsolva `text-rendering: optimizeLegibility` és WebKit antialiasing a Drive shellen.
 - A V0.9.26 profilnév, fullscreen kattintás-arbitráció és fájlmegjelenítő Kéz/Pan + lokális Ctrl+görgő zoom funkciói változatlanul részei a V0.9.27-nek.
 - Contract: `scripts/drive-v0927-typography-v1-contract.mjs` – 23/23 PASS; V0.9.26 regressziós contract 24/24 PASS; TypeScript PASS; célzott ESLint PASS. A teljes repository lint 25 korábban meglévő hibát jelez kizárólag a `app/lib/drive-core/storageRepository.ts` és `app/projektkapu/kiadas/page.tsx` fájlokban; a V0.9.27 által módosított TS/TSX/MJS fájlokban nincs lint hiba. PROD DENY.
+
+### V0.9.27 DEV aktiválás – 2026-10-08
+
+- Runtime source: `a730027ad4974f18a98f35a6de8d45438897449e`.
+- BUILD-01 run: `drive-v0927-a730027ad-20261008-build01-b3`.
+- Build ID: `HKslNO6lZZqJpumCaAVlh`.
+- Artifact SHA-256: `10b941fefc24b665dc72f397dcaf4da404d54828726fbf3adefd2c25fd2171fc`.
+- BUILD-01 result: PASS; actual artifact SHA = metadata SHA = result SHA.
+- A korábbi BUILD-01 storage freeze state elavult volt: a freeze 90%/15 GiB szabályból származott, miközben a felhasználó a DEV build használati limitet 97%-ra módosította. A feloldás előtt a DEV használat 94% volt. A régi BUILD-01 freeze fájl törlés helyett archiválva lett, és külön audit készült: `/srv/dimpro-build/state/dev-storage-freeze-clear-20261008T211846Z.json`.
+- BUILD-02 freeze state nem lett módosítva ebben a körben.
+- Candidate runtime: `dimpro-drive-v0927-typography-a730027ad-p3406`, port `3406`, PM2 online, restart `0`, error log `0 byte`.
+- Rollback runtime: `dimpro-drive-v0925-desktopsettings-131b1bd42-p3405`, port `3405`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0927/dimpro-dev.conf.before-v0927-20261008T212650Z`, SHA-256 `23c57273cf35ccd409e7f660ba18bcfb744e00d22d03312af587640d1899e06d`.
+- Public DEV header: `a730027ad DRIVE V0.9.27 + TYPOGRAPHY V1 + INTER + PROFILE SAVE + VIEWER PAN/ZOOM + FULLSCREEN CLICK FIX + DESKTOP SETTINGS + AUTH DEV`.
+- Public `/drive` auth redirect PASS; unauthenticated profile PATCH 401 fail-closed; AUTH ready, database ready, migration count `11`.
+- Inter `.woff2` assetek jelen vannak a standalone release statikus media könyvtárában.
+- PM2 process list mentve. PROD DENY változatlan.
+- DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.2G free`, 94%.

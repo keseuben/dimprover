@@ -841,3 +841,7 @@ A központi profilnév módosítása nem szélesíti az AUTH runtime tábla-jogo
 ### Drive V0.9.27 – közös DIMPRO Typography V1
 
 A Drive felület tipográfiája közös DIMPRO tokenrendszerre került. A rendszer elsődleges UI fontja Inter (`next/font`, latin + latin-ext), self-hostolt build-erőforrással; fallback Segoe UI / Arial / Helvetica. A Drive alapméretek jellemzően +1 px-szel nőttek, a korábban túl kicsi 8–9 px-es fontos feliratok legfeljebb +2 px-szel. A fő táblázati szöveg 12 px, a táblázatfejléc 11 px. Az elsődleges, másodlagos és meta szövegek külön közös színtokeneket használnak, hogy a Google Drive/Gmail-szerű olvashatóságot érjük el a DIMPRO saját arculatának megtartása mellett.
+
+### Drive V0.9.27 DEV runtime állapot
+
+A V0.9.27 aktív DEV-en a `3406` porton. Runtime source `a730027ad4974f18a98f35a6de8d45438897449e`, BUILD-01 build ID `HKslNO6lZZqJpumCaAVlh`, artifact SHA-256 `10b941fefc24b665dc72f397dcaf4da404d54828726fbf3adefd2c25fd2171fc`. A V0.9.25 + Desktop Settings `3405` runtime rollbackként online maradt. AUTH migration count `11`, public auth/smoke PASS, PROD DENY.
