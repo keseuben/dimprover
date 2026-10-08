@@ -21,6 +21,29 @@ assert.ok(runtime.indexOf("check_dev_storage_admission\n") < runtime.indexOf("np
 assert.match(probe, /SSH_ORIGINAL_COMMAND/);
 assert.match(probe, /df -B1 --output=size,used,avail,pcent/);
 
+const probePath=path.join(root,"ops/developer-grid/build-runner/dimpro-dev-storage-probe-v1");
+const deniedProbe=spawnSync("bash",[probePath],{encoding:"utf8",env:{...process.env,SSH_ORIGINAL_COMMAND:"invalid-probe-command"}});
+assert.equal(deniedProbe.status,126,"forbidden command must fail");
+assert.equal(deniedProbe.stdout,"","forbidden command must not return data");
+console.log("PASS forced SSH probe rejects unknown command");
+const allowedProbe=spawnSync("bash",[probePath],{encoding:"utf8",env:{...process.env,SSH_ORIGINAL_COMMAND:"dimpro-storage-probe-v1"}});
+assert.equal(allowedProbe.status,0,"allowlisted probe must succeed");
+assert.match(allowedProbe.stdout,/^\s*\d+\s+\d+\s+\d+\s+\d+%\s*$/);
+console.log("PASS forced SSH probe emits only storage metrics");
+
+const admission = runtime.match(/^check_dev_storage_admission\(\) \{[\s\S]*?^\}/m);
+assert.ok(admission,"LIVE admission function must exist");
+const failClosedScript=[
+  "DEV_STORAGE_IDENTITY=/path/that/must/not/exist/dev-storage-probe_ed25519",
+  "DEV_STORAGE_KNOWN_HOSTS=/path/that/must/not/exist/known_hosts",
+  'fail_json() { echo "$1"; exit 1; }',
+  admission[0],
+  "check_dev_storage_admission"
+].join("\n");
+const failClosed=spawnSync("bash",["-c",failClosedScript],{encoding:"utf8"});
+assert.equal(failClosed.status,1,"missing identity must fail closed");
+assert.match(failClosed.stdout,/DEV_STORAGE_ADMISSION_UNKNOWN_DENY/);
+console.log("PASS missing SSH probe identity fails closed before any remote command");
 const fn = runtime.match(/^dev_storage_policy\(\) \{[\s\S]*?^\}/m);
 assert.ok(fn, "pure Bash capacity policy must exist");
 const prefix = ["DEV_STORAGE_MIN_FREE_BYTES=16106127360", "DEV_STORAGE_MAX_USED_PERCENT=90",fn[0],'dev_storage_policy "$1"'].join("\n");
