@@ -6743,3 +6743,59 @@
 .reviewApproval_manager:hover,
 .reviewApproval_investor:hover,
 .reviewLifecycle_current:hover { color: #fff !important; }
+
+
+/* Drive V0.9.30 – truly compact review workline in regular bottom split inspector */
+.detailsSplitCard .reviewWorkspace > .reviewProgress {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  justify-self: start;
+  align-self: start;
+  grid-template-columns: repeat(6, 48px);
+  gap: 6px;
+  overflow: visible;
+  padding: 2px 2px 5px;
+}
+.detailsSplitCard .reviewProgressStepWrap {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  grid-template-rows: 18px 5px;
+  gap: 2px;
+}
+.detailsSplitCard .reviewProgressStep {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  min-height: 18px;
+  padding: 0 !important;
+}
+.detailsSplitCard .reviewProgressStep svg {
+  width: 13px;
+  height: 13px;
+}
+.detailsSplitCard .reviewProgressBar {
+  width: 48px;
+  max-width: 48px;
+  height: 5px;
+}
+.detailsSplitCard .reviewProgressArrow {
+  right: -8px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+}
+
+/* Full-table bottom inspector uses the same compact geometry. */
+.fullTableInspectorBottom .reviewWorkspace > .reviewProgress {
+  grid-template-columns: repeat(6, 48px);
+  gap: 6px;
+}
+.fullTableInspectorBottom .reviewProgressStepWrap,
+.fullTableInspectorBottom .reviewProgressStep,
+.fullTableInspectorBottom .reviewProgressBar {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+}

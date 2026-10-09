@@ -5,7 +5,7 @@ const read=(p)=>fs.readFileSync(p,"utf8");
 const css=read("components/drive/DriveWorkspace.module.css");
 const build=read("components/drive/driveBuildInfo.ts");
 let pass=0; const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive version is 0.9.29",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.29"/));
+check("Drive version is 0.9.29",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(29|30)"/));
 check("customer approval uses light yellow",()=>assert.match(css,/\.reviewApproval_customer \{[\s\S]*background: #f6d85e !important;[\s\S]*color: #674f00 !important;/s));
 check("project manager approval uses standard blue",()=>assert.match(css,/\.reviewApproval_manager \{[\s\S]*background: #3b82f6 !important;/s));
 check("investor approval uses standard green",()=>assert.match(css,/\.reviewApproval_investor,[\s\S]*\.reviewLifecycle_current \{[\s\S]*background: #2fa66a !important;/s));

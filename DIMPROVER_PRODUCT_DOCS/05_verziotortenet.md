@@ -4097,3 +4097,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Public header: `8413bfbfe DRIVE V0.9.29 + APPROVAL PALETTE + COMPACT REVIEW WORKLINE + SINGLE-ROW DETAIL ACTIONS + AUTH DEV`.
 - Public `/drive` auth redirect PASS; V0.9.29 és V0.9.28 rollback runtime egyaránt online, restart `0`; PM2 process list mentve.
 - DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.2G free`, 94%. PROD DENY.
+
+## 2026-10-09 – DIMPRO Drive V0.9.30 – alsó Tervellenőrzés sorrendmutató javítás
+
+- A V0.9.29 kompakt státuszsáv szabálya túl szűken csak a `fullTableInspectorBottom` nézetre vonatkozott, ezért a normál alsó `detailsSplitCard` panelben a hat lépés továbbra is a teljes rendelkezésre álló szélességet osztotta fel.
+- A normál alsó Tervellenőrzés panel most külön, fix geometriát kap: 6 × 48 px státuszlépés, 6 px köz, max-content szélesség, balra zárt elhelyezés.
+- A lépésikonok 13 px-esek, a státuszcsíkok 48 × 5 px-esek; a köztes nyilak a kompakt blokkhoz igazodnak.
+- Ugyanez a geometria érvényes a teljes táblás alsó inspector nézetre is, így a két alsó paneltípus vizuálisan konzisztens.
+- Contract: `scripts/drive-v0930-review-workline-contract.mjs` 8/8 PASS; V0.9.29 regresszió 13/13 PASS; V0.9.28 regresszió 31/31 PASS; TypeScript PASS. PROD DENY.
