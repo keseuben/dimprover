@@ -4151,3 +4151,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Candidate és public smoke: `/drive` auth redirect PASS, personal favorites unauth `401`, central logout `200` + session-cookie törlés PASS. A buildelt klienschunkban a Súgó fő fejezetei igazoltan jelen vannak.
 - V0.9.31 audit contract: 28/28 PASS; V0.9.30 8/8; V0.9.29 13/13; V0.9.28 31/31; V0.9.27 23/23; V0.9.26 24/24; TypeScript PASS; célzott ESLint 0 error.
 - PM2 lista mentve. DEV tárhely kb. `118G total / 111G used / 6.4G free`, 95%. PROD DENY.
+
+## 2026-10-09 – DIMPRO Drive V0.9.32 – Súgó keresés és akadálymentes fókuszkezelés
+
+- A keresési fejléc külön számolja a témakör- és vezérlőtalálatokat.
+- A talált Súgó-fejezetek kattintható kártyákon jelennek meg; témakör-találat esetén nincs téves Nincs találat állapot.
+- A Súgó modal Tab / Shift+Tab fókuszcsapdát, bezárás utáni fókusz-visszaállítást, stabil Esc callbacket és explicit ARIA kapcsolatokat kapott.
+- A témakör-találati kártyák reszponzív és dark-theme megjelenítést kaptak.
+- A V0.9.28–V0.9.31 regression contractok verziókapui monoton kompatibilitási ellenőrzésre frissültek; a funkcionális assertionök változatlanok.
+- V0.9.32 contract: 9/9 PASS.
+- Regresszió: V0.9.31 28/28, V0.9.30 8/8, V0.9.29 13/13, V0.9.28 31/31 PASS.
+- Célzott ESLint 0 error; TypeScript PASS; git diff --check PASS.
+- Részletes dokumentáció: DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0932_HELP_SEARCH_ACCESSIBILITY_20261009.md.
+- DEV ONLY. PROD DENY.

@@ -12,7 +12,7 @@ const build=read("components/drive/driveBuildInfo.ts");
 const logout=read("components/auth/HeaderLogoutIconButton.tsx");
 let pass=0;
 const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive carries V0.9.28 feature set or newer",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(28|29|30|31)"/));
+check("Drive carries V0.9.28 feature set or newer",()=>{const m=build.match(/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(\d+)"/);assert.ok(m);assert.ok(Number(m[1])>=28)});
 check("project default view is simple",()=>assert.match(project,/useState<DriveViewMode>\("simple"\)/));
 check("project review switches to one-panel layout",()=>assert.match(project,/setLayoutMode\(next === "review" \? "one" : "folders"\)/));
 check("project fullscreen requests native browser fullscreen",()=>assert.match(project,/document\.documentElement\.requestFullscreen/));

@@ -15,7 +15,7 @@ const zip=read("app/lib/drive-core/folderDownloadService.ts");
 const naming=read("app/lib/drive-core/nameNormalizer.ts");
 const build=read("components/drive/driveBuildInfo.ts");
 let pass=0;const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive version is 0.9.31",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.31"/));
+check("Drive version remains V0.9.31-compatible or newer",()=>{const m=build.match(/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(\d+)"/);assert.ok(m);assert.ok(Number(m[1])>=31)});
 check("Shell owns one shared help center",()=>{assert.match(shell,/import DriveHelpCenter/);assert.match(shell,/const \[helpOpen, setHelpOpen\]/);assert.match(shell,/<DriveHelpCenter[\s\S]*open=\{helpOpen\}/s)});
 check("header help wired in project and personal workspaces",()=>{assert.match(project,/onClick=\{onOpenHelp\}><HelpCircle/);assert.match(personal,/onClick=\{onOpenHelp\}><HelpCircle/)});
 check("rail and board help open shared center",()=>{assert.match(rail,/title="Súgó" onClick=\{onOpenHelp\}/);assert.match(board,/onClick=\{onOpenHelp\}><HelpCircle/)});
