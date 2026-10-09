@@ -851,3 +851,9 @@ A V0.9.27 aktív DEV-en a `3406` porton. Runtime source `a730027ad4974f18a98f35a
 A Saját Drive kedvencek V0.9.28-tól nem böngésző-lokális állapotok: USER-owned tartós rekordként kerülnek a `dimpro_personal_drive_favorites` táblába. A personal Drive actor feloldása után a szerver ellenőrzi, hogy a kedvencnek jelölt `content_ref` az adott felhasználó aktív USER referenciája. A kliens közvetlen adatbázis-hozzáférést nem kap. A projektkedvencek meglévő projekt-szintű modellje változatlan marad.
 
 A projekt Drive alapnézete Egyszerű + Mappák és dokumentumtár; Mérnöki nézet ugyanezt az elrendezést használja, Tervellenőrzés pedig egy paneles munkanézetre vált. Saját Drive Egyszerű/Mérnöki nézete is Mappák és dokumentumtár alapú. A natív böngésző fullscreen projekt és Saját Drive oldalon visszaállt.
+
+### Drive V0.9.28 – aktív DEV runtime és kijelentkezés
+
+A V0.9.28 aktív DEV runtime a `3407` porton, source `8b78ffbc0b1a6c77fb51b19f37b3b94af12ca769`, BUILD-01 build ID `579gzeE5JK7olHKJ5lQTi`, artifact SHA-256 `63fa545deeb9d0aa682fde6cb2850257b5541b5fdbb3925b40e74f23b9362057`. A V0.9.27/3406 rollbackként online marad.
+
+A fejléc Kijelentkezés gomb az aktuális eszköz munkamenetét a központi `POST /api/dimpro-auth/logout` útvonalon zárja le. A Drive app-session és a hozzá tartozó aktuális parent central session visszavonásra kerül, a `__Host-dimpro_app` HttpOnly cookie törlődik. A régi DEV-access és Supabase session cleanup csak ezután, best-effort módon fut. Ez nem azonos a külön `logout-all` / „Kijelentkezés minden eszközről” funkcióval.

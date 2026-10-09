@@ -4057,3 +4057,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A fejléc Kijelentkezés gomb javítva: elsődlegesen `POST /api/dimpro-auth/logout` zárja le és visszavonja az aktuális Drive app-sessiont és annak központi parent sessionjét, majd törli a HttpOnly app-session cookie-t. A legacy DEV-access és Supabase session csak ezt követő best-effort takarítás. Sikertelen központi kijelentkezésnél nincs ál-redirect/újratöltés; a felhasználó hibaüzenetet kap. Siker esetén `location.replace("/login")` fut.
 - Új migráció: `supabase/migrations/20261009_personal_drive_favorites_v010.sql`, SHA-256 `5d8d084f34366877a94d0666197ee39bdf92d85564e400cdb63641c3c0fda1cf`. Direct anon/authenticated DB hozzáférés tiltott; service-role szerveroldali hozzáférés engedélyezett.
 - Contract: `scripts/drive-v0928-workspace-ux-personal-favorites-contract.mjs` – 31/31 PASS; Typography V1 23/23 PASS; V0.9.26 regresszió 24/24 PASS; TypeScript PASS; célzott ESLint 0 error. PROD DENY.
+
+### V0.9.28 DEV aktiválás – 2026-10-09
+
+- Runtime source: `8b78ffbc0b1a6c77fb51b19f37b3b94af12ca769`.
+- BUILD-01 run: `drive-v0928-8b78ffbc0-20261009-build01-b1`.
+- Build ID: `579gzeE5JK7olHKJ5lQTi`.
+- Artifact SHA-256: `63fa545deeb9d0aa682fde6cb2850257b5541b5fdbb3925b40e74f23b9362057`.
+- BUILD-01 result: PASS; artifact SHA = metadata SHA = result SHA.
+- Personal Drive Favorites V0.1.0 migráció DEV-en alkalmazva. Backup: `/srv/dimpro-dev/backups/personal-drive-favorites-v010/20261009T061444Z/personal-drive-favorites-before.dump`, SHA-256 `0804f352c229a4ea36fe06e82d910ea00d24cf96506dbf5076a5d4265727d6d6`.
+- Favorites migráció protected sorok: objects `3→3`, refs `3→3`, users `3→3`, meta `3→4`, favorites `0`. RLS / PK / FK / service-role jogosultságok PASS; anon és authenticated közvetlen SELECT tiltott.
+- Candidate/runtime: `dimpro-drive-v0928-workspace-8b78ffbc0-p3407`, port `3407`, PM2 online, restart `0`, error log `0 byte`.
+- Rollback: V0.9.27 `dimpro-drive-v0927-typography-a730027ad-p3406`, port `3406`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0928/dimpro-dev.conf.before-v0928-20261009T062358Z`, SHA-256 `90a829fa87196a31b46fc407373b9392f01bdb1e50d51d3c98d7987146113d0a`.
+- Public header: `8b78ffbc0 DRIVE V0.9.28 + NATIVE FULLSCREEN + PERSONAL FAVORITES + COMPACT DETAILS + STATUS VISIBILITY + CENTRAL LOGOUT + AUTH DEV`.
+- Public `/drive` auth redirect PASS; personal favorites unauthenticated request `401`; central logout smoke `200` és `__Host-dimpro_app` törlő Set-Cookie PASS.
+- Fullscreen natív API, compact board, részletfejléc műveletek, review bottom progress, personal favorites, magas kontrasztú jóváhagyási/életciklus ikonok és központi logout együtt aktívak DEV-en.
+- PM2 process list mentve. PROD DENY változatlan.
+- DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.7G free`, 94%.
