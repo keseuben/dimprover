@@ -24,7 +24,7 @@ A Súgó egy közös Shell-szintű overlay, ezért ugyanaz a felület nyílik me
 
 A panel kereshető, `Esc` billentyűvel és háttérkattintással bezárható, mobil/szűk képernyőn reszponzív, sötét témában külön kontrasztszabályokat használ.
 
-A Súgó jelenlegi adatregisztere 169 külön kezelőelem/művelet leírását, 14 fő témakört és 5 projekt-szerepkört tartalmaz.
+A Súgó jelenlegi adatregisztere 183 külön kezelőelem/művelet leírását, 14 fő témakört és 5 projekt-szerepkört tartalmaz.
 
 ## 3. Fő Súgó-témakörök
 

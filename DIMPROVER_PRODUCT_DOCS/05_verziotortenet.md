@@ -4134,3 +4134,20 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Súgó nem állít működőnek előkészített funkciót: Saját Drive közvetlen Feltöltés/Új verzió/Új revízió/Mappa ZIP/Formális kiadás, továbbá az általános Kezdőlap/Legutóbbi/Kiadások/Értesítések/AI Dokumentumvizsgáló/Megosztás/Tárhely bővítése megfelelő `Hamarosan` állapotot kap.
 - `scripts/drive-v0931-help-ux-audit-contract.mjs`: 28/28 PASS. V0.9.30: 8/8 PASS; V0.9.29: 13/13 PASS; V0.9.28: 31/31 PASS; Typography V1: 23/23 PASS; V0.9.26: 24/24 PASS. Célzott ESLint 0 error; teljes repository lint változatlan baseline: 25 error / 106 warning. PROD DENY.
 - Részletes audit: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0931_HELP_UX_AUDIT_20261009.md`.
+
+### V0.9.31 DEV aktiválás – 2026-10-09
+
+- Runtime source: `0ec78cd8be209724854c6c50b1a3a60539fac3c4`.
+- BUILD-01 run: `drive-v0931-0ec78cd8b-20261009-build01-b1`.
+- Build ID: `2GBzi-U1Ep0JMyGR2LKEO`.
+- Artifact SHA-256: `761a3f5a330058284c00c5f0e594edb0458e7cbdf83809850cd9733635e632cb`.
+- BUILD-01 result: PASS; artifact SHA = metadata SHA = result SHA.
+- Candidate/runtime: `dimpro-drive-v0931-help-0ec78cd8-p3410`, port `3410`, PM2 online, restart `0`, error log `0 byte`.
+- Rollback: V0.9.30 `dimpro-drive-v0930-review-workline-851cbe507-p3409`, port `3409`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0931/dimpro-dev.conf.before-v0931-20261009T094130Z`, SHA-256 `6bc4062926b33ab98568cf712cc70610588f3c05bcd6796af4520b4183be5dba`.
+- Public header: `0ec78cd8b DRIVE V0.9.31 + SEARCHABLE HELP CENTER + FULL UX AUDIT + ROLE GUIDE + AUTH DEV`.
+- Súgó-központ: 183 külön kezelőelem/művelet, 14 fő témakör, 5 projekt-szerepkör; Saját Drive / Projekt munkatér kontextus szerint szűrve.
+- Külön részletes fejezet: jogosultságkezelés és szerepkörök; projekt/mappa ACL; feltöltési fájlnév-normalizálás; exportnév; Mappa ZIP és CsomagBOX ZIP kiegészítő manifest/jegyzék fájlok; Kedvencek; Tervellenőrzés; CsomagBOX; fájlmegjelenítő; teljes gomb- és ikonjegyzék.
+- Candidate és public smoke: `/drive` auth redirect PASS, personal favorites unauth `401`, central logout `200` + session-cookie törlés PASS. A buildelt klienschunkban a Súgó fő fejezetei igazoltan jelen vannak.
+- V0.9.31 audit contract: 28/28 PASS; V0.9.30 8/8; V0.9.29 13/13; V0.9.28 31/31; V0.9.27 23/23; V0.9.26 24/24; TypeScript PASS; célzott ESLint 0 error.
+- PM2 lista mentve. DEV tárhely kb. `118G total / 111G used / 6.4G free`, 95%. PROD DENY.
