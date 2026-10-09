@@ -4105,3 +4105,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A lépésikonok 13 px-esek, a státuszcsíkok 48 × 5 px-esek; a köztes nyilak a kompakt blokkhoz igazodnak.
 - Ugyanez a geometria érvényes a teljes táblás alsó inspector nézetre is, így a két alsó paneltípus vizuálisan konzisztens.
 - Contract: `scripts/drive-v0930-review-workline-contract.mjs` 8/8 PASS; V0.9.29 regresszió 13/13 PASS; V0.9.28 regresszió 31/31 PASS; TypeScript PASS. PROD DENY.
+
+### V0.9.30 DEV aktiválás – 2026-10-09
+
+- Runtime source: `851cbe507207253694af461e137dee2354ba1f99`.
+- BUILD-01 run: `drive-v0930-851cbe507-20261009-build01-b1`.
+- Build ID: `4GzYyZIpCtQIzH9NmvJml`.
+- Artifact SHA-256: `48706e68e4328ad3f06384cbfbd06f85b6bf846f0428fbd11ad8027d04ec0a5a`.
+- BUILD-01 result: PASS; artifact SHA = metadata SHA = result SHA.
+- Candidate/runtime: `dimpro-drive-v0930-review-workline-851cbe507-p3409`, port `3409`, PM2 online, restart `0`, error log `0 byte`.
+- Rollback: V0.9.29 `dimpro-drive-v0929-visual-8413bfbf-p3408`, port `3408`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0930/dimpro-dev.conf.before-v0930-20261009T081327Z`, SHA-256 `81673202c84698a04a85d45023739f0c6c5a0e9edb1cf1a7c94bfa04a2154714`.
+- Public header: `851cbe507 DRIVE V0.9.30 + TRUE COMPACT BOTTOM REVIEW WORKLINE + AUTH DEV`.
+- Stabilizáció: publikus `/drive` auth redirect PASS; V0.9.30 és V0.9.29 rollback runtime online, restart `0`; PM2 lista mentve.
+- DEV tárhely kb. `118G total / 111G used / 6.8G free`, 95%. PROD DENY.
