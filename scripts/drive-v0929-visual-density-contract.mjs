@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const read=(p)=>fs.readFileSync(p,"utf8");
+const css=read("components/drive/DriveWorkspace.module.css");
+const build=read("components/drive/driveBuildInfo.ts");
+let pass=0; const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
+check("Drive version is 0.9.29",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.29"/));
+check("customer approval uses light yellow",()=>assert.match(css,/\.reviewApproval_customer \{[\s\S]*background: #f6d85e !important;[\s\S]*color: #674f00 !important;/s));
+check("project manager approval uses standard blue",()=>assert.match(css,/\.reviewApproval_manager \{[\s\S]*background: #3b82f6 !important;/s));
+check("investor approval uses standard green",()=>assert.match(css,/\.reviewApproval_investor,[\s\S]*\.reviewLifecycle_current \{[\s\S]*background: #2fa66a !important;/s));
+check("working lifecycle uses yellow",()=>assert.match(css,/\.reviewLifecycle_working \{[\s\S]*background: #f2c94c !important;/s));
+check("details header text is ellipsized",()=>assert.match(css,/\.detailsHeaderTitle,[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/s));
+check("detail actions stay on one row",()=>assert.match(css,/\.detailsTopActions \{[\s\S]*flex-wrap: nowrap;[\s\S]*gap: 3px;/s));
+check("detail action icons are compact",()=>assert.match(css,/\.detailsActionIcon \{[\s\S]*width: 27px;[\s\S]*height: 27px;/s));
+check("fullscreen side actions never wrap",()=>assert.match(css,/\.fullTableInspector \.detailsTopActions \{[\s\S]*flex-wrap: nowrap;/s));
+check("bottom review workline has fixed compact steps",()=>assert.match(css,/\.fullTableInspectorBottom \.reviewWorkspace > \.reviewProgress \{[\s\S]*width: max-content;[\s\S]*repeat\(6, 54px\);/s));
+check("bottom review step width is fixed",()=>assert.match(css,/\.fullTableInspectorBottom \.reviewProgressStepWrap \{[\s\S]*width: 54px;[\s\S]*min-width: 54px;/s));
+check("details subtabs have stronger inactive contrast",()=>assert.match(css,/\.detailsSubTabs button \{[\s\S]*background: #f0f5fa;[\s\S]*color: #405a72;/s));
+check("details active subtab has stronger blue",()=>assert.match(css,/\.detailsSubTabActive \{[\s\S]*background: #dcecff !important;[\s\S]*color: #0f5fc8 !important;/s));
+console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.29 visual density",pass,fail:0,productionAccess:"DENY"},null,2));

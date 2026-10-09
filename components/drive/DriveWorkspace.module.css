@@ -6616,3 +6616,130 @@
   filter: brightness(.92);
   color: #fff !important;
 }
+
+
+/* Drive V0.9.29 – approval palette, compact review workline and single-row detail actions */
+.reviewApproval_customer {
+  background: #f6d85e !important;
+  border-color: #d9b938 !important;
+  color: #674f00 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 1px 2px rgba(103,79,0,.12);
+}
+.reviewApproval_manager {
+  background: #3b82f6 !important;
+  border-color: #2f6fd1 !important;
+  color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.20), 0 1px 2px rgba(30,91,181,.15);
+}
+.reviewApproval_investor,
+.reviewLifecycle_current {
+  background: #2fa66a !important;
+  border-color: #238653 !important;
+  color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.20), 0 1px 2px rgba(25,119,73,.15);
+}
+.reviewLifecycle_working {
+  background: #f2c94c !important;
+  border-color: #d6ad2e !important;
+  color: #654e00 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.30), 0 1px 2px rgba(101,78,0,.12);
+}
+.reviewApproval_customer:hover,
+.reviewApproval_manager:hover,
+.reviewApproval_investor:hover,
+.reviewLifecycle_working:hover,
+.reviewLifecycle_current:hover { filter: brightness(.97); }
+
+.detailsHeaderText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.detailsHeaderTitle,
+.detailsHeaderText strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detailsHeader { padding-right: 198px; }
+.detailsTopActions {
+  flex-wrap: nowrap;
+  max-width: none;
+  gap: 3px;
+}
+.detailsActionIcon {
+  width: 27px;
+  height: 27px;
+  min-width: 27px;
+}
+.fullTableInspector .detailsHeader { padding-right: 232px; }
+.fullTableInspector .detailsTopActions {
+  right: 44px;
+  max-width: none;
+  flex-wrap: nowrap;
+}
+.fullTableInspectorBottom .detailsHeader { padding-right: 232px; }
+.fullTableInspectorBottom .detailsTopActions {
+  right: 46px;
+  max-width: none;
+  flex-wrap: nowrap;
+}
+
+.detailsSubTabs button {
+  border-color: #bccddd;
+  background: #f0f5fa;
+  color: #405a72;
+  box-shadow: inset 0 -1px 0 rgba(91,118,143,.06);
+}
+.detailsSubTabs button:hover {
+  border-color: #8fb2d6;
+  background: #e7f1fb;
+  color: #1f5e98;
+}
+.detailsSubTabActive {
+  border-color: #5f9be6 !important;
+  background: #dcecff !important;
+  color: #0f5fc8 !important;
+  box-shadow: inset 0 0 0 1px rgba(66,132,218,.10) !important;
+}
+
+.fullTableInspectorBottom .reviewWorkspace > .reviewProgress {
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
+  grid-template-columns: repeat(6, 54px);
+  gap: 9px;
+  overflow: visible;
+  padding: 2px 3px 5px;
+}
+.fullTableInspectorBottom .reviewProgressStepWrap {
+  width: 54px;
+  min-width: 54px;
+  grid-template-rows: 18px 5px;
+}
+.fullTableInspectorBottom .reviewProgressStep {
+  width: 54px;
+  min-width: 54px;
+  padding: 0 !important;
+}
+.fullTableInspectorBottom .reviewProgressBar { width: 54px; height: 5px; }
+.fullTableInspectorBottom .reviewProgressArrow { right: -10px; }
+
+:global(html[data-drive-theme="dark"]) .detailsSubTabs button,
+:global([data-theme="dark"]) .detailsSubTabs button {
+  border-color: #456177;
+  background: #1b3347;
+  color: #c2d3df;
+}
+:global(html[data-drive-theme="dark"]) .detailsSubTabActive,
+:global([data-theme="dark"]) .detailsSubTabActive {
+  border-color: #669be0 !important;
+  background: #204b77 !important;
+  color: #d9eaff !important;
+}
+.reviewApproval_customer:hover,
+.reviewLifecycle_working:hover { color: #654e00 !important; }
+.reviewApproval_manager:hover,
+.reviewApproval_investor:hover,
+.reviewLifecycle_current:hover { color: #fff !important; }

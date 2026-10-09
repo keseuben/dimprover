@@ -4075,3 +4075,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Fullscreen natív API, compact board, részletfejléc műveletek, review bottom progress, personal favorites, magas kontrasztú jóváhagyási/életciklus ikonok és központi logout együtt aktívak DEV-en.
 - PM2 process list mentve. PROD DENY változatlan.
 - DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.7G free`, 94%.
+
+## 2026-10-09 – DIMPRO Drive V0.9.29 – státuszpaletta és részletpanel sűrűség
+
+- A táblázati jóváhagyási/életciklus jelölések finomítva: Megrendelő világos citromsárga, Projektvezető standard jóváhagyó kék, Beruházási projektvezető standard jóváhagyó zöld, Munkaközi citromsárga, Aktuális jóváhagyó zöld. A többi jelölés világos marad.
+- Az alsó Tervellenőrzés sorrendmutató nem feszül ki többé a teljes panel szélességére: hat fix, kompakt ikonlépésből áll, rövid állapotcsíkkal és köztes nyilakkal; a megnevezések tooltipként maradnak elérhetők.
+- A Részletek fejléc fájlneve rugalmasan rövidül ellipszissel, így a végrehajtási ikonok nem szorulnak le. Az ikonok 27 px-es kompakt méretet kaptak és egy sorban maradnak oldalsó és alsó inspector nézetben is.
+- A `Tervadatok / Mappa / Biztonság` alfülek kontrasztja erősebb: határozottabb alap háttér/border, aktív állapotnál erősebb kék kiemelés.
+- Contract: `scripts/drive-v0929-visual-density-contract.mjs` 13/13 PASS; V0.9.28 regresszió 31/31 PASS; Typography V1 23/23 PASS; V0.9.26 regresszió 24/24 PASS; TypeScript PASS. PROD DENY.
