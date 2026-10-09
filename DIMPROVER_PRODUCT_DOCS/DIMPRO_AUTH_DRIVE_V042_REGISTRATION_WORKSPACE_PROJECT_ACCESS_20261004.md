@@ -845,3 +845,9 @@ A Drive felület tipográfiája közös DIMPRO tokenrendszerre került. A rendsz
 ### Drive V0.9.27 DEV runtime állapot
 
 A V0.9.27 aktív DEV-en a `3406` porton. Runtime source `a730027ad4974f18a98f35a6de8d45438897449e`, BUILD-01 build ID `HKslNO6lZZqJpumCaAVlh`, artifact SHA-256 `10b941fefc24b665dc72f397dcaf4da404d54828726fbf3adefd2c25fd2171fc`. A V0.9.25 + Desktop Settings `3405` runtime rollbackként online maradt. AUTH migration count `11`, public auth/smoke PASS, PROD DENY.
+
+### Drive V0.9.28 – személyes Kedvencek és workspace UX
+
+A Saját Drive kedvencek V0.9.28-tól nem böngésző-lokális állapotok: USER-owned tartós rekordként kerülnek a `dimpro_personal_drive_favorites` táblába. A personal Drive actor feloldása után a szerver ellenőrzi, hogy a kedvencnek jelölt `content_ref` az adott felhasználó aktív USER referenciája. A kliens közvetlen adatbázis-hozzáférést nem kap. A projektkedvencek meglévő projekt-szintű modellje változatlan marad.
+
+A projekt Drive alapnézete Egyszerű + Mappák és dokumentumtár; Mérnöki nézet ugyanezt az elrendezést használja, Tervellenőrzés pedig egy paneles munkanézetre vált. Saját Drive Egyszerű/Mérnöki nézete is Mappák és dokumentumtár alapú. A natív böngésző fullscreen projekt és Saját Drive oldalon visszaállt.

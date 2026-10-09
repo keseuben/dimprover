@@ -281,7 +281,7 @@ export default function DriveWorkspace({
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [foldersDetailsHeight, setFoldersDetailsHeight] = useState(280);
   const [boxShelfHeight, setBoxShelfHeight] = useState(154);
-  const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
+  const [viewMode, setViewMode] = useState<DriveViewMode>("simple");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [projectSettings, setProjectSettings] = useState<DriveProjectSettings | null>(null);
   const [reviewFocus, setReviewFocus] = useState("");
@@ -370,6 +370,9 @@ export default function DriveWorkspace({
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
   }, [cancelFullscreenInspectTimer]);
 
   const toggleTableFullscreen = useCallback(() => {
@@ -380,7 +383,15 @@ export default function DriveWorkspace({
     setTableFullscreen(true);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
   }, [closeTableFullscreen, tableFullscreen]);
+
+  const changeViewMode = useCallback((next: DriveViewMode) => {
+    setViewMode(next);
+    setLayoutMode(next === "review" ? "one" : "folders");
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -437,14 +448,24 @@ export default function DriveWorkspace({
         setFullTableInspectorOpen(false);
         return;
       }
-      closeTableFullscreen();
+      if (!document.fullscreenElement) closeTableFullscreen();
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        cancelFullscreenInspectTimer();
+        setTableFullscreen(false);
+        setFullTableInspectorOpen(false);
+        setPreviewDocumentId("");
+      }
     };
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
+  }, [cancelFullscreenInspectTimer, closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
 
   const loadBoxes = useCallback(async () => {
     try {
@@ -3332,7 +3353,7 @@ export default function DriveWorkspace({
               documents={visibleDocuments}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
-              onViewModeChange={setViewMode}
+              onViewModeChange={changeViewMode}
               onSelectDocument={(document) => scheduleFullscreenInspector(document.id)}
               onOpenDocument={(document) => openFullscreenPreview(document.id)}
               onRefresh={() => void load()}
@@ -3505,7 +3526,7 @@ export default function DriveWorkspace({
               documents={visibleDocuments}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
-              onViewModeChange={setViewMode}
+              onViewModeChange={changeViewMode}
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
               onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
               onRefresh={() => void load()}

@@ -6512,3 +6512,66 @@
 @media (max-width: 1050px) {
   .detailsTabs button { font-size: 9px; }
 }
+
+
+/* Drive V0.9.28 – native fullscreen restore, compact navigation board and inspector density */
+.boardInner { padding: 10px 10px 10px; overflow-y: auto; scrollbar-gutter: auto; }
+.boardHeader { padding: 0 3px 8px; }
+.boardNav { gap: 2px; padding: 8px 0; }
+.boardNav a,
+.boardNav button { gap: 9px; padding: 7px 8px; }
+.boardSectionLabel { padding: 8px 7px 3px; }
+.projectSelect { padding: 7px 8px; }
+.storageCard { padding-top: 9px; }
+.storageBar { margin-top: 5px; }
+.storageError { margin-top: 4px; }
+.storageButton { margin-top: 7px; padding: 7px; }
+
+.detailsPanel { position: relative; }
+.detailsHeader { min-height: 58px; padding-right: 196px; }
+.detailsTopActions {
+  position: absolute;
+  z-index: 5;
+  top: 7px;
+  right: 8px;
+  width: auto;
+  max-width: 180px;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.fullTableInspector .detailsHeader { padding-right: 224px; }
+.fullTableInspector .detailsTopActions { right: 44px; max-width: 174px; }
+.fullTableInspectorBottom .detailsHeader { padding-right: 236px; }
+.fullTableInspectorBottom .detailsTopActions { right: 46px; max-width: none; flex-wrap: nowrap; }
+
+.fullTableInspectorBottom .reviewProgress {
+  grid-template-columns: repeat(6, minmax(44px, 1fr));
+  gap: 6px;
+  align-items: start;
+  overflow: visible;
+  padding: 2px 4px 5px;
+}
+.fullTableInspectorBottom .reviewProgressStepWrap { min-width: 0; min-height: 24px; grid-template-rows: 18px 4px; gap: 2px; }
+.fullTableInspectorBottom .reviewProgressStep { min-height: 18px; }
+.fullTableInspectorBottom .reviewProgressStep svg { width: 13px; height: 13px; }
+.fullTableInspectorBottom .reviewProgressBar { height: 4px; }
+.fullTableInspectorBottom .reviewProgressArrow { right: -8px; bottom: -1px; width: 10px; height: 10px; }
+
+@media (max-height: 820px) {
+  .boardInner { padding-top: 8px; padding-bottom: 8px; }
+  .boardHeader { padding-bottom: 6px; }
+  .boardNav { gap: 1px; padding: 6px 0; }
+  .boardNav a,
+  .boardNav button { padding-top: 6px; padding-bottom: 6px; }
+  .boardSectionLabel { padding-top: 6px; }
+  .storageCard { padding-top: 7px; }
+}
+:global(html[data-drive-theme="dark"]) .detailsTopActions,
+:global([data-theme="dark"]) .detailsTopActions { background: transparent; border: 0; }

@@ -7,7 +7,7 @@ const drive=read('components/drive/DriveWorkspace.module.css');
 const build=read('components/drive/driveBuildInfo.ts');
 let pass=0;
 const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,'0')} ${name}`)};
-check('Drive version is 0.9.27',()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.27"/));
+check('Drive carries V0.9.27 typography or newer',()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(27|28)"/));
 check('Inter is loaded through next font',()=>assert.match(layout,/import \{ Inter \} from "next\/font\/google"/));
 check('Inter includes Hungarian latin-ext subset',()=>assert.match(layout,/subsets: \["latin", "latin-ext"\]/));
 check('Inter exposes shared CSS variable',()=>assert.match(layout,/variable: "--font-inter"/));

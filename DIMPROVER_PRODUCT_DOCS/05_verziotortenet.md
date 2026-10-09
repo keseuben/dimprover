@@ -4042,3 +4042,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Inter `.woff2` assetek jelen vannak a standalone release statikus media könyvtárában.
 - PM2 process list mentve. PROD DENY változatlan.
 - DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.2G free`, 94%.
+
+## 2026-10-09 – DIMPRO Drive V0.9.28 – Workspace UX / Fullscreen / Personal Favorites
+
+- Visszaállítva a natív böngésző Fullscreen API a projekt- és Saját Drive táblázatos teljes képernyő nézetéhez. A CSS overlay mellett `requestFullscreen()` / `exitFullscreen()` és `fullscreenchange` szinkron működik.
+- A fullscreen részletek és előnézet panel egy-/duplakattintás arbitrációja megmaradt; az overlay állapot a natív fullscreen kilépésével szinkronizálódik.
+- Projekt munkatér alapnézete most `Egyszerű nézet + Mappák és dokumentumtár`. Mérnöki nézetre váltás szintén ezt a kétpaneles mappa+dokumentumtár elrendezést használja. Tervellenőrzésre váltás automatikusan egy paneles dokumentumtárnézetet aktivál.
+- Saját Drive új alapnézeti persistence-generációt kapott (`view-v2`, `layout-v3`), ezért a régi elrendezés nem írja felül az új `Egyszerű + Mappák és dokumentumtár` alapot. Egyszerű/Mérnöki váltáskor a mappák+dokumentumtár elrendezés marad.
+- A kinyíló Drive navigációs board vertikális spacingje tömörebb lett, normál desktop magasságon a felesleges görgetősáv elkerülése érdekében; kisebb viewport-magasságon további compact szabály lép életbe.
+- A Részletek panel végrehajtási ikonsora abszolút pozicionálással a dokumentumfejléc jobb oldalára került. A gombok side panelben szükség esetén több sorba törhetnek, alsó széles panelben egy sorban maradnak. A korábbi külön műveleti sor nem foglal további függőleges helyet.
+- Az alsó fullscreen Tervellenőrzés inspector külön kompakt 6-szakaszos állapotjelző szabályt kapott, kisebb ikonokkal és stabil egyvonalas státuszcsíkkal.
+- Saját Drive Kedvencek most szerveroldali, user-owned tartós állapotot kap: `dimpro_personal_drive_favorites` tábla, `/api/drive/personal/favorites` GET/PUT API és ownership-validáló repository. A Kedvencek navigáció valóban szűri a személyes fájlokat, a sorcsillag pedig menti/törli a kedvenc állapotot.
+- Új migráció: `supabase/migrations/20261009_personal_drive_favorites_v010.sql`, SHA-256 `5d8d084f34366877a94d0666197ee39bdf92d85564e400cdb63641c3c0fda1cf`. Direct anon/authenticated DB hozzáférés tiltott; service-role szerveroldali hozzáférés engedélyezett.
+- Contract: `scripts/drive-v0928-workspace-ux-personal-favorites-contract.mjs` – 23/23 PASS; Typography V1 23/23 PASS; V0.9.26 regresszió 24/24 PASS; TypeScript PASS; célzott ESLint 0 error. PROD DENY.

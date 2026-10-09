@@ -155,6 +155,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [previewDocumentId, setPreviewDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
+  const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [trashMode, setTrashMode] = useState(false);
   const [tableZoom, setTableZoom] = useState(90);
   const [tableFullscreen, setTableFullscreen] = useState(false);
@@ -205,6 +208,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     setTableFullscreen(false);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
   }, [cancelFullscreenInspectTimer]);
 
   const toggleTableFullscreen = useCallback(() => {
@@ -215,23 +221,33 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     setTableFullscreen(true);
     setFullTableInspectorOpen(false);
     setPreviewDocumentId("");
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
   }, [closeTableFullscreen, tableFullscreen]);
+
+  const changeViewMode = useCallback((next: DriveViewMode) => {
+    setViewMode(next);
+    setLayoutMode("folders");
+  }, []);
 
   const load = useCallback(async () => {
     setError("");
     try {
-      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse, storageResponse] = await Promise.all([
+      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse, storageResponse, favoritesResponse] = await Promise.all([
         fetch("/api/drive/personal/content", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/folders", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/boxes", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/storage", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/drive/personal/favorites", { credentials: "same-origin", cache: "no-store" }),
       ]);
       const contentPayload = await contentResponse.json() as ContentPayload;
       const folderPayload = await folderResponse.json() as FolderPayload;
       const projectLinksPayload = await projectLinksResponse.json() as ProjectLinksPayload;
       const boxesPayload = await boxesResponse.json() as BoxesPayload;
       const storagePayload = await storageResponse.json() as StoragePayload;
+      const favoritesPayload = await favoritesResponse.json().catch(() => ({})) as { ok?: boolean; documentIds?: string[] };
       if (!contentResponse.ok || !contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
       if (!folderResponse.ok || !folderPayload.ok) throw new Error(folderPayload.error || "A Saját Drive mappái nem tölthetők be.");
       if (!projectLinksResponse.ok || !projectLinksPayload.ok) throw new Error(projectLinksPayload.error || "A kapcsolt projektek nem tölthetők be.");
@@ -246,6 +262,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
       setAvailableProjects(projectLinksPayload.availableProjects || []);
       setBoxes(boxesPayload.boxes || []);
       setBoxCoreReady(true);
+      setFavoriteDocumentIds(favoritesResponse.ok && favoritesPayload.ok ? favoritesPayload.documentIds || [] : []);
       onStorageQuotaChange?.(storagePayload.storage);
       setSelectedFolderId((current) => current !== "all" && !nextFolders.some((folder) => folder.id === current) ? "all" : current);
       setSelectedDocumentId((current) => nextItems.some((item) => item.id === current) ? current : "");
@@ -271,8 +288,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
 
   useEffect(() => {
     try {
-      const storedView = window.localStorage.getItem("dimpro-drive-personal-view");
-      const storedLayout = window.localStorage.getItem("dimpro-drive-personal-layout-v2");
+      const storedView = window.localStorage.getItem("dimpro-drive-personal-view-v2");
+      const storedLayout = window.localStorage.getItem("dimpro-drive-personal-layout-v3");
       const storedBoxOpen = window.localStorage.getItem("dimpro-drive-personal-box-open");
       const storedBoxHeight = Number(window.localStorage.getItem("dimpro-drive-personal-box-height") || "");
       if (storedView === "simple" || storedView === "engineering") setViewMode(storedView);
@@ -282,8 +299,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     } catch {}
   }, []);
 
-  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-view", viewMode); } catch {} }, [viewMode]);
-  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout-v2", layoutMode); } catch {} }, [layoutMode]);
+  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-view-v2", viewMode); } catch {} }, [viewMode]);
+  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout-v3", layoutMode); } catch {} }, [layoutMode]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-open", boxShelfOpen ? "1" : "0"); } catch {} }, [boxShelfOpen]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-height", String(Math.round(boxShelfHeight))); } catch {} }, [boxShelfHeight]);
 
@@ -316,19 +333,30 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         setFullTableInspectorOpen(false);
         return;
       }
-      closeTableFullscreen();
+      if (!document.fullscreenElement) closeTableFullscreen();
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        cancelFullscreenInspectTimer();
+        setTableFullscreen(false);
+        setFullTableInspectorOpen(false);
+        setPreviewDocumentId("");
+      }
     };
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
+  }, [cancelFullscreenInspectTimer, closeTableFullscreen, fullTableInspectorOpen, previewDocumentId, tableFullscreen]);
 
   useEffect(() => {
     if (!navigationRequest) return;
-    if (navigationRequest.target === "trash") { setTrashMode(true); setPreviewDocumentId(""); }
-    if (navigationRequest.target === "documents") setTrashMode(false);
+    if (navigationRequest.target === "trash") { setTrashMode(true); setFavoriteOnly(false); setPreviewDocumentId(""); }
+    if (navigationRequest.target === "favorites") { setTrashMode(false); setFavoriteOnly(true); setSelectedFolderId("all"); }
+    if (navigationRequest.target === "documents") { setTrashMode(false); setFavoriteOnly(false); }
   }, [navigationRequest]);
 
   const driveFolders = useMemo(() => buildDriveFolders(folders), [folders]);
@@ -368,13 +396,13 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return documents.filter((document) => {
-      const folderMatch = selectedFolderId === "all" || (allFilesMode ? descendantFolderIds.has(document.folderId) : document.folderId === selectedFolderId);
-      if (!folderMatch) return false;
+      const folderMatch = favoriteOnly ? true : selectedFolderId === "all" || (allFilesMode ? descendantFolderIds.has(document.folderId) : document.folderId === selectedFolderId);
+      if (!folderMatch || (favoriteOnly && !favoriteDocumentIds.includes(document.id))) return false;
       if (!normalized) return true;
       const item = itemById.get(document.id);
       return [document.name, item?.originalName, item?.sourceSystem, document.extension].filter(Boolean).some((value) => String(value).toLocaleLowerCase("hu-HU").includes(normalized));
     });
-  }, [allFilesMode, descendantFolderIds, documents, itemById, query, selectedFolderId]);
+  }, [allFilesMode, descendantFolderIds, documents, favoriteDocumentIds, favoriteOnly, itemById, query, selectedFolderId]);
 
   const folderDocumentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -382,10 +410,32 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     return counts;
   }, [documents]);
   const totalBytes = useMemo(() => items.reduce((sum, item) => sum + Math.max(0, item.sizeBytes || 0), 0), [items]);
-  const title = selectedFolder?.displayName || selectedFolder?.name || "Saját Drive";
+  const title = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Saját Drive";
   const subtitle = `${visibleDocuments.length} fájl${selectedFolder && allFilesMode ? " · almappákkal együtt" : ""}`;
   const folderNameForSelectedItem = selectedItem?.folderId ? folderById.get(selectedItem.folderId)?.displayName || folderById.get(selectedItem.folderId)?.name || "Saját Drive" : "Saját Drive";
   const breadcrumbParts = selectedFolder ? (selectedFolder.displayPath || selectedFolder.path).split("/").filter(Boolean) : [];
+
+  const toggleFavorite = useCallback(async (document: DriveDocument) => {
+    if (favoriteBusyDocumentIds.includes(document.id)) return;
+    const favorite = !favoriteDocumentIds.includes(document.id);
+    setFavoriteBusyDocumentIds((current) => [...new Set([...current, document.id])]);
+    setError("");
+    try {
+      const response = await fetch("/api/drive/personal/favorites", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ documentId: document.id, favorite }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; documentIds?: string[] };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A kedvenc állapot nem menthető.");
+      setFavoriteDocumentIds(payload.documentIds || []);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A kedvenc állapot nem menthető.");
+    } finally {
+      setFavoriteBusyDocumentIds((current) => current.filter((id) => id !== document.id));
+    }
+  }, [favoriteBusyDocumentIds, favoriteDocumentIds]);
 
   const createFolder = useCallback(async (parentId: string | null, name: string) => {
     setError(""); setNotice("");
@@ -687,7 +737,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     documents={visibleDocuments}
     selectedDocumentId={selectedDocumentId}
     viewMode={viewMode}
-    onViewModeChange={setViewMode}
+    onViewModeChange={changeViewMode}
     allowedViewModes={["simple", "engineering"]}
     onSelectDocument={(document) => {
       if (tableFullscreen) scheduleFullscreenInspector(document.id);
@@ -696,13 +746,16 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     onOpenDocument={(document) => void openDocument(document)}
     onRefresh={() => void load()}
     boxColorsByDocument={boxColorsByDocument}
+    favoriteDocumentIds={favoriteDocumentIds}
+    favoriteBusyDocumentIds={favoriteBusyDocumentIds}
+    onToggleFavorite={(document) => void toggleFavorite(document)}
     metadataByDocument={{}}
-    folders={driveFolders}
+    folders={favoriteOnly ? [] : driveFolders}
     selectedFolderId={selectedFolderId}
     allFilesMode={allFilesMode}
     onAllFilesModeChange={setAllFilesMode}
-    currentFolder={selectedFolder}
-    onFolderChange={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }}
+    currentFolder={favoriteOnly ? null : selectedFolder}
+    onFolderChange={(folderId) => { setFavoriteOnly(false); setSelectedFolderId(folderId); setAllFilesMode(false); }}
     onNavigateParent={() => setSelectedFolderId(selectedFolder?.parentId || "all")}
     canWrite={folderCoreReady}
     canApprove={false}
@@ -869,7 +922,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         {compareActive ? (
           <CompareWorkspace projectId="personal" workspaceType="PERSONAL" documents={documents} boxes={boxes} seedItems={compareSeedItems} onClose={() => setCompareActive(false)} />
         ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete onDeleteSelected={deletePersonalDocuments} /> : <>
-          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} onMoveDocumentsToFolder={moveDocumentsToFolder} onMoveFolderToFolder={moveFolderToFolder} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
+          <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setFavoriteOnly(false); setSelectedFolderId(folderId); setAllFilesMode(false); }} onMoveDocumentsToFolder={moveDocumentsToFolder} onMoveFolderToFolder={moveFolderToFolder} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
           {layoutMode === "split" || layoutMode === "folders" ? <div className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`} role="separator" aria-orientation="horizontal" onDoubleClick={() => { const height = browserRef.current?.getBoundingClientRect().height || 660; const half = Math.max(150, Math.floor((height - 10) / 2)); if (layoutMode === "folders") setFoldersDetailsHeight(half); else setSplitDetailsHeight(Math.max(250, half)); }} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => { const delta = startY - moveEvent.clientY; if (layoutMode === "folders") { const height = browserRef.current?.getBoundingClientRect().height || 660; const max = Math.max(150, Math.floor((height - 10) / 2)); setFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + delta))); } else setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + delta))); }; const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
           <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
