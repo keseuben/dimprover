@@ -4083,3 +4083,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Részletek fejléc fájlneve rugalmasan rövidül ellipszissel, így a végrehajtási ikonok nem szorulnak le. Az ikonok 27 px-es kompakt méretet kaptak és egy sorban maradnak oldalsó és alsó inspector nézetben is.
 - A `Tervadatok / Mappa / Biztonság` alfülek kontrasztja erősebb: határozottabb alap háttér/border, aktív állapotnál erősebb kék kiemelés.
 - Contract: `scripts/drive-v0929-visual-density-contract.mjs` 13/13 PASS; V0.9.28 regresszió 31/31 PASS; Typography V1 23/23 PASS; V0.9.26 regresszió 24/24 PASS; TypeScript PASS. PROD DENY.
+
+### V0.9.29 DEV aktiválás – 2026-10-09
+
+- Runtime source: `8413bfbfeddab8145316e7f66fcde2325b8cc3cc`.
+- BUILD-01 run: `drive-v0929-8413bfbfe-20261009-build01-b1`.
+- Build ID: `W5gK_gZ1scry8YoDc_oyC`.
+- Artifact SHA-256: `eac072e4356dbb2ad7826f20b6c3830824306fe5182819410333b1287941038c`.
+- BUILD-01 result: PASS; artifact SHA = metadata SHA = result SHA.
+- Candidate/runtime: `dimpro-drive-v0929-visual-8413bfbf-p3408`, port `3408`, PM2 online, restart `0`, error log `0 byte`.
+- Rollback: V0.9.28 `dimpro-drive-v0928-workspace-8b78ffbc0-p3407`, port `3407`, online, restart `0`.
+- Nginx backup: `/srv/dimpro-dev/artifacts/backups/nginx-drive-v0929/dimpro-dev.conf.before-v0929-20261009T065236Z`, SHA-256 `628963fef5232dfd2a087b662f88752873671c6aad1af2402aa47774f459303f`.
+- Public header: `8413bfbfe DRIVE V0.9.29 + APPROVAL PALETTE + COMPACT REVIEW WORKLINE + SINGLE-ROW DETAIL ACTIONS + AUTH DEV`.
+- Public `/drive` auth redirect PASS; V0.9.29 és V0.9.28 rollback runtime egyaránt online, restart `0`; PM2 process list mentve.
+- DEV tárhely az aktiválás után kb. `118G total / 110G used / 7.2G free`, 94%. PROD DENY.
