@@ -4119,3 +4119,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Public header: `851cbe507 DRIVE V0.9.30 + TRUE COMPACT BOTTOM REVIEW WORKLINE + AUTH DEV`.
 - Stabilizáció: publikus `/drive` auth redirect PASS; V0.9.30 és V0.9.29 rollback runtime online, restart `0`; PM2 lista mentve.
 - DEV tárhely kb. `118G total / 111G used / 6.8G free`, 95%. PROD DENY.
+
+## 2026-10-09 – DIMPRO Drive V0.9.31 – Súgó-központ és teljes UI/UX audit
+
+- Új, közös Shell-szintű `DriveHelpCenter` készült. A fejléc Súgó gombja, a bal oldali `?` ikon és a kinyíló Drive board ugyanazt a kereshető Súgó-központot nyitja meg.
+- A Súgó munkatér-érzékeny: Saját Drive és Projekt munkatér esetén eltérő, ténylegesen elérhető funkciókat mutat.
+- 169 kezelőelem/művelet, 14 fő témakör és 5 projekt-szerepkör került a Help-regiszterbe.
+- Külön fejezet készült az Egyszerű / Mérnöki / Tervellenőrzés / Commander nézetekhez, Kedvencekhez, CsomagBOX-hoz, Tervellenőrzéshez, fájlmegjelenítőhöz, fullscreenhez, ZIP-ekhez, fájlnév-normalizáláshoz, biztonsághoz, törléshez és jogosultságkezeléshez.
+- A projekt szerepkörök és a központi Project Core permission-készlet külön Help-mátrixban jelenik meg: Beruházási projektvezető (OWNER), Projektvezető, Közreműködő, Ellenőrző, Megtekintő.
+- A Súgó leírja a mappaszintű ACL öröklést/szűkítést és a jelszavas Mappavédelem második védelmi réteg szerepét.
+- A projekt Mappa ZIP dokumentálja a digitális dokumentációjegyzéket és `DIMPRO_fajllista.txt` mellékletet; a személyes CsomagBOX ZIP a `DIMPRO_Dokumentaciojegyzek.txt` fájlt.
+- A feltöltési/fájlnév fejezet rögzíti az eredeti fájlnév megőrzését, a Windows-safe technikai név és rövid exportalias szabályait, valamint a 96/60/180 karakteres név/útvonal korlátokat.
+- Audit közben két tényleges Saját Drive navigációs inkonzisztencia javult: Kedvencek/CsomagBOX többé nem tévesen inaktív a boardon; a személyes CsomagBOX navigáció ténylegesen megnyitja a polcot; a személyes Beérkező Drop a keskeny railen helyesen inaktív.
+- A Súgó nem állít működőnek előkészített funkciót: Saját Drive közvetlen Feltöltés/Új verzió/Új revízió/Mappa ZIP/Formális kiadás, továbbá az általános Kezdőlap/Legutóbbi/Kiadások/Értesítések/AI Dokumentumvizsgáló/Megosztás/Tárhely bővítése megfelelő `Hamarosan` állapotot kap.
+- `scripts/drive-v0931-help-ux-audit-contract.mjs`: 28/28 PASS. V0.9.30: 8/8 PASS; V0.9.29: 13/13 PASS; V0.9.28: 31/31 PASS; Typography V1: 23/23 PASS; V0.9.26: 24/24 PASS. Célzott ESLint 0 error; teljes repository lint változatlan baseline: 25 error / 106 warning. PROD DENY.
+- Részletes audit: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0931_HELP_UX_AUDIT_20261009.md`.

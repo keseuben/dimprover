@@ -1,0 +1,246 @@
+export type DriveHelpWorkspace = "ALL" | "PERSONAL" | "PROJECT";
+export type DriveHelpStatus = "active" | "permission" | "conditional" | "coming";
+
+export type DriveHelpAction = {
+  id: string;
+  label: string;
+  location: string;
+  workspace: DriveHelpWorkspace;
+  status: DriveHelpStatus;
+  description: string;
+  condition?: string;
+  result?: string;
+  keywords?: string[];
+};
+
+export type DriveHelpTopic = {
+  id: string;
+  title: string;
+  summary: string;
+  workspace: DriveHelpWorkspace;
+  body: string[];
+  relatedActionIds?: string[];
+  keywords?: string[];
+};
+
+export type DriveRoleHelp = {
+  code: "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
+  label: string;
+  summary: string;
+  permissions: string[];
+};
+
+export const DRIVE_ROLE_HELP: DriveRoleHelp[] = [
+  { code:"OWNER", label:"Beruházási projektvezető", summary:"Projektgazda. Teljes projekt- és Drive-hozzáférés; a projektgazda-szerep a tagságkezelőből nem írható át közönséges szerepkörre.", permissions:["Projekt olvasás/módosítás és életciklus", "Tagkezelés és meghívások", "Naptár olvasás/írás", "Dokumentum olvasás/írás/komment/törlés", "Mappa törlés/visszaállítás/végleges törlés", "Dokumentum-jóváhagyás és formális kiadás", "Ügy/RFI olvasás/írás", "Kommunikáció olvasás/írás", "Jóváhagyás olvasás/írás/válasz", "Napló olvasás/írás/lezárás", "Audit olvasás", "Export készítés"] },
+  { code:"PROJECT_MANAGER", label:"Projektvezető", summary:"Teljes operatív projektvezetői szerepkör. Jelenleg ugyanazt a permission-készletet kapja, mint az OWNER, de nem projektgazda.", permissions:["Projekt olvasás/módosítás és életciklus", "Tagkezelés és meghívások", "Naptár olvasás/írás", "Dokumentum olvasás/írás/komment/törlés", "Mappa törlés/visszaállítás/végleges törlés", "Dokumentum-jóváhagyás és formális kiadás", "Ügy/RFI olvasás/írás", "Kommunikáció olvasás/írás", "Jóváhagyás olvasás/írás/válasz", "Napló olvasás/írás/lezárás", "Audit olvasás", "Export készítés"] },
+  { code:"CONTRIBUTOR", label:"Közreműködő", summary:"Aktív napi projektmunkára szolgáló szerepkör, teljes adminisztratív jogosultság nélkül.", permissions:["Projekt olvasás", "Naptár olvasás/írás", "Dokumentum olvasás/írás/komment", "Ügy/RFI olvasás/írás", "Kommunikáció olvasás/írás", "Jóváhagyás olvasás/írás", "Napló olvasás/írás"] },
+  { code:"REVIEWER", label:"Ellenőrző", summary:"Ellenőrzésre és jóváhagyási válaszra fókuszáló szerepkör, dokumentumfeltöltési/szerkesztési jog nélkül.", permissions:["Projekt olvasás", "Naptár olvasás", "Dokumentum olvasás/komment/jóváhagyás", "Ügy/RFI olvasás", "Kommunikáció olvasás/írás", "Jóváhagyás olvasás/válasz", "Napló olvasás", "Audit olvasás"] },
+  { code:"VIEWER", label:"Megtekintő", summary:"Csak megtekintési jogosultság. Nem írhat, nem tölthet fel és nem hagyhat jóvá.", permissions:["Projekt olvasás", "Naptár olvasás", "Dokumentum olvasás", "Ügy/RFI olvasás", "Kommunikáció olvasás", "Jóváhagyás olvasás", "Napló olvasás"] },
+];
+
+export const DRIVE_HELP_ACTIONS: DriveHelpAction[] = [
+  {id:"nav-board",label:"Navigációs board",location:"Bal keskeny sáv",workspace:"ALL",status:"active",description:"Kinyitja/összecsukja a Drive munkatér- és modulválasztó boardját."},
+  {id:"nav-documents",label:"Dokumentumtár",location:"Bal navigáció / board",workspace:"ALL",status:"active",description:"Az aktuális munkatér fő dokumentumtárára vált."},
+  {id:"nav-favorites",label:"Kedvencek",location:"Bal navigáció / board",workspace:"ALL",status:"active",description:"A csillaggal megjelölt dokumentumokat mutatja. Projekt és Saját Drive külön kedvenclistát tárol."},
+  {id:"nav-incoming",label:"Beérkező Drop",location:"Bal navigáció / board",workspace:"PROJECT",status:"conditional",description:"A projekt Beérkező Drop mappájára ugrik.",condition:"Provisionált projektmappa szükséges."},
+  {id:"nav-boxes",label:"CsomagBOX",location:"Bal navigáció / board",workspace:"ALL",status:"active",description:"A virtuális dokumentumcsomagok polcát nyitja meg."},
+  {id:"nav-trash",label:"Lomtár",location:"Bal navigáció / board",workspace:"ALL",status:"permission",description:"Soft-delete állapotú elemek megtekintése és visszaállítása.",condition:"Projektben a műveletek jogosultságfüggők."},
+  {id:"nav-home",label:"Kezdőlap",location:"Bal navigáció / board",workspace:"ALL",status:"coming",description:"Előkészített funkció, külön aktív Drive kezdőlap még nincs."},
+  {id:"nav-recent",label:"Legutóbbi",location:"Bal navigáció / board",workspace:"ALL",status:"coming",description:"Előkészített legutóbbi-fájlok nézet."},
+  {id:"nav-releases",label:"Kiadások",location:"Bal navigáció / board",workspace:"PROJECT",status:"coming",description:"A későbbi hivatalos kiadási csomagok külön nézete."},
+  {id:"nav-notifications",label:"Értesítések",location:"Fejléc / bal sáv",workspace:"ALL",status:"coming",description:"A Drive értesítési központ helye; teljes külön panel még nincs aktiválva."},
+  {id:"nav-help",label:"Súgó",location:"Fejléc / bal oldali ?",workspace:"ALL",status:"active",description:"Megnyitja a kereshető DIMPRO Drive Súgó-központot."},
+  {id:"nav-settings",label:"Beállítások",location:"Bal navigáció / board",workspace:"ALL",status:"active",description:"A DIMPRO Beállítások felületére navigál."},
+  {id:"workspace-switch",label:"Munkatér választó",location:"Fejléc / board",workspace:"ALL",status:"active",description:"Saját Drive és a hozzáférhető projektmunkaterek között vált. Az aktív munkatér frissítéskor megmarad."},
+  {id:"new-project",label:"Új projekt",location:"Bal board",workspace:"PERSONAL",status:"permission",description:"Új központi Project Core projektet és Drive környezetet készít.",condition:"Hitelesített identitás és projektlétrehozási lehetőség szükséges."},
+  {id:"theme",label:"Világos / Sötét",location:"Bal board",workspace:"ALL",status:"active",description:"A Drive megjelenési témáját váltja."},
+  {id:"storage",label:"Tárhely",location:"Fejléc / board alja",workspace:"ALL",status:"active",description:"A foglalt és rendelkezésre álló tárhelyet mutatja. Saját Drive alapkerete jelenleg 50 GB; projektkeret külön projektszintű quota."},
+  {id:"storage-upgrade",label:"Tárhely bővítése",location:"Bal board alja",workspace:"ALL",status:"coming",description:"Előfizetéses tárhelybővítés előkészített vezérlője."},
+
+  {id:"view-simple",label:"Egyszerű nézet",location:"Táblázat jobb felső része",workspace:"ALL",status:"active",description:"Napi dokumentumkezeléshez szükséges alapadatokra optimalizált táblázat."},
+  {id:"view-engineering",label:"Mérnöki nézet",location:"Táblázat jobb felső része",workspace:"ALL",status:"active",description:"Több műszaki metaadatot mutat: tervszám, lépték, MIME, revízió, verzió és kapcsolódó mezők."},
+  {id:"view-review",label:"Tervellenőrzés",location:"Táblázat jobb felső része",workspace:"PROJECT",status:"active",description:"Jóváhagyási és életciklus oszlopokra optimalizált, automatikusan egy-paneles projektnézet."},
+  {id:"view-refresh",label:"Frissítés",location:"Nézetváltók mellett",workspace:"ALL",status:"active",description:"Újratölti a mappa- és dokumentumadatokat."},
+  {id:"layout-folders",label:"Mappák és dokumentumtár",location:"Felső elrendezés ikonok",workspace:"ALL",status:"active",description:"Bal oldali mappafa + dokumentumtábla."},
+  {id:"layout-one",label:"Egy panel",location:"Felső elrendezés ikonok",workspace:"ALL",status:"active",description:"A dokumentumtárnak ad maximális helyet; Tervellenőrzés alapelrendezése."},
+  {id:"layout-commander",label:"Commander / kétpaneles fájlkezelő",location:"Felső elrendezés ikon",workspace:"ALL",status:"active",description:"Két mappa egymás melletti kezelése gyors fájl- és mappamozgatáshoz."},
+  {id:"fullscreen-data",label:"Adatok panel",location:"Fullscreen felső sáv",workspace:"ALL",status:"active",description:"A kijelölt dokumentum inspectorát mutatja/elrejti."},
+  {id:"fullscreen-right",label:"Adatok jobb oldalon",location:"Fullscreen felső sáv",workspace:"ALL",status:"active",description:"Az inspectort jobb oldalra helyezi."},
+  {id:"fullscreen-bottom",label:"Adatok alul",location:"Fullscreen felső sáv",workspace:"ALL",status:"active",description:"Az inspectort széles alsó panelbe helyezi."},
+  {id:"table-zoom",label:"− / % / + táblázatzoom",location:"Felső eszközsor",workspace:"ALL",status:"active",description:"A Drive táblázat méretezését állítja; a százalék gomb 90%-ra állít vissza."},
+
+  {id:"toolbar-new-folder",label:"Új mappa",location:"Felső Drive eszközsor",workspace:"ALL",status:"permission",description:"Új almappát hoz létre az aktuális helyen.",condition:"Írási jogosultság szükséges."},
+  {id:"toolbar-upload",label:"Feltöltés",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"permission",description:"Új fájlt/fájlokat tölt fel az aktuális projektmappába.",condition:"Írási jogosultság, aktív objektumtár és elegendő tárhely szükséges."},
+  {id:"toolbar-upload-personal",label:"Feltöltés",location:"Saját Drive felső eszközsor",workspace:"PERSONAL",status:"coming",description:"A gomb jelenleg látható, de inaktív; a személyes közvetlen fájlfeltöltési workflow még nincs bekötve."},
+  {id:"toolbar-version",label:"Új verzió",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"permission",description:"A kijelölt stabil dokumentumhoz új belső immutable verziót hoz létre; a hivatalos revízió változatlan marad."},
+  {id:"toolbar-revision",label:"Új revízió",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"permission",description:"Új hivatalos revíziót hoz létre, revízióokkal/dátummal; a verziószám is növekszik."},
+  {id:"toolbar-open",label:"Megnyitás",location:"Felső Drive eszközsor",workspace:"ALL",status:"active",description:"A kijelölt fájlt a DIMPRO Drive beépített fájlmegjelenítőjében nyitja meg."},
+  {id:"toolbar-windows",label:"Megnyitás Windowsban",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"conditional",description:"A Drive Desktopon keresztül helyi Windows-alkalmazásba adja át a fájlt.",condition:"Drive Desktop telepítés és beállított helyi munkamappa szükséges."},
+  {id:"toolbar-download",label:"Letöltés",location:"Felső Drive eszközsor",workspace:"ALL",status:"permission",description:"A kijelölt fájl letölthető példányát adja vissza.",condition:"A biztonsági állapotnak letölthetőnek kell lennie."},
+  {id:"toolbar-folderzip",label:"Mappa ZIP",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"permission",description:"Az aktuális mappa teljes almappastruktúráját Windows-kompatibilis ZIP-be csomagolja, dokumentációjegyzékkel."},
+  {id:"toolbar-box",label:"CsomagBOX",location:"Felső Drive eszközsor",workspace:"ALL",status:"active",description:"A CsomagBOX polcot nyitja/zárja."},
+  {id:"toolbar-drop",label:"DROP küldés",location:"Felső Drive eszközsor",workspace:"ALL",status:"active",description:"Új lapon megnyitja a DIMPRO Drop küldőfelületét."},
+  {id:"toolbar-compare",label:"Összehasonlítás",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"active",description:"Vizuális dokumentum-/revízió-összehasonlító munkateret nyit."},
+  {id:"toolbar-ai",label:"AI Dokumentumvizsgáló",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"coming",description:"Előkészített funkció; teljes workflow még nem aktív."},
+  {id:"toolbar-issue",label:"Formális dokumentumkiadás",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"permission",description:"A kijelölt dokumentum hivatalos kiadási állapotát rögzíti."},
+  {id:"toolbar-share",label:"Megosztás",location:"Felső Drive eszközsor",workspace:"PROJECT",status:"coming",description:"Általános dokumentummegosztás előkészített vezérlője. A mappajogosultság a Mappahozzáférés gombbal már működik."},
+  {id:"toolbar-actions",label:"Műveletek",location:"Keskeny képernyő felső eszközsora",workspace:"ALL",status:"active",description:"A fő műveleteket lenyíló menüben fogja össze."},
+  {id:"personal-version-disabled",label:"Új verzió",location:"Saját Drive felső eszközsor",workspace:"PERSONAL",status:"coming",description:"A gomb jelenleg inaktív; a személyes Drive még nem használ projekt-szintű verzió/revízió motort."},
+  {id:"personal-revision-disabled",label:"Új revízió",location:"Saját Drive felső eszközsor",workspace:"PERSONAL",status:"coming",description:"A gomb jelenleg inaktív; hivatalos revíziókezelés a projekt Drive dokumentumidentitásához tartozik."},
+  {id:"personal-folderzip-disabled",label:"Mappa ZIP",location:"Saját Drive felső eszközsor",workspace:"PERSONAL",status:"coming",description:"A személyes teljes mappa-ZIP még nincs aktiválva. Személyes CsomagBOX ZIP viszont működik."},
+  {id:"personal-issue-disabled",label:"Formális dokumentumkiadás",location:"Saját Drive felső eszközsor",workspace:"PERSONAL",status:"coming",description:"Projekt-specifikus hivatalos kiadási workflow; Saját Drive-ban inaktív."},
+
+  {id:"folder-rename",label:"Mappa átnevezése",location:"Mappafejléc / mappamenü",workspace:"ALL",status:"permission",description:"A mappa megjelenített nevét módosítja."},
+  {id:"folder-access",label:"Mappahozzáférés",location:"Projekt mappafejléc",workspace:"PROJECT",status:"permission",description:"Projektjog öröklése vagy kiválasztott projekttagokra korlátozott mappaláthatóság állítható.",condition:"project.manage_members jogosultság szükséges."},
+  {id:"folder-password",label:"Mappavédelem",location:"Projekt mappafejléc",workspace:"PROJECT",status:"permission",description:"Jelszavas/PIN-es második védelmi réteg. Nem helyettesíti az identitásalapú hozzáférést."},
+  {id:"folder-menu",label:"Mappaműveletek (…) ",location:"Mappafa sor vége",workspace:"ALL",status:"active",description:"A mappához kapcsolódó további műveleteket nyitja meg."},
+  {id:"folder-trash",label:"Lomtárba helyezés",location:"Mappamenü",workspace:"PROJECT",status:"permission",description:"A mappát soft-delete állapotba teszi; nem fizikai törlés."},
+  {id:"folder-pin",label:"Mappapanel rögzítése",location:"Mappafa fejléc",workspace:"ALL",status:"active",description:"Rögzíti a mappapanelt az aktuális munkanézetben."},
+  {id:"linked-projects",label:"Kapcsolt projektek kezelése",location:"Saját Drive mappafa",workspace:"PERSONAL",status:"active",description:"A Saját Drive oldalsávban megjelenő projektkapcsolatokat kezeli."},
+
+  {id:"grid-select",label:"Kijelölő négyzet",location:"Táblázatsor eleje",workspace:"ALL",status:"active",description:"Egy vagy több fájl kijelölése csoportos műveletekhez."},
+  {id:"grid-favorite",label:"Csillag / Kedvenc",location:"Táblázatsor eleje",workspace:"ALL",status:"active",description:"A fájlt hozzáadja/eltávolítja a Kedvencekből."},
+  {id:"grid-more",label:"További műveletek (…) ",location:"Táblázatsor vége",workspace:"ALL",status:"active",description:"Elemfüggő helyi menü: részletek, megnyitás, verziók, ZIP, lomtár stb."},
+  {id:"grid-click",label:"Egy kattintás a fájlsorra",location:"Dokumentumtábla",workspace:"ALL",status:"active",description:"Kijelöli a dokumentumot és megjeleníti a Részletek panelt."},
+  {id:"grid-double",label:"Dupla kattintás a fájlsorra",location:"Dokumentumtábla",workspace:"ALL",status:"active",description:"Megnyitja a fájlt a nagy DIMPRO Drive fájlmegjelenítőben."},
+  {id:"grid-drag",label:"Fájl/mappa áthúzás",location:"Táblázat / mappafa / Commander",workspace:"ALL",status:"permission",description:"Mappák között mozgat. CsomagBOX-ra húzva nem mozgat, hanem virtuális hivatkozást ad a BOX-hoz."},
+  {id:"grid-sort",label:"Oszlopfejléc rendezés",location:"Táblázat fejléc",workspace:"ALL",status:"active",description:"Az oszlop szerint növekvő/csökkenő sorrendet kapcsol."},
+  {id:"grid-resize",label:"Oszlopszélesség",location:"Táblázat fejléc",workspace:"ALL",status:"active",description:"Az oszlop szélén húzva módosítható; az oszlop visszaállító gomb az alapértékre állít."},
+  {id:"grid-pan",label:"Táblázat húzása",location:"Széles táblázat",workspace:"ALL",status:"active",description:"Hosszan nyomott egérgombbal vízszintesen mozgatható."},
+  {id:"grid-parent",label:"[..] / Szülőmappa",location:"Táblázat / Commander",workspace:"ALL",status:"active",description:"Egy szinttel feljebb lép a mappahierarchiában."},
+
+  {id:"details-main",label:"Részletek",location:"Dokumentum inspector",workspace:"ALL",status:"active",description:"A kijelölt dokumentum részletes adat- és műveleti felülete."},
+  {id:"details-plan",label:"Tervadatok",location:"Részletek alfül",workspace:"PROJECT",status:"permission",description:"Tervszám, név, szakág, dokumentumtípus, kiadás, jóváhagyás, épület, szint, zóna, témakör és léptékek szerkesztése."},
+  {id:"details-folder",label:"Mappa",location:"Részletek alfül",workspace:"PROJECT",status:"active",description:"Az örökölt mappabesorolást és mappakapcsolatot mutatja."},
+  {id:"details-security",label:"Biztonság",location:"Részletek alfül",workspace:"PROJECT",status:"active",description:"Karantén-, biztonsági ellenőrzés- és QR-állapot."},
+  {id:"details-save",label:"Mentés",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"Az aktuális szerkeszthető rész adatait menti."},
+  {id:"details-scan",label:"Biztonsági ellenőrzés",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"A fájl biztonsági ellenőrzését indítja."},
+  {id:"details-approve",label:"Jóváhagyás",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"A dokumentum jóváhagyási döntését rögzíti."},
+  {id:"details-reject",label:"Elutasítás",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"A dokumentum elutasítását rögzíti."},
+  {id:"details-download",label:"Letöltés",location:"Részletek fejléc",workspace:"ALL",status:"permission",description:"Az aktuális dokumentumot tölti le."},
+  {id:"details-qr",label:"QR",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"QR-azonosítót hoz létre vagy jelzi a meglévő QR állapotot."},
+  {id:"details-trash",label:"Lomtár",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"A dokumentumot soft-delete/lomtár állapotba helyezi."},
+  {id:"details-versions",label:"Verziók",location:"Dokumentum inspector",workspace:"PROJECT",status:"active",description:"Immutable verzió- és revízióelőzmények, valamint számozási korrekció."},
+  {id:"details-notes",label:"Megjegyzések",location:"Dokumentum inspector",workspace:"PROJECT",status:"permission",description:"Dokumentumhoz kötött megjegyzések kezelése."},
+  {id:"details-lists",label:"Listák",location:"Dokumentum inspector",workspace:"PROJECT",status:"permission",description:"Projekt-metaadat listák konfigurálása és alaplista visszaállítása."},
+
+  {id:"review-tabs",label:"Ellenőrzés / Megrendelő / Projektvezető / Beruházói / Életciklus",location:"Tervellenőrzés inspector",workspace:"PROJECT",status:"permission",description:"A szerepkörös tervellenőrzési szakaszok között vált. Csak a jogosult szakasz szerkeszthető."},
+  {id:"review-save",label:"Jogosult szakaszok mentése",location:"Tervellenőrzés fejléc",workspace:"PROJECT",status:"permission",description:"A jelenlegi felhasználó által szerkeszthető ellenőrzési mezőket menti."},
+  {id:"review-timeline",label:"Időnapló",location:"Tervellenőrzés",workspace:"PROJECT",status:"active",description:"Jóváhagyások és állapotváltások audit-idővonalát mutatja."},
+  {id:"review-observation",label:"Új / Hangból",location:"Tervellenőrzés észrevételek",workspace:"PROJECT",status:"permission",description:"Szöveges vagy hangból létrehozott észrevételt rögzít."},
+  {id:"review-status",label:"Jóváhagyási és életciklus ikonok",location:"Táblázat / Tervellenőrzés",workspace:"PROJECT",status:"active",description:"Megrendelő: világos citromsárga; Projektvezető: kék; Beruházási projektvezető: zöld; Munkaközi: citromsárga; Aktuális: zöld."},
+
+  {id:"access-menu",label:"Projekt-hozzáférések",location:"Projekt fejléc – személy/csoport ikon",workspace:"PROJECT",status:"active",description:"Aktív tagok, függő meghívások, saját szerepkör és tagsági adatok megtekintése."},
+  {id:"access-invite",label:"Ember meghívása",location:"Projekt-hozzáférések",workspace:"PROJECT",status:"permission",description:"Névvel, szervezettel, e-maillel, szerepkörrel és 3/7/14/30 napos érvényességgel új projektmeghívást küld.",condition:"project.manage_members jogosultság szükséges."},
+  {id:"access-role",label:"Szerepkör módosítása",location:"Projekt-hozzáférések / Tagok",workspace:"PROJECT",status:"permission",description:"Másik aktív tag PROJECT_MANAGER / CONTRIBUTOR / REVIEWER / VIEWER szerepköre módosítható.",condition:"OWNER és saját szerepkör ezen a panelen nem írható át."},
+  {id:"access-self-name",label:"Saját név módosítása",location:"Projekt-hozzáférések / saját kártya",workspace:"PROJECT",status:"active",description:"A saját projektmegjelenítési nevet módosítja."},
+  {id:"access-remove",label:"Hozzáférés megszüntetése",location:"Projekt-hozzáférések / Tagok",workspace:"PROJECT",status:"permission",description:"Másik nem-OWNER tag projekt-hozzáférését megszünteti megerősítés után."},
+  {id:"access-pending",label:"Függő meghívások",location:"Projekt-hozzáférések",workspace:"PROJECT",status:"permission",description:"A még el nem fogadott vagy lejárt projektmeghívásokat mutatja, visszavonási lehetőséggel."},
+
+  {id:"box-new",label:"Új CsomagBOX",location:"CsomagBOX polc",workspace:"ALL",status:"active",description:"Új virtuális fájlcsomagot hoz létre forrásfájl-duplikálás nélkül."},
+  {id:"box-add",label:"Kijelölt fájl hozzáadása",location:"CsomagBOX kártya",workspace:"ALL",status:"active",description:"A kijelölt Drive fájl hivatkozását hozzáadja a BOX-hoz."},
+  {id:"box-folder",label:"Új mappa / Almappa",location:"CsomagBOX",workspace:"ALL",status:"active",description:"A virtuális BOX-on belüli rendezőmappát hoz létre."},
+  {id:"box-remove",label:"Eltávolítás a BOX-ból",location:"CsomagBOX elem",workspace:"ALL",status:"active",description:"Csak a BOX-hivatkozást távolítja el; a Drive forrásfájl megmarad."},
+  {id:"box-download",label:"CsomagBOX letöltése ZIP-ként",location:"CsomagBOX kártya",workspace:"ALL",status:"active",description:"A BOX tartalmából ZIP-et készít digitális dokumentációjegyzékkel."},
+  {id:"box-history",label:"Előzmények",location:"CsomagBOX kártya",workspace:"PROJECT",status:"active",description:"A BOX módosítási és életciklus-előzményeit mutatja."},
+  {id:"box-compare",label:"Összevetés",location:"CsomagBOX kártya",workspace:"PROJECT",status:"active",description:"A BOX dokumentumait az összehasonlító munkatérbe tölti."},
+  {id:"box-filter",label:"Mind / Piszkozat / Kész / Kiküldött / Archív",location:"CsomagBOX polc",workspace:"PROJECT",status:"active",description:"A projekt BOX-okat életciklus szerint szűri."},
+
+  {id:"viewer-hand",label:"Kéz / mozgatás",location:"DIMPRO Drive fájlmegjelenítő",workspace:"ALL",status:"active",description:"Pan mód; a nagyított dokumentum egérrel mozgatható."},
+  {id:"viewer-pages",label:"Előző / Következő oldal",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"Többoldalas PDF-ben lapoz."},
+  {id:"viewer-zoom",label:"− / + / Ctrl+egérgörgő",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"Csak a megjelenített dokumentum zoomját változtatja, nem a teljes böngészőoldalt."},
+  {id:"viewer-fit",label:"Szélességre illesztés",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"A dokumentumot a megjelenítő szélességéhez igazítja."},
+  {id:"viewer-rotate",label:"Forgatás 90°",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"A megjelenített oldalt 90 fokkal elforgatja."},
+  {id:"viewer-refresh",label:"Előnézeti URL frissítése",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"Új előnézeti URL-t kér, ha az előző lejárt vagy hibás."},
+  {id:"viewer-fullscreen",label:"Teljes képernyő",location:"Fájlmegjelenítő / táblázat",workspace:"ALL",status:"active",description:"Natív böngésző fullscreen. Esc először a nyitott részlet/előnézet panelt zárja."},
+  {id:"viewer-newtab",label:"Megnyitás új lapon",location:"Fájlmegjelenítő",workspace:"ALL",status:"active",description:"Az előnézetet külön böngészőlapon nyitja meg."},
+
+  {id:"compare-side",label:"Párhuzamos",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A két dokumentumot egymás mellett mutatja."},
+  {id:"compare-overlay",label:"Átfedés",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A két réteget egymásra vetítve mutatja."},
+  {id:"compare-diff",label:"Különbség",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Eltéréskiemelő nézet."},
+  {id:"compare-align",label:"Igazítás / Auto / 2 pont / 3 pont",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A két rajz geometriai illesztését automatikusan vagy referencia-pontokkal korrigálja."},
+  {id:"compare-layer",label:"A / B réteg",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Az alap- és revíziós réteg láthatóságát kapcsolja."},
+  {id:"compare-findings",label:"Δ jegyzék / JSON / CSV",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Eltérési találatokat ment és JSON/CSV formátumban exportál."},
+
+  {id:"box-resize",label:"CsomagBOX magasságának állítása",location:"CsomagBOX felső méretezősáv",workspace:"ALL",status:"active",description:"A CsomagBOX polc függőleges méretét egérrel módosítja."},
+  {id:"box-toggle",label:"CsomagBOX összecsukása / kinyitása",location:"CsomagBOX fejléc",workspace:"ALL",status:"active",description:"A polcot összecsukja vagy megnyitja a dokumentumtábla helyének növeléséhez."},
+  {id:"box-create",label:"Létrehozás",location:"Új CsomagBOX panel",workspace:"ALL",status:"active",description:"A megadott névvel és céllal létrehozza az új BOX-ot."},
+  {id:"box-expand",label:"BOX kinyitása / összecsukása",location:"CsomagBOX kártya",workspace:"ALL",status:"active",description:"A BOX belső mappáit és fájlhivatkozásait mutatja vagy rejti."},
+  {id:"box-history-refresh",label:"Előzmények frissítése",location:"CsomagBOX előzmények",workspace:"PROJECT",status:"active",description:"Újratölti a BOX audit- és életciklus-előzményeit."},
+  {id:"box-history-close",label:"Előzmények bezárása",location:"CsomagBOX előzmények",workspace:"PROJECT",status:"active",description:"Bezárja az előzménylistát."},
+  {id:"commander-parent",label:"[..] Szülőmappa / Vissza",location:"Commander panel",workspace:"ALL",status:"active",description:"Az adott Commander panelen egy mappaszinttel feljebb lép."},
+  {id:"commander-move",label:"→ / ← áthelyezési nyíl",location:"Commander fájlsor",workspace:"ALL",status:"permission",description:"A fájlt a másik Commander panel aktuális mappájába helyezi át."},
+  {id:"commander-clear",label:"Kijelölés törlése",location:"Commander fejléc",workspace:"ALL",status:"active",description:"Törli az aktív fájlkijelölést."},
+  {id:"commander-delete",label:"Törlés",location:"Commander fejléc",workspace:"ALL",status:"permission",description:"A kijelölt fájlokat a vonatkozó törlési szabály szerint lomtárba/soft-delete állapotba helyezi."},
+  {id:"compare-load-box",label:"BOX betöltése",location:"Összehasonlítás munkatér",workspace:"PROJECT",status:"active",description:"A kiválasztott CsomagBOX dokumentumait az összehasonlító két oldalába tölti."},
+  {id:"compare-swap",label:"Oldalak cseréje",location:"Összehasonlítás munkatér",workspace:"PROJECT",status:"active",description:"Felcseréli az A és B összehasonlítási oldalt."},
+  {id:"compare-close",label:"Összehasonlítás bezárása",location:"Összehasonlítás munkatér",workspace:"PROJECT",status:"active",description:"Visszatér a normál Drive munkatérhez."},
+  {id:"compare-open-version",label:"Kiválasztott verzió megnyitása",location:"Összehasonlítás munkatér",workspace:"PROJECT",status:"active",description:"A kiválasztott oldali dokumentumverziót külön megnyitja."},
+  {id:"compare-refresh",label:"Összehasonlítás frissítése",location:"Összehasonlítás munkatér",workspace:"PROJECT",status:"active",description:"Újratölti a két összehasonlított dokumentum adatait és előnézetét."},
+  {id:"compare-nudge",label:"↑ / ← / → / ↓ igazítás",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A B réteget egy képponttal mozgatja a pontos geometriai illesztéshez."},
+  {id:"compare-auto",label:"Automatikus igazítás",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Vektoros PDF feature-ek alapján automatikus illesztési javaslatot készít."},
+  {id:"compare-2point",label:"2 pont",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Két referencia-pontpárból eltolást, méretarányt és szöget számít."},
+  {id:"compare-3point",label:"3 pont",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Három referencia-pontpárból hasonlósági illesztést számít."},
+  {id:"compare-fit",label:"Keretre/méretre igazítás",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A két renderelt lap külső mérete alapján a B réteget középre és méretre igazítja."},
+  {id:"compare-reset",label:"Igazítás nullázása",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A B réteg kézi geometriai korrekcióját alaphelyzetbe állítja."},
+  {id:"compare-candidate",label:"Automatikus illesztési jelölt",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"Az automatikusan számított illesztési jelöltek közül választ."},
+  {id:"compare-heatmap",label:"Különbség heatmap",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A helyi eltérések hőtérképes kiemelését kapcsolja."},
+  {id:"compare-zone",label:"Δ eltérési zóna",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A kiválasztott eltérési zónára fókuszál."},
+  {id:"compare-replace-pair",label:"Kézi csere",location:"Vizuális összehasonlító illesztési pár",workspace:"PROJECT",status:"active",description:"Egy automatikus referencia-párt kézzel újrapontoz."},
+  {id:"compare-apply",label:"Alkalmazás",location:"Vizuális összehasonlító",workspace:"PROJECT",status:"active",description:"A kiválasztott geometriai illesztést alkalmazza."},
+  {id:"compare-export-json",label:"JSON export",location:"Eltérési jegyzék",workspace:"PROJECT",status:"active",description:"Az összehasonlítás mentett eltéréseit JSON fájlba exportálja."},
+  {id:"compare-export-csv",label:"CSV export",location:"Eltérési jegyzék",workspace:"PROJECT",status:"active",description:"Az összehasonlítás mentett eltéréseit CSV fájlba exportálja."},
+  {id:"compare-finding-focus",label:"Mentett eltérés fókuszálása",location:"Eltérési jegyzék",workspace:"PROJECT",status:"active",description:"A mentett eltérés helyére zoomol/fókuszál."},
+  {id:"compare-finding-archive",label:"Eltérés archiválása",location:"Eltérési jegyzék",workspace:"PROJECT",status:"active",description:"Archiválja az eltérési tételt, miközben az auditnapló megmarad."},
+  {id:"compare-finding-issue",label:"Eltérés üggyé alakítása",location:"Eltérési jegyzék",workspace:"PROJECT",status:"permission",description:"A mentett eltérést projektügy/RFI típusú tétellé alakítja."},
+  {id:"details-numbering-import",label:"Hozott számozás beállítása",location:"Verziók / számozás",workspace:"PROJECT",status:"permission",description:"Meglévő dokumentum számozását hozott/legacy számozási módra állítja."},
+  {id:"details-numbering-correct",label:"Számozás korrekciója",location:"Verziók / számozás",workspace:"PROJECT",status:"permission",description:"A dokumentum verzió/revízió számozását ellenőrzött korrekciós módba kapcsolja."},
+  {id:"details-numbering-save",label:"Számozás mentése",location:"Részletek fejléc",workspace:"PROJECT",status:"permission",description:"A számozási korrekciót menti."},
+  {id:"details-numbering-cancel",label:"Számozás szerkesztésének megszakítása",location:"Részletek fejléc",workspace:"PROJECT",status:"active",description:"Elveti a még nem mentett számozási módosítást."},
+  {id:"details-scale-add",label:"Lépték hozzáadása",location:"Tervadatok",workspace:"PROJECT",status:"permission",description:"További tervlépték mezőt ad a dokumentumhoz."},
+  {id:"details-scale-remove",label:"Lépték eltávolítása",location:"Tervadatok",workspace:"PROJECT",status:"permission",description:"Egy további léptékmezőt eltávolít."},
+  {id:"review-checked",label:"Ellenőrizve / Nincs ellenőrizve",location:"Tervellenőrzés · Ellenőrzés",workspace:"PROJECT",status:"permission",description:"A műszaki ellenőrzés megtörtént státuszát állítja."},
+  {id:"review-result",label:"Megfelelő / Javítandó / Visszaadva",location:"Tervellenőrzés · Eredmény",workspace:"PROJECT",status:"permission",description:"Az ellenőrzési eredményt rögzíti."},
+  {id:"review-revision",label:"Új / Módosult / Áthelyezve / Nem található",location:"Tervellenőrzés · Revízióváltozás",workspace:"PROJECT",status:"permission",description:"A terv revízióváltozásának típusát jelöli."},
+  {id:"review-observation-delete",label:"Észrevétel törlése",location:"Tervellenőrzés észrevételek",workspace:"PROJECT",status:"permission",description:"A kiválasztott ellenőrzési észrevételt eltávolítja."},
+  {id:"identity-profile-save",label:"Megjelenítési név mentése",location:"E-mail-címek és munkahelyek",workspace:"ALL",status:"active",description:"A központi DIMPRO-fiók megjelenítési nevét menti."},
+  {id:"identity-refresh",label:"Identitások frissítése",location:"E-mail-címek és munkahelyek",workspace:"ALL",status:"active",description:"Újratölti a kapcsolt személyes és munkahelyi e-mail identitásokat."},
+  {id:"identity-verify",label:"Hitelesítés",location:"E-mail-címek és munkahelyek",workspace:"ALL",status:"active",description:"A megadott hitelesítő kóddal aktiválja az e-mail identitást."},
+  {id:"identity-resend",label:"Kód újraküldése",location:"E-mail-címek és munkahelyek",workspace:"ALL",status:"active",description:"Új e-mail hitelesítő kódot kér."},
+  {id:"identity-detach",label:"Leválasztás",location:"E-mail-címek és munkahelyek",workspace:"ALL",status:"active",description:"A leválasztható másodlagos identitást eltávolítja a DIMPRO-fiókból."},
+  {id:"identity-send-code",label:"Hitelesítő kód küldése",location:"E-mail / munkahely hozzáadása",workspace:"ALL",status:"active",description:"Az új identitáshoz hitelesítő kódot küld."},
+  {id:"personal-preview",label:"Előnézet",location:"Saját Drive részletpanel",workspace:"PERSONAL",status:"active",description:"A kijelölt személyes fájl előnézetét mutatja."},
+  {id:"personal-new-window",label:"Új ablak",location:"Saját Drive előnézet",workspace:"PERSONAL",status:"active",description:"A személyes fájl előnézetét külön böngészőablakban/lapon nyitja."},
+  {id:"personal-folder-new",label:"Új mappa",location:"Saját Drive mappafa",workspace:"PERSONAL",status:"active",description:"Új személyes mappát hoz létre."},
+  {id:"personal-folder-rename",label:"Mappa átnevezése",location:"Saját Drive mappafa",workspace:"PERSONAL",status:"active",description:"A személyes mappa nevét módosítja."},
+  {id:"trash-refresh",label:"Lomtár frissítése",location:"Lomtár",workspace:"ALL",status:"active",description:"Újratölti a soft-delete elemek listáját."},
+  {id:"trash-restore",label:"Visszaállítás",location:"Lomtár",workspace:"ALL",status:"permission",description:"A törölt elemet visszaállítja a Drive-ba."},
+  {id:"trash-purge",label:"Végleges törlés",location:"Projekt Lomtár",workspace:"PROJECT",status:"permission",description:"A lomtárból véglegesen eltávolítja az elemet megerősítés után.",condition:"folder.purge / megfelelő végleges törlési jogosultság szükséges."},
+  {id:"dialog-close",label:"Bezárás / ×",location:"Drive dialógusok",workspace:"ALL",status:"active",description:"Az aktuális dialógust vagy felugró panelt bezárja mentés nélkül, ha nincs folyamatban kötelező művelet."},
+  {id:"dialog-cancel",label:"Mégsem",location:"Drive dialógusok",workspace:"ALL",status:"active",description:"Megszakítja az aktuális, még nem véglegesített műveletet."},
+  {id:"dialog-save",label:"Mentés / Létrehozás / Átnevezés",location:"Drive dialógusok",workspace:"ALL",status:"permission",description:"Az adott dialógus érvényes adataival végrehajtja a létrehozási vagy módosítási műveletet."},
+];
+
+export const DRIVE_HELP_TOPICS: DriveHelpTopic[] = [
+  {id:"start",title:"Gyors kezdés",summary:"Munkaterek, kattintások és alapkezelés.",workspace:"ALL",body:["A DIMPRO Drive két fő munkatér-típusa a Saját Drive és a Projekt munkatér. A Munkatér választóval közöttük válthatsz.","Egy kattintás a fájlsoron a Részletek panelt nyitja. Dupla kattintás a nagy fájlmegjelenítőt nyitja. Fájl/mappa húzással mappák között mozgatható; CsomagBOX-ra húzás virtuális hivatkozást ad, nem mozgatja a forrást."],relatedActionIds:["workspace-switch","grid-click","grid-double","grid-drag"]},
+  {id:"views",title:"Táblázati nézetek",summary:"Egyszerű, Mérnöki, Tervellenőrzés és Commander.",workspace:"ALL",body:["Az Egyszerű nézet napi fájlkezelésre készült. A Mérnöki nézet részletes műszaki mezőket tesz láthatóvá. Projektben a Tervellenőrzés a jóváhagyási/lifecycle oszlopokra koncentrál és egy panelre vált.","A Commander két mappát mutat egymás mellett, gyors áthelyezéshez. A fullscreen Adatok gombbal az inspector jobb oldalra vagy alulra tehető."],relatedActionIds:["view-simple","view-engineering","view-review","layout-commander","layout-folders","layout-one","fullscreen-data","fullscreen-right","fullscreen-bottom"]},
+  {id:"personal",title:"Saját Drive",summary:"Személyes tárhely, mappák, kedvencek és csomagok.",workspace:"PERSONAL",body:["A Saját Drive USER_ROOT tulajdonú személyes tárhely. Mappák hozhatók létre, átnevezhetők és áthúzhatók; a fájlok kedvencnek jelölhetők és CsomagBOX-ba tehetők.","A személyes Kedvencek szerveroldalon tartósak. Ha egy fájl aktív CsomagBOX-hivatkozásban van, a törlés blokkolható; előbb a BOX-kapcsolatot kell megszüntetni."],relatedActionIds:["nav-favorites","nav-boxes","nav-trash","linked-projects","box-remove"]},
+  {id:"project",title:"Projekt munkatér",summary:"Közös projektfájltár, verziózás és műszaki workflow.",workspace:"PROJECT",body:["A Projekt Drive hozzáférése a központi Project Core tagsághoz kötött. Mappák örökölhetik a projekt-hozzáférést vagy saját hozzáférési listát kaphatnak.","A projektfájl stabil dokumentumidentitást használ. Fájlcsere nem destruktív felülírás: Új verzió vagy Új revízió készül, a korábbi állapotok a Verziók panelen maradnak."],relatedActionIds:["folder-access","folder-password","toolbar-version","toolbar-revision","details-versions"]},
+  {id:"permissions",title:"Jogosultságkezelés és szerepkörök",summary:"Projekt-hozzáférések, meghívások, szerepkörök és mappajogok.",workspace:"PROJECT",body:["A projekt fejlécében a Projekt-hozzáférések kezelő mutatja az aktív tagokat, függő meghívásokat és a saját szerepkört. Tagkezelési joggal új embert lehet meghívni névvel, szervezettel, e-mail-címmel, szerepkörrel és 3/7/14/30 napos meghívó-érvényességgel.","A projektgazda OWNER szerepe a felületen Beruházási projektvezető. Az OWNER és PROJECT_MANAGER jelenleg ugyanazt a teljes permission-készletet kapja, de az OWNER védett projektgazda. Más tag szerepköre PROJECT_MANAGER, CONTRIBUTOR, REVIEWER vagy VIEWER lehet.","A saját projektszerepkör ezen a kezelőn nem írható át; saját megjelenítési név módosítható. Más nem-OWNER tag szerepköre megfelelő jogosultsággal módosítható vagy hozzáférése megszüntethető.","A projektjogosultság a normál mappákra öröklődik. A mappaszintű ACL az örökölt hozzáférést lefelé szűkítheti: egyedi Mappahozzáférés esetén a mappa láthatósága kiválasztott aktív projekttagokra korlátozható. A jogosultság nélküli felhasználó számára az ilyen mappa és tartalma nem jelenik meg. A jelszavas Mappavédelem csak második réteg, nem kerüli meg az identitásalapú ACL-t."],relatedActionIds:["access-menu","access-invite","access-role","access-self-name","access-remove","access-pending","folder-access","folder-password"]},
+  {id:"upload-names",title:"Feltöltés és fájlnév-kezelés",summary:"Eredeti név, rövid név, biztonságos technikai név.",workspace:"ALL",body:["Feltöltéskor az eredeti fájlnév külön adatként változatlanul megmarad. A rendszer emellett biztonságos technikai fájlnevet képez tároláshoz és exporthoz.","A névnormalizálás a problémás karaktereket eltávolítja, ékezeteket ASCII alakra hozza, Windows-reserved neveket kezeli és stabil rövid hash-t használ. A technikai fájlnév legfeljebb 96 karakter, a biztonságos mappanév legfeljebb 60 karakter, az archív elérési út célhossza 180 karakter.","Projekt exportnál a letöltési név logikája: Tervszám_RövidNév_Vxx_Rxx_ÁLLAPOT.kiterjesztés. A RövidNév/export alias ASCII-safe, alapértelmezetten legfeljebb 30 karakter. Ez nem nevezi át az immutable eredeti tárolt fájlt."],relatedActionIds:["toolbar-upload","toolbar-version","toolbar-revision"]},
+  {id:"downloads",title:"Letöltés és ZIP-csomagok",summary:"Mappa ZIP, CsomagBOX ZIP és automatikus jegyzékek.",workspace:"ALL",body:["Projekt Mappa ZIP a kiválasztott mappa és almappái Windows-kompatibilis biztonságos exportnevét használja. A pilot korlát 500 fájl és 2 GB. Biztonságilag blokkolt fájl kimarad.","A projekt ZIP gyökérmappájába automatikusan bekerül a digitális dokumentációjegyzék és a DIMPRO_fajllista.txt. A jegyzék rögzíti többek között a csomagazonosítót, projektet, projektkódot, mappát, létrehozási időt, fájlszámot, kihagyott elemeket, eredeti fájlnevet, méretet, MIME-t és – ha elérhető – SHA-256 hash-t.","A Saját Drive CsomagBOX ZIP külön DIMPRO_Dokumentaciojegyzek.txt fájlt kap: csomagazonosító, BOX-név, létrehozási idő, fájlszám, kihagyások, eredeti fájlnév, méret, MIME és SHA-256 kerül bele.","Ha két exportált fájl ugyanazt a biztonságos nevet kapná, a ZIP _2, _3 stb. utótaggal teszi egyedivé. A forrásfájl ettől nem változik."],relatedActionIds:["toolbar-download","toolbar-folderzip","box-download"]},
+  {id:"favorites",title:"Kedvencek",summary:"Gyorslista fontos dokumentumokhoz.",workspace:"ALL",body:["A sor eleji csillag kapcsolja a kedvencállapotot. A Kedvencek nézet csak a megjelölt dokumentumokat mutatja.","A kedvenc nem mozgatja vagy másolja a fájlt; csak egy felhasználói jelölés."],relatedActionIds:["grid-favorite","nav-favorites"]},
+  {id:"boxes",title:"CsomagBOX",summary:"Virtuális dokumentumcsomagok másolás nélkül.",workspace:"ALL",body:["A CsomagBOX dokumentum-/verzióhivatkozásokat gyűjt, így ugyanaz a fájl több BOX-ban is szerepelhet másolat nélkül.","A BOX-on belül saját mappastruktúra hozható létre. Eltávolításkor csak a BOX-hivatkozás törlődik. Projekt BOX-ok életciklussal, előzménnyel és összevetéssel is rendelkeznek."],relatedActionIds:["box-new","box-add","box-folder","box-remove","box-download","box-history","box-compare","box-filter"]},
+  {id:"review",title:"Tervellenőrzés és jóváhagyások",summary:"Szerepkörös tervellenőrzési lánc és életciklus.",workspace:"PROJECT",body:["A Tervellenőrzés műszaki ellenőrzés, megrendelő, projektvezető, beruházási projektvezető és életciklus szakaszokra bontott. Minden felhasználó csak a számára jogosult szakaszt szerkesztheti.","Gyors színek: Megrendelő világos citromsárga, Projektvezető kék, Beruházási projektvezető zöld, Munkaközi citromsárga, Aktuális zöld. Az Időnapló mutatja a jóváhagyások és állapotváltások auditját."],relatedActionIds:["review-tabs","review-save","review-timeline","review-observation","review-status"]},
+  {id:"security",title:"Biztonság, karantén és törlés",summary:"Mikor tölthető le vagy törölhető egy fájl?",workspace:"ALL",body:["A Drive biztonsági állapotot kezel. Karanténos vagy nem megfelelő fájl műveletei blokkolhatók.","A törlés alapvetően soft-delete/lomtár művelet. Aktív kapcsolat – például CsomagBOX hivatkozás – blokkolhatja a törlést, ilyenkor előbb a kapcsolatot kell megszüntetni."],relatedActionIds:["details-security","details-scan","details-trash","nav-trash","box-remove"]},
+  {id:"viewer",title:"Fájlmegjelenítő és fullscreen",summary:"Pan, zoom, forgatás, lapozás és teljes képernyő.",workspace:"ALL",body:["A fájlmegjelenítő overlayként nyílik meg. PDF esetén lapozás, kéz/pan, zoom, szélességre illesztés és forgatás érhető el.","Ctrl+egérgörgő a megjelenítőben csak a dokumentumot zoomolja. Fullscreenben az Esc először az aktív részlet/előnézet panelt zárja, majd a teljes képernyőt."],relatedActionIds:["viewer-hand","viewer-pages","viewer-zoom","viewer-fit","viewer-rotate","viewer-refresh","viewer-fullscreen","viewer-newtab"]},
+  {id:"button-index",title:"Gombok és ikonok jegyzéke",summary:"A Drive kezelőfelület teljes kereshető vezérlőlistája.",workspace:"ALL",body:["A jegyzék a fő munkatér, mappafa, Commander, Részletek, Tervellenőrzés, CsomagBOX, fájlmegjelenítő és összehasonlító gombjait tartalmazza. Használd a Súgó keresőjét név, hely vagy funkció alapján."],relatedActionIds:DRIVE_HELP_ACTIONS.map((item)=>item.id)},
+  {id:"troubleshooting",title:"Gyakori kérdések",summary:"Miért inaktív, miért nem törölhető, miért nem látható?",workspace:"ALL",body:["Nem törölhető egy fájl? Ellenőrizd a CsomagBOX- vagy más aktív kapcsolatot és a törlési jogosultságot.","Nem aktív az Új verzió vagy Új revízió? Jelölj ki pontosan egy projektfájlt és ellenőrizd az írási jogosultságot.","Nem tölthető le? Biztonsági karantén vagy más fail-closed állapot blokkolhatja.","Nem látszik egy projektmappa? Egyedi mappa-ACL teljesen elrejtheti a jogosulatlan felhasználó elől.","Szürke a gomb? Lehet jogosultság-, kijelölés-, fájlállapot-, Drive Desktop- vagy még nem aktivált funkció miatti tiltás."],keywords:["inaktív","szürke","nem működik","hiba","törlés","letöltés","jogosultság"]},
+];
+
+export function driveHelpStatusLabel(status: DriveHelpStatus) {
+  if (status === "active") return "Működik";
+  if (status === "permission") return "Jogosultságfüggő";
+  if (status === "conditional") return "Feltételes";
+  return "Hamarosan";
+}

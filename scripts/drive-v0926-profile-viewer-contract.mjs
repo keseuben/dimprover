@@ -13,7 +13,7 @@ const css=read('components/drive/DriveWorkspace.module.css');
 const build=read('components/drive/driveBuildInfo.ts');
 let pass=0;
 const check=(name,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,'0')} ${name}`)};
-check('Drive carries V0.9.26 feature set or newer',()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(26|27|28|29|30)"/));
+check('Drive carries V0.9.26 feature set or newer',()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(26|27|28|29|30|31)"/));
 check('profile route stays session-bound and same-origin',()=>{assert.match(profile,/validateSameOriginMutation/);assert.match(profile,/getAppSessionByToken/);assert.match(profile,/DIMPRO_APP_SESSION_COOKIE/)});
 check('profile route uses canonical auth updater',()=>assert.match(profile,/updateAuthUserDisplayName/));
 check('repository uses constrained profile RPC, not direct auth_users UPDATE',()=>{const block=repo.slice(repo.indexOf('export async function updateAuthUserDisplayName'),repo.indexOf('export async function issueLoginOtp'));assert.match(block,/auth_update_self_display_name/);assert.doesNotMatch(block,/UPDATE auth_users/)});

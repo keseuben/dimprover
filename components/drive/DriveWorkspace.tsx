@@ -66,6 +66,7 @@ type Props = {
   userEmail?: string | null;
   userDisplayName?: string | null;
   onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
+  onOpenHelp?: () => void;
 };
 
 type ProjectMembershipRole = "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
@@ -246,6 +247,7 @@ export default function DriveWorkspace({
   userEmail = null,
   userDisplayName = null,
   onStorageQuotaChange,
+  onOpenHelp,
 }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
@@ -2610,7 +2612,7 @@ export default function DriveWorkspace({
         ) : null}
         <div className={styles.headerActions}>
           <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
-          <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
+          <button type="button" className={styles.headerAction} onClick={onOpenHelp}><HelpCircle size={14} /> Súgó</button>
           <ProjectAccessMenu projectId={projectId} compact />
           <div className={styles.userPill}>
             <span className={styles.avatar}>{(headerDisplayName || headerEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span>

@@ -7,6 +7,7 @@ import DriveWorkspace from "./DriveWorkspace";
 import PersonalDriveWorkspace from "./PersonalDriveWorkspace";
 import FloatingProjectBoard from "./FloatingProjectBoard";
 import DriveIdentityDialog from "./DriveIdentityDialog";
+import DriveHelpCenter from "./DriveHelpCenter";
 import type { DriveProject, DriveStorageQuota } from "./driveTypes";
 import type { DriveWorkspaceOption, DriveWorkspaceRecord, DriveWorkspacesPayload } from "./driveWorkspaceTypes";
 import { driveIdentityLabel, type DriveUserIdentitiesPayload, type DriveUserIdentity } from "./driveIdentityTypes";
@@ -59,6 +60,7 @@ export default function DriveShell({
   const [userIdentities, setUserIdentities] = useState<DriveUserIdentity[]>([]);
   const [selectedProjectIdentityId, setSelectedProjectIdentityId] = useState("");
   const [showIdentityDialog, setShowIdentityDialog] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [boardOpen, setBoardOpen] = useState(false);
@@ -450,6 +452,8 @@ export default function DriveShell({
         onHoverLeave={closeBoardSoon}
         onNavigate={handleDriveNavigation}
         trashEnabled={selectedWorkspace?.type === "PERSONAL" || Boolean(selectedProject?.permissions?.includes("folder.restore"))}
+        incomingEnabled={selectedWorkspace?.type === "PROJECT"}
+        onOpenHelp={() => setHelpOpen(true)}
       />
       <FloatingProjectBoard
         workspaceOptions={workspaceOptions}
@@ -487,6 +491,7 @@ export default function DriveShell({
         storageQuota={storageQuota}
         storageLoading={storageLoading}
         storageError={storageError}
+        onOpenHelp={() => setHelpOpen(true)}
       />
       <main className={styles.main}>
         {showCreateProject && canCreateProject && (
@@ -559,6 +564,7 @@ export default function DriveShell({
             navigationRequest={navigationRequest}
             storageQuota={storageQuota}
             onStorageQuotaChange={handleStorageQuotaChange}
+            onOpenHelp={() => setHelpOpen(true)}
           />
         ) : selectedProject ? (
           <DriveWorkspace
@@ -575,11 +581,18 @@ export default function DriveShell({
             userEmail={workspaceUserEmail}
             userDisplayName={workspaceUserDisplayName}
             onStorageQuotaChange={handleStorageQuotaChange}
+            onOpenHelp={() => setHelpOpen(true)}
           />
         ) : (
           <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>A projektmunkatér nem tölthető be</strong><span>A munkatér projektkapcsolata hiányos.</span></div></div>
         )}
       </main>
+      <DriveHelpCenter
+        open={helpOpen}
+        workspace={selectedWorkspace?.type === "PERSONAL" ? "PERSONAL" : "PROJECT"}
+        workspaceName={selectedWorkspace?.name || "DIMPRO Drive"}
+        onClose={() => setHelpOpen(false)}
+      />
       <DriveIdentityDialog
         open={showIdentityDialog}
         onClose={() => setShowIdentityDialog(false)}

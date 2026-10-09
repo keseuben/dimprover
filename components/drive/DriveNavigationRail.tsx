@@ -27,6 +27,8 @@ type Props = {
   onHoverLeave: () => void;
   onNavigate: (target: DriveNavigationTarget) => void;
   trashEnabled?: boolean;
+  incomingEnabled?: boolean;
+  onOpenHelp?: () => void;
 };
 
 export default function DriveNavigationRail({
@@ -37,6 +39,8 @@ export default function DriveNavigationRail({
   onHoverLeave,
   onNavigate,
   trashEnabled = false,
+  incomingEnabled = true,
+  onOpenHelp,
 }: Props) {
   const itemClass = (target: DriveNavigationTarget) =>
     `${styles.railButton} ${activeTarget === target ? styles.railActive : ""}`;
@@ -75,7 +79,7 @@ export default function DriveNavigationRail({
       <button type="button" className={itemClass("favorites")} onClick={() => onNavigate("favorites")} title="Kedvencek">
         <Star size={18} />
       </button>
-      <button type="button" className={itemClass("incoming")} onClick={() => onNavigate("incoming")} title="Beérkező Drop">
+      <button type="button" className={incomingEnabled ? itemClass("incoming") : `${styles.railButton} ${styles.railDisabled}`} disabled={!incomingEnabled} onClick={() => incomingEnabled && onNavigate("incoming")} title={incomingEnabled ? "Beérkező Drop" : "A személyes Beérkező Drop későbbi fázis"}>
         <Inbox size={18} />
       </button>
       <button type="button" className={`${styles.railButton} ${styles.railDisabled}`} disabled title="Kiadások – külön Drive nézet hamarosan">
@@ -92,7 +96,7 @@ export default function DriveNavigationRail({
       <button type="button" className={styles.railButton} title="Értesítések">
         <Bell size={18} />
       </button>
-      <button type="button" className={styles.railButton} title="Súgó">
+      <button type="button" className={styles.railButton} title="Súgó" onClick={onOpenHelp}>
         <HelpCircle size={18} />
       </button>
       <Link href="/beallitasok" className={styles.railLink} title="Beállítások">

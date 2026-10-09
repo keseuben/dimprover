@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Home,
   Inbox,
+  HelpCircle,
   PackageCheck,
   Pin,
   Moon,
@@ -68,6 +69,7 @@ type Props = {
   storageQuota?: DriveStorageQuota | null;
   storageLoading?: boolean;
   storageError?: string | null;
+  onOpenHelp?: () => void;
 };
 
 function formatBytes(value: number) {
@@ -105,6 +107,7 @@ export default function FloatingProjectBoard({
   storageQuota = null,
   storageLoading = false,
   storageError = null,
+  onOpenHelp,
 }: Props) {
   const projectMode = selectedWorkspaceType === "PROJECT";
   const storagePercent = storageQuota ? Math.max(0, Math.min(100, storageQuota.usagePercent)) : 0;
@@ -245,7 +248,7 @@ export default function FloatingProjectBoard({
           <button type="button" className={styles.boardNavDisabled} disabled title="Legutóbbi – hamarosan">
             <Clock3 size={16} /> <span>Legutóbbi</span><small>hamarosan</small>
           </button>
-          <button type="button" className={projectMode ? navClass("favorites") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("favorites")} title={projectMode ? "Kedvencek" : "Személyes Kedvencek – későbbi fázis"}>
+          <button type="button" className={navClass("favorites")} onClick={() => onNavigate("favorites")} title="Kedvencek">
             <Star size={16} /> Kedvencek
           </button>
           <button type="button" className={projectMode ? navClass("incoming") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("incoming")} title={projectMode ? "Beérkező Drop" : "A személyes Beérkező Drop későbbi fázis"}>
@@ -254,7 +257,7 @@ export default function FloatingProjectBoard({
           <button type="button" className={styles.boardNavDisabled} disabled title="Kiadások – külön Drive nézet hamarosan">
             <PackageCheck size={16} /> <span>Kiadások</span><small>hamarosan</small>
           </button>
-          <button type="button" className={projectMode ? navClass("boxes") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("boxes")} title={projectMode ? "CsomagBOX" : "A személyes CsomagBOX későbbi fázis"}>
+          <button type="button" className={navClass("boxes")} onClick={() => onNavigate("boxes")} title="CsomagBOX">
             <Box size={16} /> CsomagBOX
           </button>
           <button type="button" className={trashEnabled ? navClass("trash") : styles.boardNavDisabled} disabled={!trashEnabled} onClick={() => trashEnabled && onNavigate("trash")} title={trashEnabled ? "Lomtár" : "Nincs Lomtár-hozzáférés"}>
@@ -287,6 +290,7 @@ export default function FloatingProjectBoard({
           </div>
         </div>
         <div className={styles.boardNav}>
+          <button type="button" onClick={onOpenHelp}><HelpCircle size={16} /> Súgó</button>
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>
 

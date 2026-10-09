@@ -4,7 +4,7 @@ import fs from "node:fs";
 const css=fs.readFileSync("components/drive/DriveWorkspace.module.css","utf8");
 const build=fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
 let pass=0; const check=(name,fn)=>{fn(); pass++; console.log(`PASS ${String(pass).padStart(2,"0")} ${name}`)};
-check("Drive version is 0.9.30",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.30"/));
+check("Drive carries V0.9.30 workline or newer",()=>assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(30|31)"/));
 check("regular split review workline is max-content",()=>assert.match(css,/\.detailsSplitCard \.reviewWorkspace > \.reviewProgress \{[\s\S]*width: max-content;[\s\S]*justify-self: start;[\s\S]*align-self: start;/s));
 check("regular split review columns are fixed",()=>assert.match(css,/\.detailsSplitCard \.reviewWorkspace > \.reviewProgress \{[\s\S]*grid-template-columns: repeat\(6, 48px\);[\s\S]*gap: 6px;/s));
 check("regular split step wrappers are fixed 48px",()=>assert.match(css,/\.detailsSplitCard \.reviewProgressStepWrap \{[\s\S]*width: 48px;[\s\S]*min-width: 48px;[\s\S]*max-width: 48px;/s));
