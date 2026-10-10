@@ -42,6 +42,11 @@ const frequencies: {value:Frequency;label:string}[] = [
   {value:"NONE",label:"Nincs e-mail"},
 ];
 
+type ScheduleWindow = {category:Category;scheduledSlot:string;count:number};
+type SchedulePreview = {
+  now:string;calendarReady:boolean;examined:number;disabled:number;notDue:number;
+  duplicates:number;truncated:boolean;candidateCount:number;windows:ScheduleWindow[];
+};
 type AdminAuditRow={
   id:string;category:Category;scheduledSlot:string;status:DeliveryRow["status"];
   attempts:number;createdAt:string;smtpAcceptedAt:string|null;
@@ -62,6 +67,8 @@ export default function DriveNotificationSettings({projectId,onClose,canAuditPro
   const [deliveryBusy,setDeliveryBusy]=useState(false);
   const [adminAuditRows,setAdminAuditRows]=useState<AdminAuditRow[]|null>(null);
   const [adminAuditBusy,setAdminAuditBusy]=useState(false);
+  const [schedulePreview,setSchedulePreview]=useState<SchedulePreview|null>(null);
+  const [scheduleBusy,setScheduleBusy]=useState(false);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -164,6 +171,20 @@ export default function DriveNotificationSettings({projectId,onClose,canAuditPro
     finally{setAdminAuditBusy(false);}
   }
 
+  async function loadSchedulePreview() {
+    if (!canAuditProject) return;
+    setScheduleBusy(true);setError("");
+    try {
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/notification-schedule-preview`,{
+        credentials:"same-origin",cache:"no-store",
+      });
+      const payload=await response.json().catch(()=>({})) as SchedulePreview & {ok?:boolean;error?:string};
+      if(!response.ok||!payload.ok)throw new Error(payload.error||"Az ütemezési előnézet nem elérhető.");
+      setSchedulePreview(payload);
+    }catch(caught){setError(caught instanceof Error?caught.message:"Az ütemezési előnézet nem tölthető be.");}
+    finally{setScheduleBusy(false);}
+  }
+
   return <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="DIMPRO Drive értesítési beállítások">
     <section className={styles.panel}>
       <header><div><small>DIMPRO DRIVE</small><strong><Bell size={20}/> Értesítési beállítások</strong>
@@ -227,6 +248,26 @@ export default function DriveNotificationSettings({projectId,onClose,canAuditPro
           </div>)}
         </div>}
       </section>
+      {canAuditProject && <section className={styles.previewSection}>
+        <strong>Ütemezési előnézet – levelek küldése nélkül</strong>
+        <p>Megmutatja a jelenlegi összesítési beállítások alapján esedékes értesítések darabszámát. Címzettek személyes adatait nem tartalmazza.</p>
+        <div className={styles.previewActions}>
+          <button type="button" disabled={scheduleBusy} onClick={()=>void loadSchedulePreview()}>
+            {scheduleBusy?"Számítás…":"Ütemezési előnézet számítása"}
+          </button>
+        </div>
+        {schedulePreview && <div className={styles.previewResults}>
+          <strong>{schedulePreview.candidateCount} előkészíthető összesítő · {schedulePreview.examined} beállítás</strong>
+          {!schedulePreview.calendarReady && <p>A magyar munkanaptár hiányos; havi összesítő nem ütemezhető.</p>}
+          {schedulePreview.truncated && <p>Az előnézet korlátozott: további címzettek is lehetnek.</p>}
+          {schedulePreview.windows.map((window)=><div key={window.category+window.scheduledSlot} className={styles.previewEntry}>
+            <span>{window.count} összesítő</span>
+            <strong>{descriptions[window.category]?.label||"Értesítés"}</strong>
+            <time title={window.scheduledSlot}>{window.scheduledSlot.slice(0,16)}</time>
+          </div>)}
+          {!schedulePreview.windows.length && <p>Jelenleg nincs esedékes automatikus összesítő.</p>}
+        </div>}
+      </section>}
       {canAuditProject && <section className={styles.previewSection}>
         <strong>Projekt értesítési audit – csak projektadminisztrátoroknak</strong>
         <p>A napló a kézbesítési állapotokat és a címzettek <em>jelenlegi</em> projekttagsági adatait mutatja; korábbi SMTP-címként ezeket nem tünteti fel.</p>
