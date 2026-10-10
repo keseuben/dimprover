@@ -3381,7 +3381,7 @@ export default function DriveWorkspace({
                     {followFrequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <p>Az e-mail kézbesítés az értesítési motor aktiválása után indulhat. A beállításokat addig is eltároljuk; jogosultsági ellenőrzés minden kiküldés előtt szükséges.</p>
+                <p>Az e-mail küldése még nem aktív. A kiküldés időpontját jelenleg a projekt Értesítések beállításának gyakorisága határozza meg; a dokumentum saját ütemezési preferenciájának külön alkalmazása későbbi feladat.</p>
               </div>
               <footer>
                 {following && <button type="button" disabled={followSaving} onClick={() => void saveFollow(false)}>Követés megszüntetése</button>}

@@ -8,6 +8,12 @@ type Category = "DOCUMENT_CHANGES" | "APPROVAL_DECISIONS";
 type Frequency = "FOUR_HOURLY" | "EIGHT_HOURLY" | "DAILY" | "WEEKLY" | "MONTHLY" | "NONE";
 type Preference = { category: Category; enabled: boolean; digestFrequency: Frequency; followedOnly: boolean };
 type Props = { projectId: string; onClose: () => void };
+type PreviewRow = { eventId: string; kind: string; occurredAt: string; documentName: string };
+type PreviewResponse = { ok: boolean; entries: PreviewRow[]; count: number; truncated: boolean; examined: number };
+const previewKinds: Record<string,string> = {
+  NEW_DOCUMENT:"Új dokumentum", NEW_VERSION:"Új verzió", NEW_REVISION:"Új revízió",
+  REVIEW_DECISION:"Ellenőrzési döntés", FORMAL_ISSUE:"Hivatalos kiadás",
+};
 
 const fallback: Preference[] = [
   { category:"DOCUMENT_CHANGES",enabled:false,digestFrequency:"DAILY",followedOnly:false },
@@ -33,6 +39,9 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [available,setAvailable]=useState(false);
+  const [previewCategory,setPreviewCategory]=useState<Category>("DOCUMENT_CHANGES");
+  const [preview,setPreview]=useState<PreviewResponse|null>(null);
+  const [previewBusy,setPreviewBusy]=useState(false);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -74,6 +83,40 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
     }catch(caught){setError(caught instanceof Error?caught.message:"A mentés sikertelen.");}
     finally{setSaving(null);}
   }
+  async function loadPreview(category:Category) {
+    setPreviewBusy(true);setPreview(null);setError("");setPreviewCategory(category);
+    try {
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/notification-preview?category=${encodeURIComponent(category)}&hours=168`,{
+        credentials:"same-origin",cache:"no-store",
+      });
+      const payload=await response.json() as PreviewResponse & {error?:string};
+      if(!response.ok||!payload.ok)throw new Error(payload.error||"Az előnézet nem tölthető be.");
+      setPreview(payload);
+    }catch(caught){setError(caught instanceof Error?caught.message:"Az előnézet nem tölthető be.");}
+    finally{setPreviewBusy(false);}
+  }
+
+  async function downloadPreview(category:Category) {
+    setPreviewBusy(true);setError("");
+    try {
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/notification-preview?category=${encodeURIComponent(category)}&hours=168&format=xlsx`,{
+        credentials:"same-origin",cache:"no-store",
+      });
+      if(!response.ok){
+        const payload=await response.json().catch(()=>({})) as {error?:string};
+        throw new Error(payload.error||"A melléklet nem készíthető el.");
+      }
+      const blob=await response.blob();
+      const url=URL.createObjectURL(blob);
+      try{
+        const link=document.createElement("a");link.href=url;
+        link.download="DIMPRO_Drive_ertesitesi_elonezet.xlsx";
+        document.body.appendChild(link);link.click();link.remove();
+      }finally{window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    }catch(caught){setError(caught instanceof Error?caught.message:"A melléklet nem tölthető le.");}
+    finally{setPreviewBusy(false);}
+  }
+
   return <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="DIMPRO Drive értesítési beállítások">
     <section className={styles.panel}>
       <header><div><small>DIMPRO DRIVE</small><strong><Bell size={20}/> Értesítési beállítások</strong>
@@ -99,6 +142,27 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
           {saving===pref.category?"Mentés…":"Beállítás mentése"}
         </button>
       </section>)}
+      <section className={styles.previewSection}>
+        <strong>Értesítési előnézet – az elmúlt 7 nap</strong>
+        <p>Csak az Ön számára hozzáférhető dokumentumok. Az előnézet nem indít e-mailt, és a szűrés a dokumentumjogosultságait ellenőrzi.</p>
+        <div className={styles.previewActions}>
+          <button type="button" disabled={previewBusy} onClick={()=>void loadPreview("DOCUMENT_CHANGES")}>Dokumentumváltozások</button>
+          <button type="button" disabled={previewBusy} onClick={()=>void loadPreview("APPROVAL_DECISIONS")}>Jóváhagyások</button>
+          <button type="button" disabled={previewBusy||!preview?.entries.length} onClick={()=>void downloadPreview(previewCategory)}>Excel előnézet</button>
+        </div>
+        {previewBusy && <p>Előnézet betöltése…</p>}
+        {preview && <div className={styles.previewResults}>
+          <strong>{descriptions[previewCategory].label}: {preview.count} esemény</strong>
+          {preview.truncated && <p>A napló az első 250 legutóbbi eseményre korlátozott; a lista nem teljes.</p>}
+          {!preview.entries.length && <p>Nincs megjeleníthető változás ebben a kategóriában.</p>}
+          {preview.entries.slice(0,15).map((row)=><div key={row.eventId} className={styles.previewEntry}>
+            <span>{previewKinds[row.kind]||"Változás"}</span>
+            <strong title={row.documentName}>{row.documentName}</strong>
+            <time>{new Date(row.occurredAt).toLocaleDateString("hu-HU")}</time>
+          </div>)}
+          {preview.entries.length>15 && <p>+{preview.entries.length-15} további esemény (az Excel-előnézet tartalmazza őket).</p>}
+        </div>}
+      </section>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {notice && <p className={styles.success} role="status">{notice}</p>}
       <footer>Az értesítések címzettjeit és tartalmát a rendszer kiküldés előtt ismételten ellenőrzi a projekt- és mappajogosultságok alapján.</footer>

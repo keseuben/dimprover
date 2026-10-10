@@ -16,3 +16,15 @@
 .category button:disabled { cursor:not-allowed;opacity:.45; }
 .error { color:#aa3037;font-size:12px;margin:0; }.success { color:#216e53;font-size:12px;margin:0; }
 .panel footer { color:#728595;font-size:11px;border-top:1px solid #e2eaf0;padding-top:9px;line-height:1.5; }
+
+.previewSection { border-top:1px solid #dce8ee;padding-top:14px;display:grid;gap:9px; }
+.previewSection > strong { font-size:14px;color:#24465a; }
+.previewSection > p, .previewResults p { color:#718491;font-size:12px;margin:0;line-height:1.5; }
+.previewActions { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+.previewActions button { border:1px solid #bdd5dc;background:#f0fafb;color:#1b6671;border-radius:7px;padding:7px 11px;cursor:pointer;font-weight:800;font-size:11px; }
+.previewActions button:disabled { opacity:.45;cursor:default; }
+.previewResults { border:1px solid #dbe8eb;border-radius:9px;padding:9px;display:grid;gap:8px;max-height:250px;overflow:auto; }
+.previewResults > strong { font-size:12px; }
+.previewEntry { display:grid;grid-template-columns:125px minmax(0,1fr) 85px;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid #eef1f4;font-size:11px; }
+.previewEntry > span { color:#187f8b; }.previewEntry > strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.previewEntry > time { color:#778b9a;text-align:right; }
+@media(max-width:540px){.previewEntry{grid-template-columns:1fr 82px}.previewEntry>span{grid-column:1/-1}.previewEntry>time{grid-column:2;grid-row:2}}

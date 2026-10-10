@@ -39,10 +39,9 @@ export async function listDriveDigestPreferences(projectId:string,userId:string)
   return DEFAULT_DIGEST_PREFERENCES.map((fallback)=>rows.find((row)=>row.category===fallback.category) || fallback);
 }
 export async function updateDriveDigestPreference(projectId:string,userId:string,input:DriveDigestPreference) {
-  const {error}=await getDatabaseClient().from("drive_core_notification_preferences").upsert({
-    project_id:projectId,user_id:userId,category:input.category,enabled:input.enabled,
-    digest_frequency:input.digestFrequency,followed_only:input.followedOnly,
-    updated_at:new Date().toISOString(),
-  },{onConflict:"project_id,user_id,category"});
+  const {error}=await getDatabaseClient().rpc("drive_set_digest_preference",{
+    p_project_id:projectId,p_user_id:userId,p_category:input.category,p_enabled:input.enabled,
+    p_digest_frequency:input.digestFrequency,p_followed_only:input.followedOnly,
+  });
   if(error) fail(error);
 }
