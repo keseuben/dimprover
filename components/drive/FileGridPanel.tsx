@@ -1013,6 +1013,7 @@ export default function FileGridPanel({
   onCancelNewFolder = () => undefined,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
+  const [reviewFileType, setReviewFileType] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
   const [reviewStatus, setReviewStatus] = useState("all");
   const [reviewApprovalStage, setReviewApprovalStage] = useState("all");
@@ -1305,12 +1306,13 @@ export default function FileGridPanel({
       ].some((value) => value.toLocaleLowerCase("hu-HU").includes(q));
       return matchesSearch
         && (reviewDiscipline === "all" || row.effectiveDiscipline === reviewDiscipline)
+        && (reviewFileType === "all" || (row.document.extension || "").toLowerCase() === reviewFileType)
         && (reviewTopic === "all" || row.effectiveTopic === reviewTopic)
         && (reviewStatus === "all" || (reviewStatus === "not-approved" ? !isApprovedReviewValue(row.customer) : row.workflow === reviewStatus))
         && (reviewApprovalStage === "all" || row.approvalStage === reviewApprovalStage)
         && (reviewLifecycle === "all" || row.lifecycle === reviewLifecycle);
     });
-  }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
+  }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewFileType, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
 
   const childFolders = useMemo(() => {
     if (allFilesMode) return [];
@@ -1350,6 +1352,7 @@ export default function FileGridPanel({
     });
   }, [reviewRows, sortState]);
 
+  const reviewFileTypes = useMemo(() => [...new Set(allReviewRows.map((row) => (row.document.extension || "").toLowerCase()).filter(Boolean))].sort(), [allReviewRows]);
   const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
   const reviewTopics = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [allReviewRows]);
   const reviewStatuses = useMemo(() => [...new Set(allReviewRows.map((row) => row.workflow).filter(Boolean))].sort(), [allReviewRows]);
@@ -1543,12 +1546,13 @@ export default function FileGridPanel({
             </div>
             <div className={styles.reviewCompactFilters}>
               <input aria-label="Keresés" className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Keresés…" />
+              <select aria-label="Fájltípus" title="Fájltípus" value={reviewFileType} onChange={(event) => setReviewFileType(event.target.value)}><option value="all">Típus: mind</option>{reviewFileTypes.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select>
               <select aria-label="Szakág" title="Szakág" value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Szakág: mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select>
               <select aria-label="Témakör" title="Témakör" value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Témakör: mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select>
               <select aria-label="Workflow állapot" title="Workflow állapot" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Állapot: mind</option><option value="not-approved">Nincs még jóváhagyva</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select>
               <select aria-label="Jóváhagyási szint" title="Jóváhagyási szint" value={reviewApprovalStage} onChange={(event) => setReviewApprovalStage(event.target.value)}><option value="all">Jóváh.: mind</option><option value="pending">Ellenőrzésre vár</option><option value="review">Ellenőrzés alatt</option><option value="returned">Visszaadva</option><option value="customer">Megrendelő jóváhagyta</option><option value="manager">Projektvezető jóváhagyta</option><option value="investor">Beruházói PV jóváhagyta</option></select>
               <select aria-label="Életciklus" title="Életciklus" value={reviewLifecycle} onChange={(event) => setReviewLifecycle(event.target.value)}><option value="all">Életc.: mind</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select>
-              <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }} title="Szűrők törlése">×</button>
+              <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewFileType === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewFileType("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }} title="Szűrők törlése">×</button>
             </div>
           </>
         ) : viewMode === "simple" ? (
@@ -1725,8 +1729,8 @@ export default function FileGridPanel({
                     {renderColumnCell("review", "fileName", <OverflowTooltipText text={row.document.name} />, styles.reviewFileName)}
                     {renderColumnCell("review", "uploader", <OverflowTooltipText text={uploaderLabel(row.document.currentVersion?.createdBy)} />)}
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
-                    <td><OverflowTooltipText text={row.effectiveDiscipline || "—"} /></td>
-                    <td><OverflowTooltipText text={row.effectiveTopic || "—"} /></td>
+                    <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title="Szakág szerkesztése a részletezőben" onClick={() => openDetail(row.document, "discipline")}><OverflowTooltipText text={row.effectiveDiscipline || "—"} /></button></td>
+                    <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title="Témakör szerkesztése a részletezőben" onClick={() => openDetail(row.document, "topic")}><OverflowTooltipText text={row.effectiveTopic || "—"} /></button></td>
                     <td><button type="button" className={reviewApprovalSymbolClass(row, "checked")} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openDetail(row.document, "result")}>{reviewMark(row.result)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>

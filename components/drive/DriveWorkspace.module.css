@@ -6832,3 +6832,22 @@
 @media (max-width: 700px) {
  .previewDrawerResizeHandle { display: none; }
 }
+
+
+/* V0.9.34 - lapozó nyilak a megjelenített dokumentum két oldalán. */
+.previewDrawerBody { position: relative; }
+.previewNavigatorPrevious, .previewNavigatorNext {
+ position: absolute; top: 50%; transform: translateY(-50%); z-index: 11;
+ height: 44px; width: 44px; border-radius: 50%;
+ border: 1px solid rgba(255,255,255,.5); background: rgba(18,43,64,.78);
+ color: white; cursor: pointer; display: grid; place-items: center;
+ box-shadow: 0 2px 12px rgba(0,0,0,.2);
+}
+.previewNavigatorPrevious { left: 16px; }
+.previewNavigatorNext { right: 16px; }
+.previewNavigatorPrevious:hover, .previewNavigatorNext:hover { background: #116b84; }
+.previewNavigatorCounter {
+ position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+ padding: 4px 12px; border-radius: 100px; background: rgba(18,43,64,.72);
+ color: #fff; font-size: 11px; z-index: 10; pointer-events: none;
+}

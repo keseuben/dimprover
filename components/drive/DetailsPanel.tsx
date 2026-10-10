@@ -107,7 +107,7 @@ type Props = {
   inheritedDiscipline?: string;
   inheritedTopic?: string;
   reviewFocus?: string;
-  detailsFocus?: "planNo" | "planTitle" | "scales" | "numbering" | "";
+  detailsFocus?: "planNo" | "planTitle" | "scales" | "numbering" | "discipline" | "topic" | "";
 };
 
 function formatAuditDate(value: unknown) {
@@ -538,8 +538,9 @@ export default function DetailsPanel({
       ? "drive-meta-planNo"
       : detailsFocus === "planTitle"
         ? "drive-meta-planTitle"
-        : detailsFocus === "numbering"
-          ? "drive-numbering-editor"
+        : detailsFocus === "numbering" ? "drive-numbering-editor"
+          : detailsFocus === "discipline" ? "drive-meta-discipline"
+          : detailsFocus === "topic" ? "drive-meta-topic"
           : "drive-meta-scale-0";
     const frame = requestAnimationFrame(() => {
       const target = globalThis.document?.getElementById(targetId) as HTMLElement | null;
@@ -548,7 +549,7 @@ export default function DetailsPanel({
       if (target instanceof HTMLInputElement) target.select();
     });
     return () => cancelAnimationFrame(frame);
-  }, [detailsFocus, document?.id, tab]);
+  }, [detailsFocus, document, tab]);
   useEffect(() => { setReviewTimelineOpen(false); }, [document?.id]);
   useEffect(() => {
     if (!reviewFocus || tab !== "review") return;
@@ -583,9 +584,9 @@ export default function DetailsPanel({
       level: source.level,
       zone: source.zone,
       topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
-      planTitle: typeof source.extra?.displayName === "string" ? source.extra.displayName : typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
+      planTitle: (typeof source.extra?.displayName === "string" && source.extra.displayName.trim()) ? source.extra.displayName : (typeof source.extra?.planTitle === "string" && source.extra.planTitle.trim()) ? source.extra.planTitle : (typeof source.extra?.drawingTitle === "string" && source.extra.drawingTitle.trim()) ? source.extra.drawingTitle : fileNameWithoutExtensionForDisplay(document?.currentVersion?.originalName || document?.name || ""),
       scales: scalesFromExtra(source.extra),
-    } : emptyMetadata);
+    } : { ...emptyMetadata, planTitle: fileNameWithoutExtensionForDisplay(document?.currentVersion?.originalName || document?.name || "") });
     const extra = source?.extra || {};
     const legacyObservations = typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "";
     const technicalObservationItems = observationItems(extra.reviewObservationItems, legacyObservations);
@@ -613,7 +614,7 @@ export default function DetailsPanel({
     setNumberingRevision(currentVersion?.revisionNumber || 0);
     setNumberingReason(currentVersion?.numberingCorrectionReason || "");
     setNumberingMode("NONE");
-  }, [details?.document.id, details?.metadata, details?.notes]);
+  }, [details?.document.id, details?.metadata, details?.notes, document?.currentVersion, document?.name]);
 
   useEffect(() => {
     setSettingsDraft(projectSettings?.metadataOptions || DEFAULT_DRIVE_METADATA_OPTIONS);
@@ -788,7 +789,7 @@ export default function DetailsPanel({
                     </div>
                   ))}
                   {metadataOptionKeys.map((key) => (
-                    <div className={styles.metaItem} key={key}>
+                    <div className={styles.metaItem} key={key} data-details-focused={detailsFocus === key ? "true" : undefined}>
                       <label htmlFor={`drive-meta-${key}`}>{metadataOptionLabels[key]}</label>
                       <select id={`drive-meta-${key}`} value={metadata[key]} disabled={!canWrite} onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}>
                         <option value="">—</option>

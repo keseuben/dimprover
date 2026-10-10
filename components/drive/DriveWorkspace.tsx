@@ -287,7 +287,7 @@ export default function DriveWorkspace({
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [projectSettings, setProjectSettings] = useState<DriveProjectSettings | null>(null);
   const [reviewFocus, setReviewFocus] = useState("");
-  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "planTitle" | "scales" | "numbering" } | null>(null);
+  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "planTitle" | "scales" | "numbering" | "discipline" | "topic" } | null>(null);
   const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
   const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
@@ -657,6 +657,12 @@ export default function DriveWorkspace({
     });
   }, [allFilesInFolderMode, favoriteDocumentIds, favoriteOnly, query, selectedFolderId, selectedFolderScopeIds, tree]);
 
+
+  // Csak a jelenlegi látható és böngészőben előnézhető fájlok léptethetők.
+  const previewQueue = visibleDocuments.filter((item) => browserPreviewExtensions.has((item.extension || "").toLowerCase()));
+  const previewIndex = previewQueue.findIndex((item) => item.id === previewDocumentId);
+  const previewPrevious = previewIndex > 0 ? previewQueue[previewIndex - 1] : null;
+  const previewNext = previewIndex >= 0 && previewIndex < previewQueue.length - 1 ? previewQueue[previewIndex + 1] : null;
   const visibleFolderCount = useMemo(() => {
     if (!tree || allFilesInFolderMode || favoriteOnly) return 0;
     const parentId = selectedFolderId === "all" ? null : selectedFolderId;
@@ -1932,7 +1938,7 @@ export default function DriveWorkspace({
 
   const openReviewDetail = useCallback((document: DriveDocument, field: string) => {
     setSelectedDocumentId(document.id);
-    if (field === "planNo" || field === "planTitle" || field === "scales" || field === "numbering") {
+    if (field === "planNo" || field === "planTitle" || field === "scales" || field === "numbering" || field === "discipline" || field === "topic") {
       setDetailsFocus({ documentId: document.id, field });
       setReviewFocus("");
       if (layoutMode === "one") setLayoutMode("two");
@@ -3276,6 +3282,10 @@ export default function DriveWorkspace({
         document={previewDocument}
         open={Boolean(previewDocumentId && previewDocument)}
         onClose={() => setPreviewDocumentId("")}
+        position={previewIndex}
+        total={previewQueue.length}
+        onPrevious={previewPrevious ? () => setPreviewDocumentId(previewPrevious.id) : undefined}
+        onNext={previewNext ? () => setPreviewDocumentId(previewNext.id) : undefined}
       />
 
 {externalDragActive && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileSearch2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileSearch2, X } from "lucide-react";
 import type { DriveDocument } from "./driveTypes";
 import DriveDocumentViewer from "./DriveDocumentViewer";
 import OverflowTooltipText from "./OverflowTooltipText";
@@ -12,13 +12,17 @@ type Props = {
   document: DriveDocument | null;
   open: boolean;
   onClose: () => void;
+  position?: number;
+  total?: number;
+  onPrevious?: () => void;
+  onNext?: () => void;
 };
 
 function displayName(document: DriveDocument) {
   return document.currentVersion?.originalName || document.name || "Dokumentum";
 }
 
-export default function DrivePreviewDrawer({ projectId, document, open, onClose }: Props) {
+export default function DrivePreviewDrawer({ projectId, document, open, onClose, position = 0, total = 0, onPrevious, onNext }: Props) {
   const [drawerWidth, setDrawerWidth] = useState<number | null>(null);
   const effectiveWidth = drawerWidth ?? 1120;
   const clampWidth = (width: number) => Math.max(320, Math.min(window.innerWidth, width));
@@ -26,10 +30,13 @@ export default function DrivePreviewDrawer({ projectId, document, open, onClose 
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if ((event.target instanceof HTMLInputElement) || (event.target instanceof HTMLTextAreaElement) || (event.target instanceof HTMLSelectElement) || (event.target instanceof HTMLElement && event.target.isContentEditable)) return;
+      if (event.key === "ArrowLeft" && onPrevious) { event.preventDefault(); onPrevious(); }
+      if (event.key === "ArrowRight" && onNext) { event.preventDefault(); onNext(); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, open]);
+  }, [onClose, onPrevious, onNext, open]);
 
   if (!open) return null;
 
@@ -87,6 +94,9 @@ export default function DrivePreviewDrawer({ projectId, document, open, onClose 
           <button type="button" className={styles.previewDrawerClose} onClick={onClose} title="Bezárás" aria-label="Fájl megjelenítő bezárása"><X size={18} /></button>
         </header>
         <div className={styles.previewDrawerBody}>
+          {onPrevious && <button className={styles.previewNavigatorPrevious} type="button" onClick={onPrevious} aria-label="Előző dokumentum" title="Előző dokumentum"><ChevronLeft size={25}/></button>}
+          {onNext && <button className={styles.previewNavigatorNext} type="button" onClick={onNext} aria-label="Következő dokumentum" title="Következő dokumentum"><ChevronRight size={25}/></button>}
+          {total > 0 && <div className={styles.previewNavigatorCounter}>{position + 1} / {total}</div>}
           {document
             ? <DriveDocumentViewer projectId={projectId} document={document} />
             : <div className={styles.previewPlaceholder}><div><FileSearch2 size={26} /><strong>Nincs kijelölt fájl</strong></div></div>}
