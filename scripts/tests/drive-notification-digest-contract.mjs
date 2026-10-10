@@ -12,8 +12,10 @@ const events=[
   change("DOCUMENT_UPLOADED",{id:"upload",sequence:16,entityType:"document",entityId:"doc-1",payload:{document:{id:"doc-1"}}}),
   change("DOCUMENT_REVISION_CREATED"), // duplicate id
   change("DOCUMENT_REVIEW_DECISION_CHANGED",{id:"review-decision",sequence:17,entityType:"document",entityId:"doc-1",payload:{documentId:"doc-1",changedFields:["customerApproval"]}}),
+  change("DOCUMENT_CREATED",{id:"new-doc",sequence:18,entityType:"document",entityId:"doc-2",payload:{document:{id:"doc-2"}}}),
 ];
 assert.equal(classifyDriveChange(events[1]),null,"metadata change excluded");
+assert.equal(classifyDriveChange(events.at(-1))?.kind,"NEW_DOCUMENT","actual Drive-created event is included");
 assert.equal(classifyDriveChange(events[3]),null,"security scan approval excluded");
 assert.equal(classifyDriveChange(change("DOCUMENT_REVISION_CREATED",{payload:{}})),null,"no document ID excluded");
 const filter=(approvalIds, visibleIds=new Set(["doc-1"]))=>buildRecipientDigest(events,{

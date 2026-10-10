@@ -16,6 +16,7 @@ export type DigestItem = {
 };
 
 const KNOWN_EVENTS: Record<string, { kind: DigestKind; category: DigestCategory }> = {
+  DOCUMENT_CREATED: { kind: "NEW_DOCUMENT", category: "DOCUMENT_CHANGES" },
   DOCUMENT_UPLOADED: { kind: "NEW_DOCUMENT", category: "DOCUMENT_CHANGES" },
   DOCUMENT_VERSION_UPLOADED: { kind: "NEW_VERSION", category: "DOCUMENT_CHANGES" },
   DOCUMENT_VERSION_CREATED: { kind: "NEW_VERSION", category: "DOCUMENT_CHANGES" },
