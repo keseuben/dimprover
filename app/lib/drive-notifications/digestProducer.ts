@@ -9,6 +9,7 @@ import type { DigestFrequency, IsWorkingDay } from "./scheduling";
 import { latestDueDigestSlot } from "./scheduling";
 import { prepareDigestJournalBatch, type JournalRegisterStatus } from "./producerFlow";
 import { clipJournalAtScheduledTime } from "./journalWindow";
+import { loadApprovedHuWorkdays } from "./huCalendarRepository";
 
 type User = { id: string; email_normalized: string; status: string; login_enabled: boolean; email_verified_at: string|null };
 type Pref = {
@@ -42,7 +43,9 @@ export async function produceDigestForControlledWorker(input:{
   if(pError)throw Error("DRIVE_DIGEST_PREFERENCES_UNAVAILABLE");
   const preference=preferences as Pref|null;
   if(!preference?.enabled || preference.digest_frequency==="NONE")return {status:"NO_CONSENT"};
-  const due=latestDueDigestSlot(preference.digest_frequency,input.at,input.isWorkingDay);
+  const huWorkdays = preference.digest_frequency==="MONTHLY"
+    ? (input.isWorkingDay ?? await loadApprovedHuWorkdays(input.at)) : undefined;
+  const due=latestDueDigestSlot(preference.digest_frequency,input.at,huWorkdays);
   if(!due)return {status:"NOT_DUE"};
   const row=await authQuery<User>(`SELECT id::text,email_normalized,status,login_enabled,
     email_verified_at::text FROM public.auth_users WHERE id::text=$1`,[input.userId]);

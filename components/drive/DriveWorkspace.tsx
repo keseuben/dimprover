@@ -3352,7 +3352,9 @@ export default function DriveWorkspace({
         </div>
       )}
 
-      {notificationSettingsOpen && <DriveNotificationSettings projectId={projectId} onClose={() => setNotificationSettingsOpen(false)} />}
+      {notificationSettingsOpen && <DriveNotificationSettings projectId={projectId}
+        canAuditProject={effectivePermissions.includes("audit.read") && effectivePermissions.includes("project.manage_members")}
+        onClose={() => setNotificationSettingsOpen(false)} />}
       {followDialogDocumentId && (() => {
         const document = tree?.documents.find((item) => item.id === followDialogDocumentId);
         const following = follows.some((item) => item.documentId === followDialogDocumentId);

@@ -7,7 +7,7 @@ import styles from "./DriveNotificationSettings.module.css";
 type Category = "DOCUMENT_CHANGES" | "APPROVAL_DECISIONS";
 type Frequency = "FOUR_HOURLY" | "EIGHT_HOURLY" | "DAILY" | "WEEKLY" | "MONTHLY" | "NONE";
 type Preference = { category: Category; enabled: boolean; digestFrequency: Frequency; followedOnly: boolean };
-type Props = { projectId: string; onClose: () => void };
+type Props = { projectId: string; onClose: () => void; canAuditProject?: boolean };
 type PreviewRow = { eventId: string; kind: string; occurredAt: string; documentName: string };
 type PreviewResponse = { ok: boolean; entries: PreviewRow[]; count: number; truncated: boolean; examined: number };
 type DeliveryRow = {
@@ -42,7 +42,13 @@ const frequencies: {value:Frequency;label:string}[] = [
   {value:"NONE",label:"Nincs e-mail"},
 ];
 
-export default function DriveNotificationSettings({projectId,onClose}:Props) {
+type AdminAuditRow={
+  id:string;category:Category;scheduledSlot:string;status:DeliveryRow["status"];
+  attempts:number;createdAt:string;smtpAcceptedAt:string|null;
+  recipient:{displayName:string;currentProjectRole:string|null;
+    currentProjectEmail:string|null;membershipStatus:string|null};
+};
+export default function DriveNotificationSettings({projectId,onClose,canAuditProject=false}:Props) {
   const [preferences,setPreferences]=useState<Preference[]>(fallback);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState<Category|null>(null);
@@ -54,6 +60,8 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
   const [previewBusy,setPreviewBusy]=useState(false);
   const [deliveryRows,setDeliveryRows]=useState<DeliveryRow[]|null>(null);
   const [deliveryBusy,setDeliveryBusy]=useState(false);
+  const [adminAuditRows,setAdminAuditRows]=useState<AdminAuditRow[]|null>(null);
+  const [adminAuditBusy,setAdminAuditBusy]=useState(false);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -142,6 +150,20 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
     finally{setDeliveryBusy(false);}
   }
 
+  async function loadAdminAudit() {
+    if(!canAuditProject)return;
+    setAdminAuditBusy(true);setError("");
+    try{
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/notification-admin-audit`,{
+        credentials:"same-origin",cache:"no-store",
+      });
+      const payload=await response.json().catch(()=>({})) as {ok?:boolean;error?:string;rows?:AdminAuditRow[]};
+      if(!response.ok||!payload.ok)throw Error(payload.error||"Az adminnapló nem érhető el.");
+      setAdminAuditRows(payload.rows||[]);
+    }catch(caught){setError(caught instanceof Error?caught.message:"Az adminnapló nem érhető el.");}
+    finally{setAdminAuditBusy(false);}
+  }
+
   return <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="DIMPRO Drive értesítési beállítások">
     <section className={styles.panel}>
       <header><div><small>DIMPRO DRIVE</small><strong><Bell size={20}/> Értesítési beállítások</strong>
@@ -205,6 +227,23 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
           </div>)}
         </div>}
       </section>
+      {canAuditProject && <section className={styles.previewSection}>
+        <strong>Projekt értesítési audit – csak projektadminisztrátoroknak</strong>
+        <p>A napló a kézbesítési állapotokat és a címzettek <em>jelenlegi</em> projekttagsági adatait mutatja; korábbi SMTP-címként ezeket nem tünteti fel.</p>
+        <div className={styles.previewActions}>
+          <button type="button" disabled={adminAuditBusy} onClick={()=>void loadAdminAudit()}>
+            {adminAuditBusy?"Lekérdezés…":"Projekt kézbesítési naplója"}
+          </button>
+        </div>
+        {adminAuditRows && <div className={styles.previewResults} role="region" aria-label="Projektadminisztrátori kézbesítési napló">
+          {!adminAuditRows.length && <p>Még nincs naplózott kiküldés.</p>}
+          {adminAuditRows.map((row)=><div className={styles.adminAuditRow} key={row.id}>
+            <strong>{row.recipient.displayName}</strong>
+            <span>{row.recipient.currentProjectRole || "Nincs aktuális projekt szerep"} · {row.recipient.currentProjectEmail || "Nincs aktuális e-mail"}</span>
+            <small>{deliveryLabels[row.status]||row.status} · {row.scheduledSlot} · {descriptions[row.category]?.label||"Értesítés"}</small>
+          </div>)}
+        </div>}
+      </section>}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {notice && <p className={styles.success} role="status">{notice}</p>}
       <footer>Az értesítések címzettjeit és tartalmát a rendszer kiküldés előtt ismételten ellenőrzi a projekt- és mappajogosultságok alapján.</footer>

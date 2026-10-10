@@ -28,3 +28,8 @@
 .previewEntry { display:grid;grid-template-columns:125px minmax(0,1fr) 85px;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid #eef1f4;font-size:11px; }
 .previewEntry > span { color:#187f8b; }.previewEntry > strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.previewEntry > time { color:#778b9a;text-align:right; }
 @media(max-width:540px){.previewEntry{grid-template-columns:1fr 82px}.previewEntry>span{grid-column:1/-1}.previewEntry>time{grid-column:2;grid-row:2}}
+
+.adminAuditRow { display:grid; gap:3px; padding:9px 4px; border-bottom:1px solid #e7eef2; }
+.adminAuditRow strong { color:#1d4a60;font-size:12px; }
+.adminAuditRow span { color:#4e6979;font-size:11px; overflow-wrap:anywhere; }
+.adminAuditRow small { color:#718796;font-size:10px; }
