@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS public.drive_core_digest_deliveries (
   message_id text NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   sent_at timestamptz NULL,
-  UNIQUE(project_id,user_id,category,scheduled_slot)
+  -- Multiple bounded batches may be required in the same scheduled interval.
+  -- Cursor compare-and-swap plus this unique key prevent re-queueing the same batch.
+  UNIQUE(project_id,user_id,category,scheduled_slot,cursor_from)
 );
 CREATE INDEX IF NOT EXISTS drive_notification_preferences_user_idx
   ON public.drive_core_notification_preferences(user_id,project_id);

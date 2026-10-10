@@ -16,27 +16,8 @@ function assertReady<T>(result: RpcResult<T>, operation: string): T | null {
   return result.data;
 }
 
-export async function reserveDigestSlot(input: {
-  projectId: string; userId: string; category: DigestCategory;
-  scheduledSlot: string; eventIds: string[]; cursorFrom: number; cursorTo: number; digestFrequency: DigestFrequency;
-}): Promise<{ queued: boolean; id: string | null }> {
-  if(!input.eventIds.length || input.eventIds.length>250
-     || input.eventIds.some((id)=>!id||id.length>160)
-     || !Number.isSafeInteger(input.cursorFrom) || !Number.isSafeInteger(input.cursorTo)
-     || input.cursorTo<input.cursorFrom || input.scheduledSlot.length>90) {
-    throw new Error("DRIVE_DIGEST_INVALID_RESERVATION");
-  }
-  const {data,error}=await getDatabaseClient().from("drive_core_digest_deliveries")
-    .insert({
-      project_id:input.projectId,user_id:input.userId,category:input.category,
-      scheduled_slot:input.scheduledSlot,status:"PENDING",event_ids:input.eventIds,
-      digest_frequency:input.digestFrequency,
-      cursor_from:input.cursorFrom,cursor_to:input.cursorTo,
-    }).select("id").single();
-  if(error?.code==="23505")return {queued:false,id:null}; // preserve SENT / existing slot
-  if(error)throw new Error("DRIVE_DIGEST_QUEUE_UNAVAILABLE");
-  return {queued:true,id:data?.id||null};
-}
+// Creating a delivery must go through the guarded drive_digest_register_journal_page
+// DB transaction (cursor CAS, consent check and dedupe). No direct INSERT API here.
 
 export async function claimDigestSlot(deliveryId:string):Promise<{token:string;ticket:DeliveryTicket}|null>{
   const token=randomUUID();

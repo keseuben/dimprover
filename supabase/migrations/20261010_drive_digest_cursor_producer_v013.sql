@@ -61,6 +61,18 @@ BEGIN
   ) INTO v_existing;
   IF v_existing THEN RETURN jsonb_build_object('status','OUTSTANDING_DELIVERY'); END IF;
 
+  -- Verify the claimed processed range exists and fits one bounded journal page.
+  -- Never let a stale/buggy producer skip unseen events by inventing cursor_to.
+  SELECT count(*) INTO v_count
+  FROM public.drive_core_change_events
+  WHERE project_id=p_project_id AND sequence>p_cursor_from AND sequence<=p_cursor_to;
+  IF v_count NOT BETWEEN 1 AND 250 OR NOT EXISTS (
+    SELECT 1 FROM public.drive_core_change_events
+    WHERE project_id=p_project_id AND sequence=p_cursor_to
+  ) THEN
+    RAISE EXCEPTION 'DRIVE_DIGEST_CURSOR_RANGE_NOT_VERIFIED' USING ERRCODE='22023';
+  END IF;
+
   IF v_length=0 THEN
     -- No eligible event: cursor-only checkpoint, no mail and no outbox row.
     UPDATE public.drive_core_notification_preferences SET
@@ -91,7 +103,7 @@ BEGIN
     p_project_id,p_user_id,p_category,p_frequency,p_slot,
     'PENDING',to_jsonb(p_event_ids),p_cursor_from,p_cursor_to
   )
-  ON CONFLICT(project_id,user_id,category,scheduled_slot) DO NOTHING
+  ON CONFLICT(project_id,user_id,category,scheduled_slot,cursor_from) DO NOTHING
   RETURNING id INTO v_id;
   IF v_id IS NULL THEN
     RETURN jsonb_build_object('status','SLOT_ALREADY_RESERVED');
