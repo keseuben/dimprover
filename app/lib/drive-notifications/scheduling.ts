@@ -46,3 +46,29 @@ export function digestScheduleSlot(
   }
   return null;
 }
+
+
+/**
+ * Hour-granularity recovery if a scheduled execution is a few minutes late.
+ * A scheduler must not silently lose a 07:00 slot when its run starts at 07:05.
+ * Maximum catch-up is intentionally bounded; caller decides overdue policy.
+ */
+export function latestDueDigestSlot(
+  frequency: DigestFrequency,
+  now: Date,
+  isWorkingDay?: IsWorkingDay,
+): {slot: string; scheduledAt: Date; latenessMinutes: number}|null {
+  if (!Number.isFinite(now.getTime()) || frequency === "NONE") return null;
+  const maximumHours:Record<Exclude<DigestFrequency,"NONE">,number>={
+    FOUR_HOURLY:5,EIGHT_HOURLY:9,DAILY:26,WEEKLY:8*24,MONTHLY:36*24,
+  };
+  const rounded=new Date(Math.floor(now.getTime()/3600000)*3600000);
+  for(let ago=0;ago<maximumHours[frequency];ago++){
+    const point=new Date(rounded.getTime()-ago*3600000);
+    const slot=digestScheduleSlot(frequency,point,isWorkingDay);
+    if(slot){
+      return {slot,scheduledAt:point,latenessMinutes:Math.floor((now.getTime()-point.getTime())/60000)};
+    }
+  }
+  return null;
+}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { budapestTime, digestScheduleSlot } from "../../app/lib/drive-notifications/scheduling.ts";
+import { budapestTime, digestScheduleSlot, latestDueDigestSlot } from "../../app/lib/drive-notifications/scheduling.ts";
 const saturday = new Date("2026-10-10T05:00:00Z");
 const monday = new Date("2026-10-12T05:00:00Z");
 assert.equal(digestScheduleSlot("DAILY",saturday),"2026-10-10T07:00-Europe/Budapest");
@@ -12,4 +12,9 @@ assert.equal(digestScheduleSlot("MONTHLY",new Date("2026-10-01T05:00:00Z"),(date
 assert.equal(digestScheduleSlot("MONTHLY",new Date("2026-10-02T05:00:00Z"),(date)=>["2026-10-01","2026-10-02"].includes(date)),null);
 assert.equal(budapestTime(new Date("2026-03-29T05:00:00Z")).hour,7,"DST starts");
 assert.equal(budapestTime(new Date("2026-10-25T06:00:00Z")).hour,7,"DST ends");
-console.log("DRIVE NOTIFICATION SCHEDULING CONTRACT 10/10 PASS");
+assert.equal(latestDueDigestSlot("DAILY",new Date("2026-10-12T05:09:00Z"))?.slot,"2026-10-12T07:00-Europe/Budapest","late daily scheduler");
+assert.equal(latestDueDigestSlot("FOUR_HOURLY",new Date("2026-10-12T07:15:00Z"))?.slot,"2026-10-12T08:00-Europe/Budapest","late four hourly");
+assert.equal(latestDueDigestSlot("MONTHLY",new Date("2026-10-02T06:00:00Z"),(date)=>date==="2026-10-01")?.slot,"2026-10-01T07:00-Europe/Budapest","monthly catchup");
+assert.equal(latestDueDigestSlot("MONTHLY",new Date("2026-10-02T06:00:00Z")),null,"no HU calendar");
+assert.equal(latestDueDigestSlot("NONE",new Date()),null,"none");
+console.log("DRIVE NOTIFICATION SCHEDULING CONTRACT 15/15 PASS");

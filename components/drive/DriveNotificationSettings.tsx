@@ -10,6 +10,16 @@ type Preference = { category: Category; enabled: boolean; digestFrequency: Frequ
 type Props = { projectId: string; onClose: () => void };
 type PreviewRow = { eventId: string; kind: string; occurredAt: string; documentName: string };
 type PreviewResponse = { ok: boolean; entries: PreviewRow[]; count: number; truncated: boolean; examined: number };
+type DeliveryRow = {
+  id:string; category:Category; scheduled_slot:string;
+  status:"PENDING"|"PROCESSING"|"SENT"|"FAILED"|"AMBIGUOUS"|"SUPPRESSED";
+  cursor_from:number; cursor_to:number; attempt_count:number;
+  created_at:string; sent_at:string|null; last_error_code:string|null;
+};
+const deliveryLabels: Record<DeliveryRow["status"],string> = {
+  PENDING:"Várakozik",PROCESSING:"Feldolgozás alatt",SENT:"SMTP elfogadta",
+  FAILED:"Előkészítési hiba",AMBIGUOUS:"Kézbesítés ellenőrzendő",SUPPRESSED:"Nem küldhető",
+};
 const previewKinds: Record<string,string> = {
   NEW_DOCUMENT:"Új dokumentum", NEW_VERSION:"Új verzió", NEW_REVISION:"Új revízió",
   REVIEW_DECISION:"Ellenőrzési döntés", FORMAL_ISSUE:"Hivatalos kiadás",
@@ -42,6 +52,8 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
   const [previewCategory,setPreviewCategory]=useState<Category>("DOCUMENT_CHANGES");
   const [preview,setPreview]=useState<PreviewResponse|null>(null);
   const [previewBusy,setPreviewBusy]=useState(false);
+  const [deliveryRows,setDeliveryRows]=useState<DeliveryRow[]|null>(null);
+  const [deliveryBusy,setDeliveryBusy]=useState(false);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -117,6 +129,19 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
     finally{setPreviewBusy(false);}
   }
 
+  async function loadDeliveryHistory() {
+    setDeliveryBusy(true);setError("");
+    try {
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/notification-deliveries`,{
+        credentials:"same-origin",cache:"no-store",
+      });
+      const payload=await response.json().catch(()=>({})) as {ok?:boolean;error?:string;deliveries?:DeliveryRow[]};
+      if(!response.ok || !payload.ok)throw Error(payload.error||"A kézbesítési napló nem olvasható.");
+      setDeliveryRows(payload.deliveries||[]);
+    }catch(caught){setError(caught instanceof Error?caught.message:"A kézbesítési napló nem érhető el.");}
+    finally{setDeliveryBusy(false);}
+  }
+
   return <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="DIMPRO Drive értesítési beállítások">
     <section className={styles.panel}>
       <header><div><small>DIMPRO DRIVE</small><strong><Bell size={20}/> Értesítési beállítások</strong>
@@ -161,6 +186,23 @@ export default function DriveNotificationSettings({projectId,onClose}:Props) {
             <time>{new Date(row.occurredAt).toLocaleDateString("hu-HU")}</time>
           </div>)}
           {preview.entries.length>15 && <p>+{preview.entries.length-15} további esemény (az Excel-előnézet tartalmazza őket).</p>}
+        </div>}
+      </section>
+      <section className={styles.previewSection}>
+        <strong>Saját értesítési kézbesítési napló</strong>
+        <p>Az előzmények kizárólag az Ön fiókjához tartoznak. Az „SMTP elfogadta” állapot nem bizonyítja a címzett postafiókjába érkezést.</p>
+        <div className={styles.previewActions}>
+          <button type="button" disabled={deliveryBusy} onClick={()=>void loadDeliveryHistory()}>
+            {deliveryBusy?"Lekérdezés…":"Saját kézbesítések lekérdezése"}
+          </button>
+        </div>
+        {deliveryRows && <div className={styles.previewResults} role="region" aria-label="Saját kézbesítési napló">
+          {!deliveryRows.length && <p>Jelenleg nincs rögzített kézbesítés.</p>}
+          {deliveryRows.map((row)=><div key={row.id} className={styles.previewEntry}>
+            <span>{deliveryLabels[row.status]||"Ismeretlen"}</span>
+            <strong>{descriptions[row.category]?.label||"Értesítés"} · {row.scheduled_slot}</strong>
+            <time title={row.last_error_code||undefined}>{row.sent_at?new Date(row.sent_at).toLocaleDateString("hu-HU"):"—"}</time>
+          </div>)}
         </div>}
       </section>
       {error && <p className={styles.error} role="alert">{error}</p>}
