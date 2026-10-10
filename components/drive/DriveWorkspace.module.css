@@ -6851,3 +6851,14 @@
  padding: 4px 12px; border-radius: 100px; background: rgba(18,43,64,.72);
  color: #fff; font-size: 11px; z-index: 10; pointer-events: none;
 }
+
+
+/* DIMPRO Drive V0.9.34: külön Követem és Kedvencek státusz. */
+.followToggleActive { color: #118e87; }
+.followToggleActive svg { fill: rgba(17,142,135,.18); }
+.driveFollowOptions { display: grid; gap: 12px; color: #344f66; }
+.driveFollowOptions label { display: flex; align-items: center; gap: 9px; font-weight: 700; }
+.driveFollowOptions input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: #0c8f8c; }
+.driveFollowOptions label:has(select) { display: grid; }
+.driveFollowOptions select { min-height: 38px; border: 1px solid #c8d9e5; border-radius: 8px; padding: 7px; background: white; color: #234055; }
+.driveFollowOptions p { margin: 0; color: #687e90; font-size: 11px; line-height: 1.45; }

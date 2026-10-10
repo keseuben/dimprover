@@ -18,12 +18,14 @@ import CompareWorkspace from "./CompareWorkspace";
 import DetailsPanel from "./DetailsPanel";
 import DrivePremiumLoader from "./DrivePremiumLoader";
 import DrivePreviewDrawer from "./DrivePreviewDrawer";
+import DriveNotificationSettings from "./DriveNotificationSettings";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
 import TrashPanel from "./TrashPanel";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
+import ProfilePhotoControl from "@/components/auth/ProfilePhotoControl";
 import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
 import type { ProjectMembership } from "@/app/lib/project-core/types";
@@ -89,6 +91,26 @@ type TreePayload = {
   membershipDisplayName?: string;
   membershipEmail?: string | null;
 };
+
+type FollowFrequency = "FOUR_HOURLY" | "EIGHT_HOURLY" | "DAILY" | "WEEKLY" | "MONTHLY" | "NONE";
+type FollowPreferences = {
+  notifyVersions: boolean;
+  notifyRevisions: boolean;
+  notifyApprovals: boolean;
+  digestFrequency: FollowFrequency;
+};
+type FollowRow = FollowPreferences & { documentId: string };
+const defaultFollowPreferences: FollowPreferences = {
+  notifyVersions: true, notifyRevisions: true, notifyApprovals: false, digestFrequency: "DAILY",
+};
+const followFrequencyOptions: Array<{ value: FollowFrequency; label: string }> = [
+  { value: "FOUR_HOURLY", label: "4 óránként" },
+  { value: "EIGHT_HOURLY", label: "8 óránként" },
+  { value: "DAILY", label: "Naponta 07:00" },
+  { value: "WEEKLY", label: "Hétfőnként 07:00" },
+  { value: "MONTHLY", label: "Havonta, első munkanapon 07:00" },
+  { value: "NONE", label: "Nincs e-mail" },
+];
 
 type FolderPasswordGateStatus = {
   folderId: string;
@@ -272,6 +294,7 @@ export default function DriveWorkspace({
   const [newFolderSaving, setNewFolderSaving] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [previewDocumentId, setPreviewDocumentId] = useState("");
+  const [previewDocumentOrder, setPreviewDocumentOrder] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -292,6 +315,12 @@ export default function DriveWorkspace({
   const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
   const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [follows, setFollows] = useState<FollowRow[]>([]);
+  const [followAvailable, setFollowAvailable] = useState(false);
+  const [followDialogDocumentId, setFollowDialogDocumentId] = useState("");
+  const [followDraft, setFollowDraft] = useState<FollowPreferences>(defaultFollowPreferences);
+  const [followSaving, setFollowSaving] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const [trashMode, setTrashMode] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -487,13 +516,14 @@ export default function DriveWorkspace({
   const load = useCallback(async () => {
     setError("");
     try {
-      const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse, favoritesResponse] = await Promise.all([
+      const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse, favoritesResponse, followsResponse] = await Promise.all([
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/health`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/settings`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/favorites`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/follows`, { credentials: "same-origin", cache: "no-store" }),
       ]);
       const healthPayload = await healthResponse.json() as DriveHealth;
       const treePayload = await treeResponse.json() as TreePayload;
@@ -501,6 +531,7 @@ export default function DriveWorkspace({
       const storagePayload = await storageResponse.json().catch(() => ({})) as { ok?: boolean; storage?: DriveStorageQuota };
       const settingsPayload = await settingsResponse.json().catch(() => ({})) as { ok?: boolean; settings?: DriveProjectSettings };
       const favoritesPayload = await favoritesResponse.json().catch(() => ({})) as { ok?: boolean; documentIds?: string[] };
+      const followsPayload = await followsResponse.json().catch(() => ({})) as { ok?: boolean; follows?: FollowRow[] };
       if (!healthResponse.ok || !healthPayload.ok) throw new Error(healthPayload.error || "A Drive rendszerállapot nem tölthető be.");
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setHealth(healthPayload);
@@ -515,6 +546,8 @@ export default function DriveWorkspace({
       setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
       setProjectSettings(settingsResponse.ok && settingsPayload.ok && settingsPayload.settings ? settingsPayload.settings : null);
       setFavoriteDocumentIds(favoritesResponse.ok && favoritesPayload.ok ? favoritesPayload.documentIds || [] : []);
+      setFollowAvailable(followsResponse.ok && followsPayload.ok === true);
+      setFollows(followsResponse.ok && followsPayload.ok ? followsPayload.follows || [] : []);
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       setSelectedDocumentId((current) => {
@@ -658,8 +691,14 @@ export default function DriveWorkspace({
   }, [allFilesInFolderMode, favoriteDocumentIds, favoriteOnly, query, selectedFolderId, selectedFolderScopeIds, tree]);
 
 
-  // Csak a jelenlegi látható és böngészőben előnézhető fájlok léptethetők.
-  const previewQueue = visibleDocuments.filter((item) => browserPreviewExtensions.has((item.extension || "").toLowerCase()));
+  // A fájlmegjelenítő a tényleges táblázati szűrést és rendezési sorrendet követi.
+  const previewQueue = useMemo(() => {
+    const visible = new Map(visibleDocuments
+      .filter((item) => browserPreviewExtensions.has((item.extension || "").toLowerCase()))
+      .map((item) => [item.id, item]));
+    if (!previewDocumentOrder.length) return [...visible.values()];
+    return previewDocumentOrder.map((id) => visible.get(id)).filter((item): item is DriveDocument => Boolean(item));
+  }, [previewDocumentOrder, visibleDocuments]);
   const previewIndex = previewQueue.findIndex((item) => item.id === previewDocumentId);
   const previewPrevious = previewIndex > 0 ? previewQueue[previewIndex - 1] : null;
   const previewNext = previewIndex >= 0 && previewIndex < previewQueue.length - 1 ? previewQueue[previewIndex + 1] : null;
@@ -743,6 +782,42 @@ export default function DriveWorkspace({
       setFavoriteBusyDocumentIds((current) => current.filter((id) => id !== document.id));
     }
   }
+
+  function openFollowDialog(document: DriveDocument) {
+    const current = follows.find((row) => row.documentId === document.id);
+    setFollowDraft(current ? {
+      notifyVersions: current.notifyVersions,
+      notifyRevisions: current.notifyRevisions,
+      notifyApprovals: current.notifyApprovals,
+      digestFrequency: current.digestFrequency,
+    } : { ...defaultFollowPreferences });
+    setFollowDialogDocumentId(document.id);
+  }
+
+  async function saveFollow(follow: boolean) {
+    if (!followDialogDocumentId || followSaving) return;
+    setFollowSaving(true);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/follows`, {
+        method: "PUT", credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ documentId: followDialogDocumentId, follow, preferences: followDraft }),
+      });
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; follows?: FollowRow[] };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumkövetés nem menthető.");
+      setFollows(payload.follows || []);
+      setFollowDialogDocumentId("");
+      setNotice(follow ? "A dokumentum követési beállításai mentve." : "Dokumentumkövetés megszüntetve.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentumkövetés nem menthető.");
+    } finally {
+      setFollowSaving(false);
+    }
+  }
+
+  const updatePreviewOrder = useCallback((ids: string[]) => {
+    setPreviewDocumentOrder((old) => old.length === ids.length && old.every((id, index) => id === ids[index]) ? old : ids);
+  }, []);
 
   function openNewFolderEditor() {
     if (!canWrite || newFolderSaving) return;
@@ -2617,11 +2692,11 @@ export default function DriveWorkspace({
           </div>
         ) : null}
         <div className={styles.headerActions}>
-          <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
+          <button type="button" className={styles.headerAction} onClick={() => setNotificationSettingsOpen(true)}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction} onClick={onOpenHelp}><HelpCircle size={14} /> Súgó</button>
           <ProjectAccessMenu projectId={projectId} compact />
           <div className={styles.userPill}>
-            <span className={styles.avatar}>{(headerDisplayName || headerEmail || "D").trim().charAt(0).toUpperCase() || "D"}</span>
+            <ProfilePhotoControl displayName={headerDisplayName || headerEmail || "DIMPRO felhasználó"} compact />
             <div className={styles.userIdentityText}>
               <strong>{headerDisplayName}</strong>
               <span title={headerEmail}>{headerEmail}</span>
@@ -3277,6 +3352,47 @@ export default function DriveWorkspace({
         </div>
       )}
 
+      {notificationSettingsOpen && <DriveNotificationSettings projectId={projectId} onClose={() => setNotificationSettingsOpen(false)} />}
+      {followDialogDocumentId && (() => {
+        const document = tree?.documents.find((item) => item.id === followDialogDocumentId);
+        const following = follows.some((item) => item.documentId === followDialogDocumentId);
+        return (
+          <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Dokumentumkövetés beállításai">
+            <form className={styles.projectCreatePanel} onSubmit={(event) => { event.preventDefault(); void saveFollow(true); }}>
+              <header>
+                <div><small>DIMPRO DRIVE · KÖVETETT DOKUMENTUMOK</small>
+                  <strong>{document?.currentVersion?.originalName || document?.name || "Dokumentum"}</strong>
+                  <span>Új verziók, revíziók és jogosult jóváhagyási események követése. A követés nem jelent automatikus jóváhagyást.</span>
+                </div>
+                <button type="button" onClick={() => setFollowDialogDocumentId("")} aria-label="Bezárás">×</button>
+              </header>
+              <div className={styles.driveFollowOptions}>
+                {([
+                  ["notifyVersions", "Új belső verziók"],
+                  ["notifyRevisions", "Új hivatalos revíziók"],
+                  ["notifyApprovals", "Jóváhagyási döntések (csak jogosultsággal)"],
+                ] as const).map(([key, label]) => (
+                  <label key={key}><input type="checkbox" checked={followDraft[key]}
+                    onChange={(event) => setFollowDraft((current) => ({ ...current, [key]: event.target.checked }))} />
+                    {label}</label>
+                ))}
+                <label>Összesítő e-mail gyakorisága
+                  <select value={followDraft.digestFrequency} onChange={(event) => setFollowDraft((current) => ({ ...current, digestFrequency: event.target.value as FollowFrequency }))}>
+                    {followFrequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <p>Az e-mail kézbesítés az értesítési motor aktiválása után indulhat. A beállításokat addig is eltároljuk; jogosultsági ellenőrzés minden kiküldés előtt szükséges.</p>
+              </div>
+              <footer>
+                {following && <button type="button" disabled={followSaving} onClick={() => void saveFollow(false)}>Követés megszüntetése</button>}
+                <button type="button" onClick={() => setFollowDialogDocumentId("")}>Mégsem</button>
+                <button type="submit" disabled={followSaving}>{followSaving ? "Mentés…" : following ? "Beállítások mentése" : "Dokumentum követése"}</button>
+              </footer>
+            </form>
+          </div>
+        );
+      })()}
+
       <DrivePreviewDrawer
         projectId={projectId}
         document={previewDocument}
@@ -3368,11 +3484,15 @@ export default function DriveWorkspace({
               onViewModeChange={changeViewMode}
               onSelectDocument={(document) => scheduleFullscreenInspector(document.id)}
               onOpenDocument={(document) => openFullscreenPreview(document.id)}
+              onDocumentOrderChange={tableFullscreen ? updatePreviewOrder : undefined}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}
               favoriteBusyDocumentIds={favoriteBusyDocumentIds}
               onToggleFavorite={(document) => void toggleFavorite(document)}
+              followedDocumentIds={follows.map((row) => row.documentId)}
+              followAvailable={followAvailable}
+              onConfigureFollow={openFollowDialog}
               metadataByDocument={metadataByDocument}
               folders={favoriteOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}
@@ -3541,11 +3661,15 @@ export default function DriveWorkspace({
               onViewModeChange={changeViewMode}
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
               onOpenDocument={(document) => { setSelectedDocumentId(document.id); setPreviewDocumentId(document.id); }}
+              onDocumentOrderChange={!tableFullscreen ? updatePreviewOrder : undefined}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               favoriteDocumentIds={favoriteDocumentIds}
               favoriteBusyDocumentIds={favoriteBusyDocumentIds}
               onToggleFavorite={(document) => void toggleFavorite(document)}
+              followedDocumentIds={follows.map((row) => row.documentId)}
+              followAvailable={followAvailable}
+              onConfigureFollow={openFollowDialog}
               metadataByDocument={metadataByDocument}
               folders={favoriteOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}

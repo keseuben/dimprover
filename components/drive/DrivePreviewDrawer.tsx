@@ -30,6 +30,7 @@ export default function DrivePreviewDrawer({ projectId, document, open, onClose,
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       if ((event.target instanceof HTMLInputElement) || (event.target instanceof HTMLTextAreaElement) || (event.target instanceof HTMLSelectElement) || (event.target instanceof HTMLElement && event.target.isContentEditable)) return;
       if (event.key === "ArrowLeft" && onPrevious) { event.preventDefault(); onPrevious(); }
       if (event.key === "ArrowRight" && onNext) { event.preventDefault(); onNext(); }
@@ -96,7 +97,7 @@ export default function DrivePreviewDrawer({ projectId, document, open, onClose,
         <div className={styles.previewDrawerBody}>
           {onPrevious && <button className={styles.previewNavigatorPrevious} type="button" onClick={onPrevious} aria-label="Előző dokumentum" title="Előző dokumentum"><ChevronLeft size={25}/></button>}
           {onNext && <button className={styles.previewNavigatorNext} type="button" onClick={onNext} aria-label="Következő dokumentum" title="Következő dokumentum"><ChevronRight size={25}/></button>}
-          {total > 0 && <div className={styles.previewNavigatorCounter}>{position + 1} / {total}</div>}
+          {total > 0 && position >= 0 && <div className={styles.previewNavigatorCounter}>{position + 1} / {total}</div>}
           {document
             ? <DriveDocumentViewer projectId={projectId} document={document} />
             : <div className={styles.previewPlaceholder}><div><FileSearch2 size={26} /><strong>Nincs kijelölt fájl</strong></div></div>}

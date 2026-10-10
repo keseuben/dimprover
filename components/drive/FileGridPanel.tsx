@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, Plus, RotateCcw, Search, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, Plus, RotateCcw, Search, ShieldCheck, Star, Bell, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import DriveViewModeToggle from "./DriveViewModeToggle";
@@ -17,11 +17,15 @@ type Props = {
   allowedViewModes?: DriveViewMode[];
   onSelectDocument: (document: DriveDocument) => void;
   onOpenDocument?: (document: DriveDocument) => void;
+  onDocumentOrderChange?: (documentIds: string[]) => void;
   onRefresh: () => void;
   boxColorsByDocument?: Record<string, string[]>;
   favoriteDocumentIds?: string[];
   favoriteBusyDocumentIds?: string[];
   onToggleFavorite?: (document: DriveDocument) => void;
+  followedDocumentIds?: string[];
+  followAvailable?: boolean;
+  onConfigureFollow?: (document: DriveDocument) => void;
   metadataByDocument?: Record<string, DriveEngineeringMetadata>;
   folders?: DriveFolder[];
   selectedFolderId?: string;
@@ -245,6 +249,19 @@ function FavoriteToggle({ favorite, busy, enabled, onToggle, label }: { favorite
       <Star size={13} />
     </button>
   );
+}
+
+function FollowToggle({ followed, enabled, onConfigure, label }: { followed: boolean; enabled: boolean; onConfigure: () => void; label: string }) {
+  return <button type="button"
+    className={`${styles.favoriteToggle} ${followed ? styles.followToggleActive : ""}`}
+    disabled={!enabled}
+    title={!enabled ? "Dokumentumkövetés még nem elérhető" : followed ? "Követés beállításai" : "Dokumentum követése és értesítései"}
+    aria-label={`${label} – ${followed ? "követés beállításai" : "követés indítása"}`}
+    aria-pressed={followed}
+    onClick={(event) => { event.preventDefault(); event.stopPropagation(); onConfigure(); }}
+    onDoubleClick={(event) => event.stopPropagation()}>
+      <Bell size={13} />
+  </button>;
 }
 
 function VersionStatusDot({ status }: { status: string | undefined }) {
@@ -971,11 +988,15 @@ export default function FileGridPanel({
   allowedViewModes = ["simple", "engineering", "review"],
   onSelectDocument,
   onOpenDocument,
+  onDocumentOrderChange,
   onRefresh,
   boxColorsByDocument = {},
   favoriteDocumentIds = [],
   favoriteBusyDocumentIds = [],
   onToggleFavorite,
+  followedDocumentIds = [],
+  followAvailable = false,
+  onConfigureFollow,
   metadataByDocument = {},
   folders = [],
   selectedFolderId = "all",
@@ -1024,6 +1045,7 @@ export default function FileGridPanel({
   const [rowActionMenu, setRowActionMenu] = useState("");
   const selectedIds = selectedDocumentIds ?? internalSelectedIds;
   const favoriteSet = useMemo(() => new Set(favoriteDocumentIds), [favoriteDocumentIds]);
+  const followedSet = useMemo(() => new Set(followedDocumentIds), [followedDocumentIds]);
   const favoriteBusySet = useMemo(() => new Set(favoriteBusyDocumentIds), [favoriteBusyDocumentIds]);
   const metadataActionsEnabled = Boolean(onOpenReviewDetail);
   const boxActionsEnabled = Boolean(onOpenBoxDocument);
@@ -1351,6 +1373,15 @@ export default function FileGridPanel({
       return result * (sortState.direction === "asc" ? 1 : -1);
     });
   }, [reviewRows, sortState]);
+
+  const navigationOrderKey = useMemo(() => (
+    viewMode === "review"
+      ? sortedReviewRows.map((row) => row.document.id).join("|")
+      : sortedDocuments.map((document) => document.id).join("|")
+  ), [viewMode, sortedReviewRows, sortedDocuments]);
+  useEffect(() => {
+    onDocumentOrderChange?.(navigationOrderKey ? navigationOrderKey.split("|") : []);
+  }, [navigationOrderKey, onDocumentOrderChange]);
 
   const reviewFileTypes = useMemo(() => [...new Set(allReviewRows.map((row) => (row.document.extension || "").toLowerCase()).filter(Boolean))].sort(), [allReviewRows]);
   const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
@@ -1717,7 +1748,7 @@ export default function FileGridPanel({
                         >
                           <FileKindIcon extension={row.document.extension} />
                         </span>
-                        <FavoriteToggle favorite={favoriteSet.has(row.document.id)} busy={favoriteBusySet.has(row.document.id)} enabled={favoriteActionsEnabled} label={row.displayName} onToggle={() => onToggleFavorite?.(row.document)} />
+                        <FavoriteToggle favorite={favoriteSet.has(row.document.id)} busy={favoriteBusySet.has(row.document.id)} enabled={favoriteActionsEnabled} label={row.displayName} onToggle={() => onToggleFavorite?.(row.document)} /><FollowToggle followed={followedSet.has(row.document.id)} enabled={followAvailable && Boolean(onConfigureFollow)} label={row.displayName} onConfigure={() => onConfigureFollow?.(row.document)} />
                         <BoxInlineMarker tokens={boxColorsByDocument[row.document.id] || []} />
                       </div>
                     </td>
@@ -1833,7 +1864,7 @@ export default function FileGridPanel({
                             title="Húzd mappába vagy CsomagBOX-ba"
                             aria-label={`${displayName.value} húzása mappába vagy CsomagBOX-ba`}
                           ><FileKindIcon extension={document.extension} /></span>
-                          <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} />
+                          <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><FollowToggle followed={followedSet.has(document.id)} enabled={followAvailable && Boolean(onConfigureFollow)} label={displayName.value} onConfigure={() => onConfigureFollow?.(document)} />
                           <BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} />
                         </div>
                       </td>
@@ -1947,7 +1978,7 @@ export default function FileGridPanel({
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd mappába vagy CsomagBOX-ba"
                         aria-label={`${displayName.value} húzása mappába vagy CsomagBOX-ba`}
-                      ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
+                      ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} enabled={favoriteActionsEnabled} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><FollowToggle followed={followedSet.has(document.id)} enabled={followAvailable && Boolean(onConfigureFollow)} label={displayName.value} onConfigure={() => onConfigureFollow?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
                       {renderColumnCell("engineering", "planNo", <button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? metadata?.planNo || "Tervszám megadása" : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button>)}
                       <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite && metadataActionsEnabled} onEdit={() => openDetail(document, "planTitle")} /></td>
                       <td><button type="button" className={styles.metadataCellButton} disabled={!metadataActionsEnabled} title={metadataActionsEnabled ? scaleSummary(metadata).title : "Mérnöki metaadat szerkesztés – ebben a munkatérben még nem aktív"} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
