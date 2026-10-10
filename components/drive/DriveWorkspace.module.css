@@ -6799,3 +6799,36 @@
   min-width: 48px;
   max-width: 48px;
 }
+
+
+/* V0.9.33: a jobb oldali fájlmegjelenítő bal oldali, húzható fogantyúja. */
+.previewDrawer { position: relative; max-width: 100vw; }
+.previewDrawerResizeHandle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+  z-index: 20;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.previewDrawerResizeHandle span {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 66px;
+  border-radius: 6px;
+  transform: translate(-50%,-50%);
+  background: #4e8793;
+  box-shadow: 0 0 0 4px #e2f1f2;
+}
+.previewDrawerResizeHandle:hover span,
+.previewDrawerResizeHandle:focus-visible span { background: #145b68; }
+@media (max-width: 700px) {
+ .previewDrawerResizeHandle { display: none; }
+}

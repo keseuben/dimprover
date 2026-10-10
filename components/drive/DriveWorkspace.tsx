@@ -392,7 +392,7 @@ export default function DriveWorkspace({
 
   const changeViewMode = useCallback((next: DriveViewMode) => {
     setViewMode(next);
-    setLayoutMode(next === "review" ? "one" : "folders");
+    setLayoutMode(next === "review" ? "split" : "folders");
   }, []);
 
   useEffect(() => {
