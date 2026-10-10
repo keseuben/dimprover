@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {pathToFileURL} from "node:url";
+const modulePath=process.env.DIMPRO_TEST_PGLITE_MODULE_PATH;
+if(!modulePath)throw Error("DIMPRO_TEST_PGLITE_MODULE_PATH required; never use an existing DIMPRO database.");
+const {PGlite}=await import(pathToFileURL(modulePath).href);
+const db=new PGlite();
+try {
+  await db.exec("CREATE ROLE dimpro_auth_migrator_dev; CREATE ROLE dimpro_auth_app_dev;");
+  await db.exec("CREATE TABLE public.auth_users (id uuid primary key,email_normalized text not null,status text not null default 'ACTIVE',login_enabled boolean not null default true);");
+  await db.exec("GRANT USAGE, CREATE ON SCHEMA public TO dimpro_auth_migrator_dev; GRANT SELECT, REFERENCES ON public.auth_users TO dimpro_auth_migrator_dev;");
+  await db.exec("SET ROLE dimpro_auth_migrator_dev;");
+  await db.exec(readFileSync("db/auth/migrations/012_auth_v049_profile_photo.sql","utf8"));
+  await db.exec("RESET ROLE;");
+  console.log("AUTH_PHOTO_MIGRATION_PASS");
+  const userId="11111111-1111-4111-a111-111111111111";
+  await db.query("INSERT INTO public.auth_users (id,email_normalized) VALUES ($1::uuid,'example@example.invalid')",[userId]);
+  await db.exec("SET ROLE dimpro_auth_app_dev;");
+  const photo=Buffer.alloc(100,42);
+  const hash="a".repeat(64);
+  let result=await db.query("SELECT public.auth_upsert_self_profile_photo($1::uuid,$2::bytea,$3::text)",[userId,photo,hash]);
+  assert.equal(result.rows.length,1);
+  result=await db.query("SELECT octet_length(image_data) AS size,content_type,sha256 FROM public.auth_read_profile_photo($1::uuid)",[userId]);
+  assert.equal(result.rows.length,1);
+  assert.equal(result.rows[0].size,100);
+  assert.equal(result.rows[0].content_type,"image/webp");
+  assert.equal(result.rows[0].sha256,hash);
+  await assert.rejects(()=>db.query("SELECT * FROM public.auth_profile_photos"),/permission denied/);
+  await db.query("SELECT public.auth_delete_self_profile_photo($1::uuid)",[userId]);
+  result=await db.query("SELECT * FROM public.auth_read_profile_photo($1::uuid)",[userId]);
+  assert.equal(result.rows.length,0);
+  await db.exec("RESET ROLE;");
+  console.log("AUTH_PHOTO_PGLITE_E2E_PASS");
+}finally{await db.close();}
