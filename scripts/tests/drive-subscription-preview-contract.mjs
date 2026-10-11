@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {evaluateSubscriptionPreview,PREVIEW_GIB_BYTES as G,PREVIEW_GRACE_DAYS} from "../../app/lib/license/subscriptionPreviewPolicy.ts";
+const ref={
+ currentStatus:"ACTIVE",expiresAt:"2026-10-15T00:00:00Z",now:"2026-10-11T12:00:00Z",
+ target:{product:"DRIVE",scope:"PROJECT",quotaGiB:100,maxEditors:10,maxReadOnly:50},
+ usedBytes:50*G,reservedBytes:10*G,activeEditors:7,readOnlyMembers:20,
+};
+const active=evaluateSubscriptionPreview(ref);
+assert.equal(active.mode,"ACTIVE");
+assert.equal(active.switchDecision,"ELIGIBLE_FOR_OPERATOR_REVIEW");
+assert.equal(active.capacityShortfallGiB,0);
+assert.equal(active.preserveAssets,true);
+assert.equal(active.effectiveQuotaChanged,false);
+assert.equal(active.effectiveAccessChanged,false);
+assert.equal(active.appliesPrice,false);
+const atExpiry=evaluateSubscriptionPreview({...ref,now:"2026-10-15T00:00:00Z"});
+assert.equal(atExpiry.mode,"ACTIVE","exact expiry is still valid");
+const grace=evaluateSubscriptionPreview({...ref,now:"2026-10-16T00:00:00Z"});
+assert.equal(grace.mode,"GRACE_RECOMMENDED");
+assert.equal(PREVIEW_GRACE_DAYS,14);
+const after=evaluateSubscriptionPreview({...ref,now:"2026-11-06T00:00:00Z"});
+assert.equal(after.mode,"READ_ONLY_RECOMMENDED");
+assert.equal(after.preserveAssets,true);
+assert.equal(after.effectiveAccessChanged,false,"read-only is never auto-applied");
+const down=evaluateSubscriptionPreview({...ref,target:{...ref.target,quotaGiB:25}});
+assert.equal(down.switchDecision,"BLOCKED_UNTIL_RECONCILED");
+assert.equal(down.capacityShortfallGiB,35);
+assert.equal(down.preserveAssets,true,"downgrade never deletes files");
+const reserved=evaluateSubscriptionPreview({...ref,usedBytes:20*G,reservedBytes:10*G,target:{...ref.target,quotaGiB:25}});
+assert.equal(reserved.capacityShortfallGiB,5,"reserved bytes counted");
+const editor=evaluateSubscriptionPreview({...ref,activeEditors:12});
+assert.equal(editor.editorShortfall,2);
+assert.equal(editor.switchDecision,"BLOCKED_UNTIL_RECONCILED");
+const reader=evaluateSubscriptionPreview({...ref,readOnlyMembers:55});
+assert.equal(reader.readerShortfall,5);
+const gate=evaluateSubscriptionPreview({...ref,target:{product:"PROJECT_GATE",scope:"PROJECT",quotaGiB:null,maxEditors:25,maxReadOnly:null}});
+assert.equal(gate.targetGiB,null);
+assert.equal(gate.capacityShortfallGiB,0,"Projektkapu cannot double-count Drive quota");
+assert.throws(()=>evaluateSubscriptionPreview({...ref,target:{...ref.target,quotaGiB:0}}),/INVALID_TARGET_QUOTA/);
+assert.throws(()=>evaluateSubscriptionPreview({...ref,usedBytes:-10}),/INVALID_USED_BYTES/);
+assert.throws(()=>evaluateSubscriptionPreview({...ref,reservedBytes:Number.MAX_SAFE_INTEGER}),/OCCUPIED_STORAGE_OVERFLOW/);
+assert.throws(()=>evaluateSubscriptionPreview({...ref,target:{product:"PROJECT_GATE",scope:"PERSONAL",quotaGiB:null,maxEditors:1,maxReadOnly:null}}),/INVALID_PRODUCT_SCOPE/);
+assert.equal(evaluateSubscriptionPreview({...ref,currentStatus:"SUSPENDED"}).mode,"NEEDS_OPERATOR_REVIEW");
+assert.equal(evaluateSubscriptionPreview({...ref,currentStatus:"PENDING"}).switchDecision,"BLOCKED_UNTIL_RECONCILED");
+assert.equal(evaluateSubscriptionPreview({...ref,currentStatus:"EXPIRED",expiresAt:null}).mode,"READ_ONLY_RECOMMENDED");
+assert.equal(evaluateSubscriptionPreview({...ref,target:{...ref.target,quotaGiB:500}}).switchDecision,"ELIGIBLE_FOR_OPERATOR_REVIEW","upsizing should be possible for operator review");
+assert.ok(evaluateSubscriptionPreview({...ref,currentStatus:"SUSPENDED"}).preserveAssets,"suspended licenses preserve assets");
+assert.ok(evaluateSubscriptionPreview({...ref,target:{product:"PROJECT_GATE",scope:"PROJECT",quotaGiB:null,maxEditors:10,maxReadOnly:null}}).effectiveQuotaChanged===false);
+const panel=readFileSync("components/license/SubscriptionImpactPreview.tsx","utf8");
+assert.ok(panel.includes("evaluateSubscriptionPreview"),"UI uses policy");
+assert.ok(panel.includes("Csak szimuláció"),"UI conveys non-enforcement");
+assert.ok(panel.includes("PREVIEW_GIB_BYTES"),"UI converts GiB to actual bytes");
+const code=readFileSync("app/lib/license/subscriptionPreviewPolicy.ts","utf8");
+assert.ok(!code.includes("authQuery(")&&!code.includes("fetch(")&&!code.includes("DELETE FROM"));
+assert.ok(readFileSync("app/api/dimpro-identity/admin/project-product-licenses/route.ts","utf8").includes("PROJECT_LICENSE_ADMIN_WRITES_RELEASED:boolean=false"));
+console.log("DIMPRO SUBSCRIPTION PREVIEW POLICY 33/33 PASS");

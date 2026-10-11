@@ -1,0 +1,26 @@
+.panel{background:white;border:1px solid #d9e4ed;border-radius:10px;color:#1d4058;padding:18px;margin:18px 0}
+.header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.header h2{display:flex;align-items:center;gap:9px;margin:0 0 8px;font-size:17px}
+.header p{font-size:11px;line-height:1.5;margin:0 0 12px;color:#698297;max-width:770px}
+.locked{white-space:nowrap;display:flex;align-items:center;gap:7px;border:1px solid #d7e3eb;background:#f6f9fb;color:#6a839a;border-radius:6px;font-size:10px;font-weight:800;padding:8px}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0 15px}
+.tabs button{border:1px solid #ccdee9;background:#f8fafc;border-radius:6px;font-size:12px;padding:8px 12px;color:#54758c;cursor:pointer}
+.tabs button.active{background:#165b76;border-color:#165b76;color:white}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.grid label{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:11px;font-weight:800;color:#54768d}
+.grid select,.grid input{font-size:12px;width:100%;background:#fff;border:1px solid #cbdce5;padding:10px;border-radius:6px;color:#24455f}
+.output{border:1px solid #d8e7ee;background:#f8fbfd;border-radius:8px;margin-top:15px;padding:15px}
+.outcome{display:flex;align-items:center;gap:12px;color:#24778a}
+.outcome>div{display:flex;flex-direction:column;gap:5px}
+.outcome strong{font-size:13px}
+.outcome small{font-size:11px;color:#7b8799}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:15px 0}
+.metrics div{background:#fff;border:1px solid #e1edf2;border-radius:6px;padding:10px;display:flex;gap:6px;flex-direction:column}
+.metrics small{font-size:10px;color:#758ba0}
+.metrics strong{font-size:16px}
+.reason{font-size:11px;color:#486e86;line-height:1.6;margin:6px 0}
+.guarantee{display:flex;gap:8px;align-items:flex-start;background:#eff9f5;border:1px solid #cfe8da;border-radius:6px;padding:11px;color:#256a53;font-size:11px;font-weight:800}
+.guarantee svg{flex:0 0 auto}
+.disclaimer{font-size:11px;line-height:1.65;color:#758a9b;margin:12px 0 0}
+@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){.panel{padding:12px}.header{flex-direction:column}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}}
