@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import {
   AlertTriangle,
   Bell,
+  BadgeCheck,
   Building2,
   HelpCircle,
   Loader2,
@@ -2725,6 +2726,14 @@ export default function DriveWorkspace({
           </div>
         ) : null}
         <div className={styles.headerActions}>
+          {effectivePermissions.includes("project.read") && (
+            <Link className={styles.projectLicenseSwitch}
+              href={"/drive/licenc?project="+encodeURIComponent(projectId)}
+              title="Projekt Drive licenc, előfizetés, tárhely és érvényesség"
+              aria-label="Projekt Drive licenc és előfizetés megnyitása">
+              <BadgeCheck size={16}/><span>Projektlicenc</span>
+            </Link>
+          )}
           {effectivePermissions.includes("project.read") && (
             <Link className={styles.projectGateSwitch} href={projectGateModuleHref(projectId,"dock")}
               title="DIMPRO Projektkapu – ugyanennek a projektnek a ProjektTér felülete"

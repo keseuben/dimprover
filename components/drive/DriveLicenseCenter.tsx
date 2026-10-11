@@ -8,6 +8,7 @@ import {
   LockKeyhole, Mail, RefreshCcw, ShieldCheck, Users,
 } from "lucide-react";
 import type { DriveStorageQuota } from "./driveTypes";
+import ProjectDriveLicensePanel from "./ProjectDriveLicensePanel";
 import styles from "./DriveLicenseCenter.module.css";
 
 type Grant = {
@@ -72,6 +73,11 @@ export default function DriveLicenseCenter() {
       if (!response.ok || !data.ok) throw Error(data.error || "Nem tölthetők be a licencadatok.");
       setLicense(data);
       setSelectedScope(current => {
+        // /drive/licenc?project=<id> opens the selected Project Drive license.
+        const requestedProject = new URLSearchParams(window.location.search).get("project");
+        if (requestedProject && data.projects?.some(project => project.id === requestedProject)) {
+          return "project:" + requestedProject;
+        }
         if (current === "personal" && data.personalDrive?.enabled) return current;
         if (data.projects?.some(project => `project:${project.id}` === current)) return current;
         return data.personalDrive?.enabled ? "personal" : data.projects?.[0] ? `project:${data.projects[0].id}` : "";
@@ -131,9 +137,9 @@ export default function DriveLicenseCenter() {
     <main className={styles.container}>
       <header className={styles.intro}>
         <div>
-          <span className={styles.eyebrow}>DIMPRO Drive · saját fiók</span>
+          <span className={styles.eyebrow}>DIMPRO Drive · személyes és projektlicencek</span>
           <h1><BadgeCheck size={28} /> Licenc és előfizetés</h1>
-          <p>A saját hozzáférésed, projektjogosultságaid és tárhelykereteid. Az üzemeltetői Licencközpont külön felület.</p>
+          <p>A saját Drive- és projektlicencek, jogosultságok és tárhelykeretek áttekintése. Az üzemeltetői Licencközpont külön felület.</p>
         </div>
         <button className={styles.refresh} type="button" onClick={() => void refresh()} disabled={loading}>
           <RefreshCcw size={15} /> Frissítés
@@ -185,7 +191,10 @@ export default function DriveLicenseCenter() {
         <section className={styles.panel}>
           <h2><Database size={19}/> Tárhelykeret és használat</h2>
           <label className={styles.scopePicker}>Munkatér
-            <select value={selectedScope} onChange={event => setSelectedScope(event.target.value)}>
+            <select value={selectedScope} onChange={event => {
+              window.history.replaceState(window.history.state,"","/drive/licenc");
+              setSelectedScope(event.target.value);
+            }}>
               {!selectedScope && <option value="">Nincs hozzáférhető tárhely</option>}
               {license.personalDrive?.enabled && <option value="personal">Saját Drive</option>}
               {projects.map(project => <option value={`project:${project.id}`} key={project.id}>Projekt · {project.name}</option>)}
@@ -213,6 +222,10 @@ export default function DriveLicenseCenter() {
             <Mail size={15}/> Tárhely- vagy csomagbővítés igénylése <ArrowRight size={14}/>
           </Link>
         </section>
+
+        {selectedScope.startsWith("project:") &&
+          projects.filter(project => "project:"+project.id===selectedScope)
+            .map(project => <ProjectDriveLicensePanel key={project.id} projectId={project.id} projectName={project.name}/>)}
 
         <section className={styles.panel}>
           <h2><Building2 size={19}/> Hozzáférhető projektmunkaterek</h2>

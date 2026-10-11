@@ -6921,3 +6921,9 @@
  .projectHeader .projectMeta { gap:4px; }
  .projectHeader .projectStorageMeter { display:none; }
 }
+
+/* Compact Project Drive license link in the existing project header */
+.projectLicenseSwitch { flex:0 0 auto; display:flex; align-items:center; gap:5px; min-height:31px; padding:6px 9px; border:1px solid #b5ccda; background:#f1f8fb; color:#1b657c; border-radius:7px; text-decoration:none; font-size:11px; font-weight:900; }
+.projectLicenseSwitch:hover { background:#e0f2f5; border-color:#64a6b6; }
+.projectLicenseSwitch:focus-visible { outline:2px solid #0c87a5; outline-offset:2px; }
+@media(max-width:1350px) { .projectLicenseSwitch { padding:6px; } .projectLicenseSwitch span { display:none; } }
