@@ -101,6 +101,18 @@ Az új táblázati beállítások csak helyi böngészőeszközön mentődnek, k
 
 Részletek: DIMPROVER_PRODUCT_DOCS/DIMPRO_LICENSE_V0948_GRID_DEV_PROD_GUARD_20261011.md.
 
+## V0.9.49 – központi AUTH licencoperátorok és jóváhagyások
+
+A V0.9.48-ban kialakított DEV/PROD fail-closed íráskapu után az operátori szerepkörök forrásmodellje külön készült el. Az operátorok nem önálló belépési rendszert használnak: a meglévő központi AUTH auth_roles / auth_permissions / auth_role_permissions rendszerére épülnek. Hat szerepkör és nyolc finom jogosultság jelenik meg; egyelőre nem kerül user szerepkör-hozzárendelés az auth_access_grants táblába.
+
+Az admin- és kereskedelmi folyamat szerepkörei: LICENSE_SUPERADMIN, LICENSE_OPERATOR, LICENSE_FINANCE, LICENSE_SECURITY, LICENSE_AUDITOR és LICENSE_SUPPORT_READONLY. A kérelmet létrehozó személy nem lehet a pénzügyi vagy a biztonsági jóváhagyó; ezeknek egymástól is különbözniük kell. Az egyes lépések auditja a műveletet indító AUTH user UUID-t és az indoklást köti a kérelemváltozáshoz. A végleges licencaktiválás külön, tiltott release-gate marad.
+
+A db/auth/migrations/022_auth_v059_license_operator_approval_review.sql SOURCE ONLY, soha nem futott valós DEV vagy PROD adatbázisban. A kérelmezési táblát csak izolált PostgreSQL tesztben hoztuk létre. Sem hozzáférést, sem számlázási műveletet, sem licencet nem aktivál.
+
+A BENJADMIN Licencközpont új 'Jóváhagyások és szerepkörök' füle kizárólag dokumentált, kereshető/követhető operátori mátrixot és helyi szabályszimulációt jelenít meg, nem élő ügyfél- vagy licencadatokat. Később, önálló release-review után készülhet hiteles szerepkör-hozzárendelő és operátori döntési API.
+
+Részletes átadó: DIMPROVER_PRODUCT_DOCS/DIMPRO_LICENSE_V0949_OPERATOR_APPROVAL_SOURCE_20261011.md.
+
 ## Kötelező fejlesztési szabályok
 
 - Felhasználói jogosultság és fizetős előfizetés két külön dolog.

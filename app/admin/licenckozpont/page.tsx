@@ -15,6 +15,7 @@ import ProductArchitectureOverview from "@/components/license/ProductArchitectur
 import MiniAppLicenseCatalog from "@/components/license/MiniAppLicenseCatalog";
 import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 import UnifiedProductGrid from "@/components/license/UnifiedProductGrid";
+import LicenseOperatorReviewOverview from "@/components/license/LicenseOperatorReviewOverview";
 import {sortLicenseGrid,type LicenseGridSortKey,type LicenseGridSortOrder} from "@/app/lib/license/licenseGrid";
 import {
   LICENSE_GRID_PREFERENCES_KEY,LICENSE_GRID_COLUMNS,
@@ -357,7 +358,7 @@ export default function DimproLicenseCenterPage() {
   const [createdCode, setCreatedCode] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [activeView,setActiveView]=useState<"licenses"|"modules"|"products"|"projects"|"plans">("licenses");
+  const [activeView,setActiveView]=useState<"licenses"|"modules"|"products"|"projects"|"plans"|"approvals">("licenses");
   const [productFilter,setProductFilter]=useState("all");
   const [sortKey,setSortKey]=useState<LicenseGridSortKey>("code");
   const [sortOrder,setSortOrder]=useState<LicenseGridSortOrder>("asc");
@@ -858,6 +859,7 @@ export default function DimproLicenseCenterPage() {
           ["licenses","Licencek"],["modules","Moduljogok"],
           ["products","Termékek"],["projects","Projektlicencek"],
           ["plans","Csomagok és díjak"],
+          ["approvals","Jóváhagyások és szerepkörök"],
         ] as const).map(([id,label])=>
           <button type="button" key={id} aria-pressed={activeView===id}
             onClick={()=>setActiveView(id)}>{label}</button>
@@ -1081,6 +1083,9 @@ export default function DimproLicenseCenterPage() {
       </section>}
       {activeView==="projects"&&<section className="dimpro-license-center__tab-panel">
         <ProjectProductLicensesAdmin adminKey={adminKey}/>
+      </section>}
+      {activeView==="approvals"&&<section className="dimpro-license-center__tab-panel">
+        <LicenseOperatorReviewOverview/>
       </section>}
       {activeView==="plans"&&<section className="dimpro-license-center__tab-panel">
         <PlanDraftCatalogue/>
