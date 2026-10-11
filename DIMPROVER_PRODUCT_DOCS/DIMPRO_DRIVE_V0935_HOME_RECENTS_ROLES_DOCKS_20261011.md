@@ -18,3 +18,16 @@ Dátum: 2026-10-11.
 - TypeScript noEmit és célzott ESLint PASS. git diff --check PASS.
 - Következő release kapu: BUILD01 Next.js fordítás és vizuális QA laptop 1366×768/1600×900; valós migráció DB-jóváhagyás; ACL/profil/auth és Projektkapu navigáció E2E. SMTP producer és küldés tiltva.
 - DEV tárhely továbbra is nagyon kevés, DEV-re nem fordítunk, nem telepítünk. PROD DENY.
+
+## BUILD01 – 2026-10-11, teljes fordítás
+
+- BUILD01 ellenőrzés: **PASS**, nem történt DEV-telepítés.
+- Run ID: drive-v0935-2d5efb080-20261011-build01-b1.
+- Forrás Git commit: 2d5efb0807953db06ea1aa00fcfdac30846144e5.
+- BUILD_ID: 3GA5bSLjEZBAJ1KkXYBHe.
+- Artifact SHA-256: 1dcfd0bf77259727f13456f544cfa56bcd54182c336a5f3509fad030ad856c76.
+- A BUILD01 standalone asset generálás és 103 statikus oldal, TypeScript, Next optimalizálás: PASS.
+- A csomag a BUILD gateway független futási mappájában található, 92 MB körül.
+- DEV aktuális HTTP candidate továbbra is c74326afd / V0.9.33; a felhasználói UI-képernyőképen V0.9.32 olvasható. Eltérő információ: verziócímke/router külön QA.
+- DEV /dev/sda3: 118 GiB összes, 115 GiB foglalt, 2,3 GiB szabad (99%). Nincs automatikus telepítési jóváhagyás.
+- Még szükséges: browser responsive QA, központi/auth és végső ACL QA, szakmai roles DB migráció review, Box lifecycle DB readiness, felhasználói elfogadás, külön email release gate.
