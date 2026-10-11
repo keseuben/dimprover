@@ -41,3 +41,19 @@ Az 500 GiB-os V0.9.41 modell továbbra is modellfeltevés; hiteles szolgáltató
 ## 5. QA
 
 33/33 elővizsgálati policy, TypeScript és célzott ESLint PASS. Teljes BUILD01 eredmény a build után rögzítendő. PROD DENY.
+
+## 6. BUILD01 – verified 2026-10-11
+
+- Run ID: license-lifecycle-v0942-bb1852160-20261011-build01-b1
+- Forráscommit: bb18521603d06360aa95ade56c1e61b51e95e990
+- Teljes build: PASS, Next.js 16.2.6, TypeScript PASS, 104/104 oldal, 274 standalone chunk.
+- Build ID: XHT6_TPDNWm_6RDVDg9vi
+- Artifact SHA-256: 1a6263508f7f53d4848bfec6bd90f9c8a9c575f13b15ca07a0520d09f86aed48
+- A tényleges artifact-fájl SHA, a BUILD gateway status és a metaadat SHA egyezik. Artifact kb. 92 MiB.
+- Regresszió: 33/33 V0.9.42 policy contract, 28/28 V0.9.41 ármodell, 30/30 csomagkatalógus, 18/18 PGlite seed, 15/15 admin hard gate, 21/21 Projektkapu–Drive ACL, 14/14 Drive notification test groups PASS.
+- DEV ellenőrzött válasz header: V0.9.33, candidate c74326afd. DEV szabad tárhely kb. 1,6 GiB (99% lemezhasználat).
+- A BUILD01 csak izolált buildet készített. Nincs DEV deploy, PROD deploy, szerver restart, DB migráció, licenckiadás, SMTP, jogosultság- vagy kvótaváltozás. PROD DENY.
+
+### Következő egyetlen műszaki főirány
+
+A központi AUTH terméklicenc és a valódi Drive / Projektkapu / Saját Drive entitlement összerendelési tervének és nem módosító, hiteles állapotlekérdezésének elkészítése. Ehhez külön szükségesek a stabil central AUTH identitások, számlázási igazolás, dokumentum- és résztvevői kvóta hiteles mérése, magas jogosultságú operátor és audit. A V0.9.42 hatásvizsgáló demóadatokat használ, ezért nem kezelhető döntésre kész éles ügyfélállapotként.
