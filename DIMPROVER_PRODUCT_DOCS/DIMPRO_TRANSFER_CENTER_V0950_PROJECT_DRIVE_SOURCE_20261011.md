@@ -46,3 +46,20 @@ A historical drive-project-provision-upload-v110-runtime-e2e és drop-v129-full-
 ## V0.9.51 irány
 
 Valódi közös Drop/Drive Transfer Queue Engine, idempotens server-side transfer job, scanner status polling/SSE, per-file retry/resume, külön Personal Drive és verzió/revízió adapter. A UI látvány további animációja csak ezek után indokolt.
+
+## BUILD01 ellenőrzött V0.9.50 source release candidate – 2026-10-11
+
+- Build runner: BUILD01, PASS.
+- Run: benjadmin-transfer-v0950-4dc86aede-20261011-build01-b1.
+- Hiteles forrás: 4dc86aeded1457e8073d1fc5145b02ae4b0dce0b.
+- Build ID: tjg_e6REruODm38GVV38L.
+- Artifact SHA-256: 90ec7269ed7fa209ab581aed9c526bcd7bb139fb155c5bf00c21c590c65f3eca.
+- A tényleges tar.gz SHA-256 és a remote build gateway metadata megegyeznek.
+- Next.js 16.2.6 optimalizált fordítás PASS (101 s), teljes TS PASS (2.8 perc), 104/104 page generation PASS, 274 standalone CSS/JS állomány ellenőrizve.
+- Artifact tartalmazza a Transfer Center TSX/CSS, a közös transfer-core model + XHR motor és a szerveroldali scanner kaput. A lefordított CSS chunkokban az új Transfer Center CSS is ellenőrzötten szerepel.
+- QA: 19/19 új integrációs ellenőrzés, új XHR mock (signed/same-origin, valós byte progress, megszakítás, HTTP failure), 9/9 kiválasztott garantáltan non-destructive Drive/Drop regresszió, TypeScript, ESLint PASS.
+- A korábbi infrastruktúra-összesítő útvonalhoz tartozó Turbopack figyelmeztetés ismét megjelent, de a teljes build PASS.
+- DEV root read-only tárhelyellenőrzéskor 118 GiB méret mellett 807 MiB szabad, df szerint 100% foglaltság. DotRoll bővítésére várunk.
+- Sem DEV, sem PROD alkalmazást nem telepítettünk vagy indítottunk újra. Nincs valódi fájlfeltöltés, DB írás/migráció, változtatott licenc, Nginx vagy SMTP művelet.
+
+Következő biztonságos lépés a V0.9.51 izolált Transfer Task/Job újrapróbálási és scanner státuszkövető interfészének forrásfejlesztése, a DEV/PROD bármilyen runtime beavatkozása nélkül.
