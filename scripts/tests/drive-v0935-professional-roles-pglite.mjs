@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {pathToFileURL} from "node:url";
+import {normalizeProfessionalRoles,PROJECT_PROFESSIONAL_ROLES} from "../../app/lib/project-core/professionalRoles.ts";
+
+assert.equal(Object.keys(PROJECT_PROFESSIONAL_ROLES).length,12);
+assert.deepEqual(normalizeProfessionalRoles(["INVESTOR","INVESTOR","TECHNICAL_INSPECTOR"]),["INVESTOR","TECHNICAL_INSPECTOR"]);
+assert.throws(()=>normalizeProfessionalRoles(["OWNER"]),/INVALID/,"business role cannot impersonate technical ACL");
+assert.throws(()=>normalizeProfessionalRoles(["INVESTOR",42]),/INVALID/);
+assert.throws(()=>normalizeProfessionalRoles(Array.from({length:9},()=> "INVESTOR")) ,/INVALID/);
+const path=process.env.DIMPRO_TEST_PGLITE_MODULE_PATH;
+if(!path)throw new Error("Isolated PGlite only: specify DIMPRO_TEST_PGLITE_MODULE_PATH.");
+const {PGlite}=await import(pathToFileURL(path).href);
+const db=new PGlite();
+try{
+ await db.exec("CREATE ROLE service_role BYPASSRLS;CREATE ROLE anon;CREATE ROLE authenticated;");
+ await db.exec("CREATE TABLE public.project_core_memberships (id text PRIMARY KEY,project_id text NOT NULL,status text NOT NULL);");
+ await db.exec("GRANT SELECT ON public.project_core_memberships TO service_role;");
+ await db.exec("INSERT INTO public.project_core_memberships(id,project_id,status) VALUES ('m1','p','ACTIVE'),('m2','other','ACTIVE'),('m3','p','REVOKED');");
+ await db.exec(readFileSync("supabase/migrations/20261011_drive_professional_roles_v010.sql","utf8"));
+ console.log("DRIVE V0935 PROFESSIONAL ROLE MIGRATION PASS");
+ await db.exec("SET ROLE service_role");
+ await db.query("SELECT public.drive_set_professional_roles_atomic($1,$2,$3::text[],$4)",["p","m1",["INVESTOR","TECHNICAL_INSPECTOR"],"admin"]);
+ let result=await db.query("SELECT roles FROM public.drive_core_member_professional_roles WHERE project_id='p' AND membership_id='m1'");
+ assert.deepEqual(result.rows[0].roles,["INVESTOR","TECHNICAL_INSPECTOR"]);
+ await db.exec("RESET ROLE");
+ result=await db.query("SELECT count(*)::int AS n FROM public.drive_core_member_professional_roles_audit");
+ await db.exec("SET ROLE service_role");
+ assert.equal(result.rows[0].n,1);
+ await db.query("SELECT public.drive_set_professional_roles_atomic($1,$2,$3::text[],$4)",["p","m1",["TECHNICAL_INSPECTOR","INVESTOR"],"admin"]);
+ await db.exec("RESET ROLE");
+ result=await db.query("SELECT count(*)::int AS n FROM public.drive_core_member_professional_roles_audit");
+ await db.exec("SET ROLE service_role");
+ assert.equal(result.rows[0].n,1,"idempotent same role set");
+ await assert.rejects(()=>db.query("SELECT public.drive_set_professional_roles_atomic('p','m1',ARRAY['OWNER']::text[],'admin')"),/INVALID_CODE/);
+ await assert.rejects(()=>db.query("SELECT public.drive_set_professional_roles_atomic('p','m2',ARRAY['CLIENT']::text[],'admin')"),/NOT_ACTIVE/);
+ await assert.rejects(()=>db.query("SELECT public.drive_set_professional_roles_atomic('p','m3',ARRAY['CLIENT']::text[],'admin')"),/NOT_ACTIVE/);
+ await db.exec("RESET ROLE");
+ result=await db.query("SELECT count(*)::int AS n FROM public.drive_core_member_professional_roles_audit");
+ await db.exec("SET ROLE service_role");
+ assert.equal(result.rows[0].n,1,"denied attempts do not create audit artifacts");
+ await db.exec("RESET ROLE");
+ result=await db.query("SELECT old_roles,new_roles,actor_user_id FROM public.drive_core_member_professional_roles_audit");
+ assert.deepEqual(result.rows[0].old_roles,[]);
+ assert.deepEqual(result.rows[0].new_roles,["INVESTOR","TECHNICAL_INSPECTOR"]);
+ assert.equal(result.rows[0].actor_user_id,"admin");
+ console.log("DRIVE V0935 PROFESSIONAL ROLES PG CONTRACT PASS");
+}finally{await db.close();}

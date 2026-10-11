@@ -12,6 +12,8 @@ import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
 import PersonalDriveDetailsPanel, { type PersonalDriveDetailsItem } from "./PersonalDriveDetailsPanel";
+import DriveRecentHome from "./DriveRecentHome";
+import {sortedRecentUploads} from "@/app/lib/drive-core/recentUploadCore";
 import PersonalDrivePreviewDrawer from "./PersonalDrivePreviewDrawer";
 import PersonalDriveTrashPanel from "./PersonalDriveTrashPanel";
 import TableFullscreenBar from "./TableFullscreenBar";
@@ -158,7 +160,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
   const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
+  const [personalDetailsDockOpen,setPersonalDetailsDockOpen]=useState(true);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [recentOnly,setRecentOnly]=useState(false);
+  const [homeMode,setHomeMode]=useState(false);
   const [trashMode, setTrashMode] = useState(false);
   const [tableZoom, setTableZoom] = useState(90);
   const [tableFullscreen, setTableFullscreen] = useState(false);
@@ -355,6 +360,11 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
 
   useEffect(() => {
     if (!navigationRequest) return;
+    setHomeMode(navigationRequest.target==="home");
+    setRecentOnly(navigationRequest.target==="recent");
+    if (navigationRequest.target==="home" || navigationRequest.target==="recent") {
+      setTrashMode(false);setFavoriteOnly(false);setSelectedFolderId("all");setQuery("");return;
+    }
     if (navigationRequest.target === "trash") { setTrashMode(true); setFavoriteOnly(false); setPreviewDocumentId(""); return; }
     if (navigationRequest.target === "favorites") { setTrashMode(false); setFavoriteOnly(true); setSelectedFolderId("all"); return; }
     if (navigationRequest.target === "boxes") { setTrashMode(false); setBoxShelfOpen(true); return; }
@@ -398,13 +408,14 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return documents.filter((document) => {
-      const folderMatch = favoriteOnly ? true : selectedFolderId === "all" || (allFilesMode ? descendantFolderIds.has(document.folderId) : document.folderId === selectedFolderId);
+      const folderMatch = favoriteOnly || recentOnly ? true : selectedFolderId === "all" || (allFilesMode ? descendantFolderIds.has(document.folderId) : document.folderId === selectedFolderId);
       if (!folderMatch || (favoriteOnly && !favoriteDocumentIds.includes(document.id))) return false;
+      if (recentOnly && !document.currentVersion) return false;
       if (!normalized) return true;
       const item = itemById.get(document.id);
       return [document.name, item?.originalName, item?.sourceSystem, document.extension].filter(Boolean).some((value) => String(value).toLocaleLowerCase("hu-HU").includes(normalized));
-    });
-  }, [allFilesMode, descendantFolderIds, documents, favoriteDocumentIds, favoriteOnly, itemById, query, selectedFolderId]);
+    }).sort((a,b)=>recentOnly ? (Date.parse(b.currentVersion?.createdAt || b.updatedAt) || 0)-(Date.parse(a.currentVersion?.createdAt || a.updatedAt)||0) : 0);
+  }, [allFilesMode, descendantFolderIds, documents, favoriteDocumentIds, favoriteOnly, recentOnly, itemById, query, selectedFolderId]);
 
   const folderDocumentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -412,7 +423,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     return counts;
   }, [documents]);
   const totalBytes = useMemo(() => items.reduce((sum, item) => sum + Math.max(0, item.sizeBytes || 0), 0), [items]);
-  const title = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Saját Drive";
+  const title = recentOnly ? "Legutóbbi feltöltések" : favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Saját Drive";
   const subtitle = `${visibleDocuments.length} fájl${selectedFolder && allFilesMode ? " · almappákkal együtt" : ""}`;
   const folderNameForSelectedItem = selectedItem?.folderId ? folderById.get(selectedItem.folderId)?.displayName || folderById.get(selectedItem.folderId)?.name || "Saját Drive" : "Saját Drive";
   const breadcrumbParts = selectedFolder ? (selectedFolder.displayPath || selectedFolder.path).split("/").filter(Boolean) : [];
@@ -737,6 +748,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     title={title}
     subtitle={subtitle}
     documents={visibleDocuments}
+    recentMode={recentOnly}
     selectedDocumentId={selectedDocumentId}
     viewMode={viewMode}
     onViewModeChange={changeViewMode}
@@ -752,11 +764,11 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     favoriteBusyDocumentIds={favoriteBusyDocumentIds}
     onToggleFavorite={(document) => void toggleFavorite(document)}
     metadataByDocument={{}}
-    folders={favoriteOnly ? [] : driveFolders}
+    folders={favoriteOnly || recentOnly ? [] : driveFolders}
     selectedFolderId={selectedFolderId}
     allFilesMode={allFilesMode}
     onAllFilesModeChange={setAllFilesMode}
-    currentFolder={favoriteOnly ? null : selectedFolder}
+    currentFolder={favoriteOnly || recentOnly ? null : selectedFolder}
     onFolderChange={(folderId) => { setFavoriteOnly(false); setSelectedFolderId(folderId); setAllFilesMode(false); }}
     onNavigateParent={() => setSelectedFolderId(selectedFolder?.parentId || "all")}
     canWrite={folderCoreReady}
@@ -920,14 +932,40 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} onPointerDown={(event) => event.stopPropagation()}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
       </section> : null}
 
-      <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : layoutMode === "folders" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` } : undefined}>
+      {homeMode && !compareActive && !tableFullscreen &&
+        <DriveRecentHome name={workspaceName} scopeLabel="Saját Drive"
+          documents={sortedRecentUploads(documents)}
+          onShowAll={()=>{setHomeMode(false);setRecentOnly(true);setSelectedFolderId("all");}}
+          onSelect={(document)=>{setHomeMode(false);setRecentOnly(false);setFavoriteOnly(false);
+            setSelectedFolderId(document.folderId||"all");setSelectedDocumentId(document.id);}}
+        />}
+      <div ref={browserRef} hidden={homeMode && !compareActive && !tableFullscreen}
+        className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split"
+          ? {gridTemplateRows:personalDetailsDockOpen ? `minmax(0,1fr) 10px min(${splitDetailsHeight}px,70%)` : "minmax(0,1fr) 0px 36px"}
+          : layoutMode === "folders"
+            ? {gridTemplateRows:personalDetailsDockOpen ? `minmax(0,1fr) 10px min(${foldersDetailsHeight}px,70%)` : "minmax(0,1fr) 0px 36px"}
+            : undefined}>
         {compareActive ? (
           <CompareWorkspace projectId="personal" workspaceType="PERSONAL" documents={documents} boxes={boxes} seedItems={compareSeedItems} onClose={() => setCompareActive(false)} />
         ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete onDeleteSelected={deletePersonalDocuments} /> : <>
           <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setFavoriteOnly(false); setSelectedFolderId(folderId); setAllFilesMode(false); }} onMoveDocumentsToFolder={moveDocumentsToFolder} onMoveFolderToFolder={moveFolderToFolder} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
-          {layoutMode === "split" || layoutMode === "folders" ? <div className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`} role="separator" aria-orientation="horizontal" onDoubleClick={() => { const height = browserRef.current?.getBoundingClientRect().height || 660; const half = Math.max(150, Math.floor((height - 10) / 2)); if (layoutMode === "folders") setFoldersDetailsHeight(half); else setSplitDetailsHeight(Math.max(250, half)); }} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => { const delta = startY - moveEvent.clientY; if (layoutMode === "folders") { const height = browserRef.current?.getBoundingClientRect().height || 660; const max = Math.max(150, Math.floor((height - 10) / 2)); setFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + delta))); } else setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + delta))); }; const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
-          <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
+          {layoutMode === "split" || layoutMode === "folders" ? <div className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""} ${!personalDetailsDockOpen ? styles.detailsDockResizeHidden : ""}`} role="separator" aria-orientation="horizontal" onDoubleClick={() => { const height = browserRef.current?.getBoundingClientRect().height || 660; const half = Math.max(150, Math.floor((height - 10) / 2)); if (layoutMode === "folders") setFoldersDetailsHeight(half); else setSplitDetailsHeight(Math.max(250, half)); }} onPointerDown={(event) => { if(!personalDetailsDockOpen)return; event.preventDefault(); const startY = event.clientY; const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => { const delta = startY - moveEvent.clientY; if (layoutMode === "folders") { const height = browserRef.current?.getBoundingClientRect().height || 660; const max = Math.max(150, Math.floor((height - 10) / 2)); setFoldersDetailsHeight(Math.max(150, Math.min(max, startHeight + delta))); } else setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + delta))); }; const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
+          <div className={layoutMode === "split" || layoutMode === "folders"
+            ? `${styles.detailsDock} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${!personalDetailsDockOpen ? styles.detailsDockCollapsed : ""}`
+            : styles.detailsDockPassthrough}>
+            {(layoutMode === "split" || layoutMode === "folders") && <button type="button"
+              className={styles.detailsDockBar} aria-expanded={personalDetailsDockOpen}
+              onClick={()=>setPersonalDetailsDockOpen(current=>!current)}>
+              <strong>Fájlrészletek</strong><span>{selectedDocument?.name || "Válassz egy fájlt"}</span>
+              <span className={styles.detailsDockArrow}>{personalDetailsDockOpen?"⌄":"⌃"}</span>
+            </button>}
+            <div className={styles.detailsDockContent}
+              hidden={!personalDetailsDockOpen && (layoutMode === "split" || layoutMode === "folders")}>
+              <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem}
+                onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" || layoutMode === "folders" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
+            </div>
+          </div>
         </>}
       </div>
 

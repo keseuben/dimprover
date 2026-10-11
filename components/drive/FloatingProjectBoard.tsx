@@ -239,14 +239,14 @@ export default function FloatingProjectBoard({
 
         <span className={styles.boardSectionLabel}>Drive</span>
         <div className={styles.boardNav}>
-          <button type="button" className={styles.boardNavDisabled} disabled title="Kezdőlap – hamarosan">
-            <Home size={16} /> <span>Kezdőlap</span><small>hamarosan</small>
+          <button type="button" className={navClass("home")} onClick={() => onNavigate("home")}>
+            <Home size={16} /> <span>Kezdőlap</span>
           </button>
           <button type="button" className={navClass("documents")} onClick={() => onNavigate("documents")}>
             <FolderOpen size={16} /> Dokumentumtár
           </button>
-          <button type="button" className={styles.boardNavDisabled} disabled title="Legutóbbi – hamarosan">
-            <Clock3 size={16} /> <span>Legutóbbi</span><small>hamarosan</small>
+          <button type="button" className={navClass("recent")} onClick={() => onNavigate("recent")}>
+            <Clock3 size={16} /> <span>Legutóbbi</span>
           </button>
           <button type="button" className={navClass("favorites")} onClick={() => onNavigate("favorites")} title="Kedvencek">
             <Star size={16} /> Kedvencek

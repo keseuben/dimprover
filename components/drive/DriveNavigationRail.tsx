@@ -67,13 +67,13 @@ export default function DriveNavigationRail({
         <PanelLeftOpen size={18} />
       </button>
 
-      <button type="button" className={`${styles.railButton} ${styles.railDisabled}`} disabled title="Kezdőlap – hamarosan">
+      <button type="button" className={itemClass("home")} onClick={() => onNavigate("home")} title="Drive Kezdőlap – legutóbbi feltöltések">
         <Home size={18} />
       </button>
       <button type="button" className={itemClass("documents")} onClick={() => onNavigate("documents")} title="Dokumentumtár">
         <FolderOpen size={18} />
       </button>
-      <button type="button" className={`${styles.railButton} ${styles.railDisabled}`} disabled title="Legutóbbi – hamarosan">
+      <button type="button" className={itemClass("recent")} onClick={() => onNavigate("recent")} title="Legutóbbi feltöltések és verziók">
         <Clock3 size={18} />
       </button>
       <button type="button" className={itemClass("favorites")} onClick={() => onNavigate("favorites")} title="Kedvencek">

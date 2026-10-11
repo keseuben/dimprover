@@ -6862,3 +6862,62 @@
 .driveFollowOptions label:has(select) { display: grid; }
 .driveFollowOptions select { min-height: 38px; border: 1px solid #c8d9e5; border-radius: 8px; padding: 7px; background: white; color: #234055; }
 .driveFollowOptions p { margin: 0; color: #687e90; font-size: 11px; line-height: 1.45; }
+
+/* V0.9.35: Collapsible inspector above independent CsomagBOX shelf. */
+.detailsDockPassthrough { display:contents; }
+.detailsDockPassthrough .detailsDockContent { display:contents; }
+.detailsDock { min-width:0; min-height:0; grid-column:1/-1; grid-row:3; display:flex; flex-direction:column; overflow:hidden; background:#fff; border-top:1px solid #b9cee3; }
+.detailsDockBar { flex:0 0 36px; min-width:0; width:100%; display:flex; align-items:center; gap:9px; padding:0 12px; color:#2d4864; background:#f7fbff; border:1px solid #acc9eb; border-radius:6px; text-align:left; cursor:pointer; }
+.detailsDockBar:hover { background:#edf6ff; }
+.detailsDockBar:focus-visible { outline:2px solid #176bff; outline-offset:-2px; }
+.detailsDockBar strong { flex:0 0 auto; font-size:var(--drive-font-sm); text-transform:uppercase; letter-spacing:.025em; }
+.detailsDockBar > span:not(.detailsDockArrow) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--drive-font-xs); color:#667f98; }
+.detailsDockArrow { flex:0 0 auto; margin-left:auto; font-size:20px; line-height:1; color:#3b74af; }
+.detailsDockContent { flex:1; min-width:0; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+.detailsDockContent[hidden] { display:none !important; }
+.detailsDock .detailsSplitCard { flex:1; min-height:0; height:auto; margin:0; border-radius:0 0 7px 7px; border-top:0; box-shadow:none; }
+.detailsDockCollapsed { height:36px; }
+.detailsDockResizeHidden { visibility:hidden; pointer-events:none; border:0; min-height:0; height:0; }
+@media(max-height:750px) { .detailsDockBar { padding:0 8px; } .detailsDockBar strong { font-size:10px; } }
+
+/* Compact document recents/home for own and project workspaces. */
+.browser[hidden] { display:none !important; }
+.driveHome { flex:1; min-height:0; overflow:auto; padding:clamp(12px,2vw,24px); background:#f7fafc; }
+.driveHomeHeader { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:17px 19px; border:1px solid #dbe7f1; border-radius:10px; background:#fff; }
+.driveHomeHeader small { color:#138c9e; font-weight:800; font-size:10px; letter-spacing:.05em; text-transform:uppercase; }
+.driveHomeHeader h2 { margin:4px 0; color:#183958; font-size:18px; }
+.driveHomeHeader p { margin:0; color:#637c93; font-size:12px; }
+.driveHomeHeader button { display:flex; gap:7px; align-items:center; border:1px solid #abd2dc; background:#edf9fc; color:#166273; padding:9px 11px; font-size:11px; font-weight:800; cursor:pointer; border-radius:7px; }
+.driveHomeSectionHead { display:flex; align-items:center; gap:9px; margin:18px 0 9px; color:#194767; font-size:13px; }
+.driveHomeSectionHead span { margin-left:auto; color:#62798c; font-size:11px; }
+.driveHomeRows { border:1px solid #dbe7f1; background:#fff; border-radius:9px; overflow:hidden; }
+.driveHomeRows button { width:100%; display:flex; align-items:center; gap:12px; padding:10px 13px; border:0; border-bottom:1px solid #eef3f7; text-align:left; color:#426784; background:#fff; cursor:pointer; }
+.driveHomeRows button:hover { background:#eff8fd; }
+.driveHomeFileName { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; font-size:12px; color:#213d58; }
+.driveHomeRows small { flex:0 0 90px; font-size:10px; }
+.driveHomeRows time { flex:0 0 140px; font-size:11px; color:#64798b; }
+.driveHomeEmpty { padding:22px; border:1px dashed #d1dfeb; background:#fff; border-radius:9px; color:#72859a; }
+.driveHomeHint { color:#72879b; font-size:11px; margin-top:11px; }
+@media(max-width:780px) { .driveHomeHeader { flex-direction:column; align-items:stretch; } .driveHomeRows time { flex:0 0 auto; } .driveHomeRows small { display:none; } }
+
+/* Responsive project header. Projectkapu is not a new sidebar entry. */
+.projectGateSwitch { flex:0 0 auto; display:flex; align-items:center; gap:6px; min-height:31px; padding:6px 9px; border:1px solid #95ccc8; border-radius:7px; background:#effafa; color:#106f74; text-decoration:none; font-size:11px; font-weight:900; }
+.projectGateSwitch:hover { background:#dff7f5; border-color:#5aa9a6; }
+.projectGateSwitch:focus-visible { outline:2px solid #188ab1; outline-offset:2px; }
+.projectHeader .projectIdentity { flex:1 1 250px; overflow:hidden; }
+.projectHeader .projectIdentity > div:last-child { min-width:0; }
+.projectHeader .headerActions { flex:0 0 auto; gap:clamp(3px,.65vw,10px); }
+@media(max-width:1320px) {
+  .projectHeader { gap:7px; padding:7px 10px; }
+  .projectHeader .projectIdentity h1 { font-size:14px; }
+  .projectHeader .workspaceSelectorWrap { width:min(240px,23vw); min-width:150px; }
+  .projectGateSwitch { padding:6px; }
+  .projectGateSwitch span { display:none; }
+}
+@media(max-width:1080px) {
+ .projectHeader .workspaceSelectorWrap { position:relative; left:auto; top:auto; transform:none; width:min(235px,24vw); max-width:none; min-width:120px; }
+ .projectHeader .workspaceSelectorLabel { display:none; }
+ .projectHeader .projectIdentity h1 { font-size:12px; }
+ .projectHeader .projectMeta { gap:4px; }
+ .projectHeader .projectStorageMeter { display:none; }
+}

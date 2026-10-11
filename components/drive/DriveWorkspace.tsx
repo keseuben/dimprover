@@ -27,6 +27,10 @@ import TrashPanel from "./TrashPanel";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import ProfilePhotoControl from "@/components/auth/ProfilePhotoControl";
 import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
+import Link from "next/link";
+import { projectGateModuleHref } from "@/app/lib/project-gate/d6Modules";
+import DriveRecentHome from "./DriveRecentHome";
+import {recentUploadTimestamp} from "@/app/lib/drive-core/recentUploadCore";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
 import type { ProjectMembership } from "@/app/lib/project-core/types";
 import { hasExternalDriveFiles, prepareDroppedDriveUpload } from "./externalFileDrop";
@@ -305,6 +309,7 @@ export default function DriveWorkspace({
   const [tableZoom, setTableZoom] = useState(90);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [foldersDetailsHeight, setFoldersDetailsHeight] = useState(280);
+  const [detailsDockOpen, setDetailsDockOpen] = useState(true);
   const [boxShelfHeight, setBoxShelfHeight] = useState(154);
   const [viewMode, setViewMode] = useState<DriveViewMode>("simple");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
@@ -315,6 +320,8 @@ export default function DriveWorkspace({
   const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
   const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [recentOnly, setRecentOnly] = useState(false);
+  const [homeMode, setHomeMode] = useState(false);
   const [follows, setFollows] = useState<FollowRow[]>([]);
   const [followAvailable, setFollowAvailable] = useState(false);
   const [followDialogDocumentId, setFollowDialogDocumentId] = useState("");
@@ -358,6 +365,18 @@ export default function DriveWorkspace({
   const foldersDetailsInitializedRef = useRef(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
   const dragDepthRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(`dimpro-drive-project-details-open:${projectId}`);
+      setDetailsDockOpen(stored !== "0");
+    } catch { setDetailsDockOpen(true); }
+  }, [projectId]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(`dimpro-drive-project-details-open:${projectId}`, detailsDockOpen ? "1" : "0"); }
+    catch { /* Storage unavailable; the dock still works for this session. */ }
+  }, [detailsDockOpen, projectId]);
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
@@ -674,7 +693,7 @@ export default function DriveWorkspace({
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return (tree?.documents || []).filter((document) => {
-      const folderMatch = favoriteOnly
+      const folderMatch = favoriteOnly || recentOnly
         ? true
         : selectedFolderId === "all"
           ? !document.folderId
@@ -686,9 +705,11 @@ export default function DriveWorkspace({
         .toLocaleLowerCase("hu-HU")
         .includes(normalized);
       const favoriteMatch = !favoriteOnly || favoriteDocumentIds.includes(document.id);
-      return folderMatch && queryMatch && favoriteMatch;
-    });
-  }, [allFilesInFolderMode, favoriteDocumentIds, favoriteOnly, query, selectedFolderId, selectedFolderScopeIds, tree]);
+      return folderMatch && queryMatch && favoriteMatch && (!recentOnly || Boolean(document.currentVersion));
+    }).sort((a,b)=> recentOnly
+      ? recentUploadTimestamp(b)-recentUploadTimestamp(a)
+      : 0);
+  }, [allFilesInFolderMode, favoriteDocumentIds, favoriteOnly, recentOnly, query, selectedFolderId, selectedFolderScopeIds, tree]);
 
 
   // A fájlmegjelenítő a tényleges táblázati szűrést és rendezési sorrendet követi.
@@ -708,7 +729,9 @@ export default function DriveWorkspace({
     return tree.folders.filter((folder) => folder.parentId === parentId).length;
   }, [allFilesInFolderMode, favoriteOnly, selectedFolderId, tree]);
 
-  const fileGridSubtitle = favoriteOnly
+  const fileGridSubtitle = recentOnly
+    ? `${visibleDocuments.length} legutóbbi feltöltés és verzió`
+    : favoriteOnly
     ? `${visibleDocuments.length} kedvenc fájl`
     : `${visibleDocuments.length} fájl · ${visibleFolderCount} mappa${allFilesInFolderMode ? " · almappákkal együtt" : ""}`;
 
@@ -727,6 +750,16 @@ export default function DriveWorkspace({
   useEffect(() => {
     if (!navigationRequest?.id) return;
     setPreviewDocumentId("");
+    setHomeMode(navigationRequest.target === "home");
+    setRecentOnly(navigationRequest.target === "recent");
+    if (navigationRequest.target === "home" || navigationRequest.target === "recent") {
+      setTrashMode(false);
+      setFavoriteOnly(false);
+      setSelectedFolderId("all");
+      setAllFilesInFolderMode(false);
+      setQuery("");
+      return;
+    }
     if (navigationRequest.target === "trash") {
       setTrashMode(true);
       setFavoriteOnly(false);
@@ -2631,7 +2664,7 @@ export default function DriveWorkspace({
 
   const folderHidden = layoutMode !== "three" && layoutMode !== "folders";
   const detailsHidden = layoutMode === "one";
-  const titleBase = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
+  const titleBase = recentOnly ? "Legutóbbi feltöltések" : favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
   const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
   const headerRole = projectRoleBadge(membershipRole);
@@ -2692,6 +2725,13 @@ export default function DriveWorkspace({
           </div>
         ) : null}
         <div className={styles.headerActions}>
+          {effectivePermissions.includes("project.read") && (
+            <Link className={styles.projectGateSwitch} href={projectGateModuleHref(projectId,"dock")}
+              title="DIMPRO Projektkapu – ugyanennek a projektnek a ProjektTér felülete"
+              aria-label="Projektkapu megnyitása ugyanebben a projektben">
+              <Building2 size={16}/><span>Projektkapu</span>
+            </Link>
+          )}
           <button type="button" className={styles.headerAction} onClick={() => setNotificationSettingsOpen(true)}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction} onClick={onOpenHelp}><HelpCircle size={14} /> Súgó</button>
           <ProjectAccessMenu projectId={projectId} compact />
@@ -3481,6 +3521,7 @@ export default function DriveWorkspace({
               title={title}
               subtitle={fileGridSubtitle}
               documents={visibleDocuments}
+              recentMode={recentOnly}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={changeViewMode}
@@ -3496,11 +3537,11 @@ export default function DriveWorkspace({
               followAvailable={followAvailable}
               onConfigureFollow={openFollowDialog}
               metadataByDocument={metadataByDocument}
-              folders={favoriteOnly ? [] : tree?.folders || []}
+              folders={favoriteOnly || recentOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}
               allFilesMode={allFilesInFolderMode}
               onAllFilesModeChange={setFolderFileScope}
-              currentFolder={favoriteOnly ? null : selectedFolder}
+              currentFolder={favoriteOnly || recentOnly ? null : selectedFolder}
               onFolderChange={(folderId) => { setFavoriteOnly(false); selectFolder(folderId); }}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
@@ -3603,13 +3644,26 @@ export default function DriveWorkspace({
         </section>
       )}
 
+      {homeMode && !trashMode && !compareActive && !tableFullscreen && (
+        <DriveRecentHome name={projectName} scopeLabel="Projektmunkatér"
+          documents={tree?.documents || []}
+          onShowAll={() => { setHomeMode(false); setRecentOnly(true); setSelectedFolderId("all"); }}
+          onSelect={(document) => { setHomeMode(false); setRecentOnly(false); setFavoriteOnly(false);
+            setSelectedFolderId(document.folderId || "all"); setSelectedDocumentId(document.id); setDetailsDockOpen(true); }}
+        />
+      )}
       <div
         ref={browserRef}
         className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}
+        hidden={homeMode && !trashMode && !compareActive && !tableFullscreen}
         style={layoutMode === "split"
-          ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` }
+          ? { gridTemplateRows: detailsDockOpen
+              ? `minmax(0,1fr) 10px min(${splitDetailsHeight}px,70%)`
+              : "minmax(0,1fr) 0px 36px" }
           : layoutMode === "folders"
-            ? { gridTemplateRows: `minmax(220px,1fr) 10px ${foldersDetailsHeight}px` }
+            ? { gridTemplateRows: detailsDockOpen
+                ? `minmax(0,1fr) 10px min(${foldersDetailsHeight}px,70%)`
+                : "minmax(0,1fr) 0px 36px" }
             : undefined}
       >
         {trashMode ? (
@@ -3658,6 +3712,7 @@ export default function DriveWorkspace({
               title={title}
               subtitle={fileGridSubtitle}
               documents={visibleDocuments}
+              recentMode={recentOnly}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
               onViewModeChange={changeViewMode}
@@ -3673,11 +3728,11 @@ export default function DriveWorkspace({
               followAvailable={followAvailable}
               onConfigureFollow={openFollowDialog}
               metadataByDocument={metadataByDocument}
-              folders={favoriteOnly ? [] : tree?.folders || []}
+              folders={favoriteOnly || recentOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}
               allFilesMode={allFilesInFolderMode}
               onAllFilesModeChange={setFolderFileScope}
-              currentFolder={favoriteOnly ? null : selectedFolder}
+              currentFolder={favoriteOnly || recentOnly ? null : selectedFolder}
               onFolderChange={(folderId) => { setFavoriteOnly(false); selectFolder(folderId); }}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
@@ -3713,7 +3768,7 @@ export default function DriveWorkspace({
             />
             {(layoutMode === "split" || layoutMode === "folders") && (
               <div
-                className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""}`}
+                className={`${styles.splitResizeHandle} ${layoutMode === "folders" ? styles.foldersDetailsResizeHandle : ""} ${!detailsDockOpen ? styles.detailsDockResizeHidden : ""}`}
                 role="separator"
                 aria-orientation="horizontal"
                 aria-label="Részletező panel magasságának módosítása"
@@ -3733,6 +3788,7 @@ export default function DriveWorkspace({
                   }
                 }}
                 onPointerDown={(event) => {
+                  if (!detailsDockOpen) return;
                   event.preventDefault();
                   const startY = event.clientY;
                   const startHeight = layoutMode === "folders" ? foldersDetailsHeight : splitDetailsHeight;
@@ -3763,6 +3819,22 @@ export default function DriveWorkspace({
                 <span />
               </div>
             )}
+            <div className={layoutMode === "split" || layoutMode === "folders"
+              ? `${styles.detailsDock} ${layoutMode === "folders" ? styles.foldersDetailsCard : ""} ${!detailsDockOpen ? styles.detailsDockCollapsed : ""}`
+              : styles.detailsDockPassthrough}>
+              {(layoutMode === "split" || layoutMode === "folders") && (
+                <button type="button" className={styles.detailsDockBar}
+                  aria-expanded={detailsDockOpen} aria-controls="drive-project-detail-dock-content"
+                  onClick={() => setDetailsDockOpen((current) => !current)}
+                  title={detailsDockOpen ? "Fájlrészletek összecsukása" : "Fájlrészletek megnyitása"}
+                >
+                  <strong>Fájlrészletek</strong>
+                  <span>{selectedDocument ? selectedDocument.name : "Válassz egy fájlt a részletek megtekintéséhez"}</span>
+                  <span className={styles.detailsDockArrow}>{detailsDockOpen ? "⌄" : "⌃"}</span>
+                </button>
+              )}
+              <div id="drive-project-detail-dock-content" className={styles.detailsDockContent}
+                hidden={(layoutMode === "split" || layoutMode === "folders") && !detailsDockOpen}>
             <DetailsPanel
               projectId={projectId}
               document={selectedDocument}
@@ -3796,6 +3868,8 @@ export default function DriveWorkspace({
               inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
               inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
             />
+              </div>
+            </div>
           </>
         )}
       </div>

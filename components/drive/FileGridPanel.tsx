@@ -11,6 +11,7 @@ type Props = {
   title: string;
   subtitle: string;
   documents: DriveDocument[];
+  recentMode?: boolean;
   selectedDocumentId: string;
   viewMode: DriveViewMode;
   onViewModeChange: (value: DriveViewMode) => void;
@@ -982,6 +983,7 @@ export default function FileGridPanel({
   title,
   subtitle,
   documents,
+  recentMode = false,
   selectedDocumentId,
   viewMode,
   onViewModeChange,
@@ -1078,7 +1080,12 @@ export default function FileGridPanel({
   });
   const suppressPanClickRef = useRef(false);
   const [tablePanning, setTablePanning] = useState(false);
-  const [sortState, setSortState] = useState<TableSortState>({ key: "name", direction: "asc" });
+  const [sortState, setSortState] = useState<TableSortState>(
+    recentMode ? { key:"uploadedAt", direction:"desc" } : { key:"name", direction:"asc" }
+  );
+  useEffect(()=>{
+    setSortState(recentMode ? {key:"uploadedAt",direction:"desc"} : {key:"name",direction:"asc"});
+  },[recentMode]);
   const [columnWidths, setColumnWidths] = useState<ColumnWidthsByView>(() => ({
     simple: createColumnWidthMap(SIMPLE_COLUMNS),
     engineering: createColumnWidthMap(ENGINEERING_COLUMNS),
@@ -1350,13 +1357,17 @@ export default function FileGridPanel({
 
   const sortedDocuments = useMemo(() => {
     return [...documents].sort((a, b) => {
-      if (sortState.key === "uploadedAt") return compareTableDates(a.updatedAt, b.updatedAt, sortState.direction);
+      if (sortState.key === "uploadedAt") return compareTableDates(
+        recentMode ? (a.currentVersion?.createdAt || a.updatedAt) : a.updatedAt,
+        recentMode ? (b.currentVersion?.createdAt || b.updatedAt) : b.updatedAt,
+        sortState.direction
+      );
       const aValue = sortState.key === "fileName" ? a.name : displayDocumentName(a, metadataByDocument[a.id]).value;
       const bValue = sortState.key === "fileName" ? b.name : displayDocumentName(b, metadataByDocument[b.id]).value;
       const result = compareTableText(aValue, bValue);
       return result * (sortState.direction === "asc" ? 1 : -1);
     });
-  }, [documents, metadataByDocument, sortState]);
+  }, [documents, metadataByDocument, recentMode, sortState]);
 
   const sortedReviewRows = useMemo(() => {
     return [...reviewRows].sort((a, b) => {

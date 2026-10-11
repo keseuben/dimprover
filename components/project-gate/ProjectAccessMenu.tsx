@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { permissionsForRole, projectRoleLabel } from "@/app/lib/project-core/permissions";
+import { PROJECT_PROFESSIONAL_ROLES, type ProfessionalRoleCode } from "@/app/lib/project-core/professionalRoles";
 import type { ProjectMembership, ProjectMembershipRole, ProjectPermission } from "@/app/lib/project-core/types";
 import styles from "./ProjectAccessMenu.module.css";
 
@@ -127,6 +128,9 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [draftRoles, setDraftRoles] = useState<Record<string, EditableRole>>({});
+  const [professionalRoles, setProfessionalRoles] = useState<Record<string, ProfessionalRoleCode[]>>({});
+  const [professionalDrafts, setProfessionalDrafts] = useState<Record<string, ProfessionalRoleCode[]>>({});
+  const [professionalReady,setProfessionalReady]=useState(false);
   const [confirmRemove, setConfirmRemove] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -135,6 +139,41 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   const [selfNameDraft, setSelfNameDraft] = useState("");
   const [inviteRole, setInviteRole] = useState<EditableRole>("VIEWER");
   const [inviteDays, setInviteDays] = useState(7);
+  useEffect(()=>{
+    if(!open)return;
+    let active=true;
+    const controller=new AbortController();
+    setProfessionalReady(false);
+    void fetch(`/api/projects/${encodeURIComponent(projectId)}/professional-roles`,{
+      credentials:"same-origin",cache:"no-store",signal:controller.signal,
+    }).then(async response=>{
+      const data=await response.json().catch(()=>({})) as {ok?:boolean;roles?:Record<string,ProfessionalRoleCode[]>};
+      if(!active)return;
+      if(!response.ok || !data.ok){setProfessionalReady(false);return;}
+      setProfessionalRoles(data.roles||{});
+      setProfessionalDrafts(data.roles||{});
+      setProfessionalReady(true);
+    }).catch(()=>{if(active)setProfessionalReady(false);});
+    return ()=>{active=false;controller.abort();};
+  },[open,projectId]);
+
+  async function saveProfessionalRoles(member:ProjectMembership){
+    if(!access?.canManageMembers || !professionalReady)return;
+    setBusy(`professional:${member.id}`);setError("");setSuccess("");
+    try{
+      const roles=professionalDrafts[member.id]||[];
+      const response=await fetch(`/api/projects/${encodeURIComponent(projectId)}/professional-roles`,{
+        method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},
+        body:JSON.stringify({membershipId:member.id,roles}),
+      });
+      const data=await response.json().catch(()=>({})) as {ok?:boolean;error?:string};
+      if(!response.ok||!data.ok)throw Error(data.error||"A szakmai szerepek nem menthetők.");
+      setProfessionalRoles(current=>({...current,[member.id]:roles}));
+      setSuccess("A szakmai szerepek naplózva és mentve.");
+    }catch(error){setError(error instanceof Error?error.message:"Szakmai szerepkör mentési hiba.");}
+    finally{setBusy("");}
+  }
+
   const rootRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -527,6 +566,30 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                       </div>
                     </div>
                     <small>{secondaryLine(member)}</small>
+                    {professionalReady && <details className={styles.professionalRoleEditor}>
+                      <summary>Szakmai szerepek · {(professionalRoles[member.id]||[]).map(code=>PROJECT_PROFESSIONAL_ROLES[code]).join(", ") || "nincs megadva"}</summary>
+                      <p>Leíró szakmai minőségek, nem adnak további hozzáférést vagy automatikus e-mail-jogot.</p>
+                      {access?.canManageMembers ? <>
+                        <div className={styles.professionalRoleOptions}>
+                          {(Object.entries(PROJECT_PROFESSIONAL_ROLES) as [ProfessionalRoleCode,string][]).map(([code,label])=>(
+                            <label key={code}><input type="checkbox"
+                              checked={(professionalDrafts[member.id]||[]).includes(code)}
+                              onChange={(event)=>setProfessionalDrafts(current=>{
+                                const existing=current[member.id]||[];
+                                const next=event.target.checked
+                                  ? [...existing.filter(r=>r!==code),code].slice(0,8)
+                                  : existing.filter(r=>r!==code);
+                                return {...current,[member.id]:next};
+                              })}
+                              disabled={busy!=="" || (!(professionalDrafts[member.id]||[]).includes(code) && (professionalDrafts[member.id]||[]).length>=8)}
+                            />{label}</label>
+                          ))}
+                        </div>
+                        <button type="button" className={styles.professionalSave}
+                          disabled={busy!=="" || JSON.stringify([...(professionalDrafts[member.id]||[])].sort())===JSON.stringify([...(professionalRoles[member.id]||[])].sort())}
+                          onClick={()=>void saveProfessionalRoles(member)}>Szakmai szerepek mentése</button>
+                      </> : null}
+                    </details>}
                     {isSelf && editingSelfName === member.id ? (
                       <div className={styles.selfNameEditor}>
                         <input autoFocus maxLength={160} value={selfNameDraft} onChange={(event) => setSelfNameDraft(event.target.value)} />

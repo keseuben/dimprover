@@ -447,14 +447,22 @@ export default function BoxShelf({
                   </button>
                   <span
                     className={styles.boxLifecycleActionWrap}
-                    title={"Állapot: " + lifecycleConfig[box.lifecycleStatus].label}
+                    title={box.lifecycleFeatureReady
+                      ? "Állapot: " + lifecycleConfig[box.lifecycleStatus].label + " · Archiválás után az Archív szűrőből visszaállítható."
+                      : "A CsomagBOX életciklus adatbázis-migrációja még nincs aktiválva."}
                     data-disabled={!box.lifecycleFeatureReady || !canWrite || !onSetLifecycle || busy ? "true" : "false"}
                   >
                     <PackageCheck size={13} className={styles.boxLifecycleActionIconGlyph} />
                     <select
                       className={styles.boxLifecycleCompactSelect}
                       value={box.lifecycleStatus}
-                      onChange={(event) => void onSetLifecycle?.(box.id, event.target.value as DriveBoxLifecycleStatus)}
+                      onChange={(event) => {
+                        const next=event.target.value as DriveBoxLifecycleStatus;
+                        if(next==="ARCHIVED" && !window.confirm(
+                          "Archiválod ezt a CsomagBOX-ot? A fájlok változatlanul a Drive-ban maradnak, a BOX az Archív szűrőben lesz elérhető."
+                        )) { event.currentTarget.value=box.lifecycleStatus; return; }
+                        void onSetLifecycle?.(box.id,next);
+                      }}
                       disabled={!box.lifecycleFeatureReady || !canWrite || !onSetLifecycle || busy}
                       aria-label={"Állapot: " + lifecycleConfig[box.lifecycleStatus].label}
                     >

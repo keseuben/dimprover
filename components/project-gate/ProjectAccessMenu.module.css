@@ -909,3 +909,12 @@
 .footer { font-size: 10px; }
 .selfNameEditor input { font-size: 12px; }
 .editSelfName { font-size: 10px; }
+
+.professionalRoleEditor { margin:6px 0; padding:6px 8px; border:1px solid #d0e6e3; border-radius:7px; background:#f3fbf9; color:#315f63; font-size:11px; }
+.professionalRoleEditor summary { cursor:pointer; font-size:11px; font-weight:800; }
+.professionalRoleEditor p { margin:5px 0; font-size:10px; line-height:1.4; color:#567c7e; }
+.professionalRoleOptions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 8px; max-height:170px; overflow-y:auto; }
+.professionalRoleOptions label { display:flex; gap:5px; align-items:center; cursor:pointer; font-size:10px; }
+.professionalRoleOptions input { accent-color:#167c83; }
+.professionalSave { margin-top:8px; padding:6px 9px; border:1px solid #8ecac5; background:#dff6f3; color:#116e73; cursor:pointer; border-radius:5px; font-size:10px; font-weight:800; }
+.professionalSave:disabled { opacity:.45; cursor:default; }
