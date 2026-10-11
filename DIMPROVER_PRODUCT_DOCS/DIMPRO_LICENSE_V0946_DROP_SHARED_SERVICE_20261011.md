@@ -59,3 +59,17 @@ PROD DENY. A teszt- és buildadatokat a validáció lezárásakor rögzítjük.
 - TypeScript, célzott ESLint és git diff --check PASS.
 - Külön vizsgált, a V0.9.46 által NEM módosított régi Drop alkalmazási tesztek: scripts/drop-v094-product-family-contract.mjs a fejlesztői worktree-ben hiányzó .env.local fájlt vár, ezért nem futtatható ezen a környezeten. scripts/drop-v127-contract.mjs voice-recording-feedback ellenőrzése fail eredményt ad; e régebbi Drop UI-regresszió okát nem kutattuk vagy módosítottuk, mert a jelen fejlesztés csak licencforrásra/UI-architektúrára terjed ki. E két régi Drop tesztre NEM állítunk PASS eredményt.
 - Teljes BUILD01 státusz: ellenőrzés alatt.
+
+## BUILD01 ellenőrzött eredmény – 2026-10-11
+
+- Run: dimpro-drop-license-v0946-f842ee12e-20261011-build01-b1.
+- Forráscommit: f842ee12ec21170b6214ea415091306d33ccd1b0.
+- Teljes Next.js build: PASS; TypeScript PASS, 104/104 oldal, 274 standalone statikus chunk ellenőrizve.
+- BUILD ID: cxKxZUWzqsBbXaW36uPkN.
+- Artifact SHA-256: e8fe05e711e1170b2979d8685d69ed8aa5ec915fe2eda45842a16e67fda3fb16.
+- A tényleges artifact SHA-256, a BUILD gateway státusz és a metaadat ellenőrzőösszege egyezik.
+- Kód: TypeScript, célzott ESLint PASS; új Drop licenckatalógus és új PGlite kontraktus PASS; 11/11 korábbi licencteszt-csoport, 5/5 PGlite-csoport, 2/2 licenc API-guard és 14/14 Drive értesítési tesztcsoport PASS.
+- A két régebbi, másik fejlesztési körből származó Drop alkalmazás-UX tesztet nem tudtuk PASS-nak minősíteni: az egyik .env.local fájlt igényel; a másik voice-recording-feedback eltérést jelez. Ezek a V0.9.46 licencrétegtől külön vizsgálandók.
+- DEV lemez a záróméréskor 78 GiB, ~71 GiB foglalt, ~5,9 GiB szabad (93%). Nincs DEV deploy, AUTH/Drop DB migráció, PM2 restart vagy PROD módosítás.
+- Az új központi katalogizáló 021 migráció csak izolált PostgreSQL/PGlite adatbázisban futott.
+- A régi Drop Identity Core licencek továbbra is változatlanok, nem történt cutover vagy új számlázás. PROD DENY.
