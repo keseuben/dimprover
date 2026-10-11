@@ -52,3 +52,31 @@ A Drive és a Projektkapu külön/együttes csomagjai, ára és kerete; a Projek
 - Izolált PostgreSQL: 014+015 adatmegőrzés és két termék egy projekten; 014+015+016 kiadás/jóváhagyás/duplikáció/operátor deny/audit.
 - Projekt és termék ACL forráscontractok; külön Drive projektlicenc regresszió.
 - TypeScript, ESLint, teljes BUILD01 szükséges release gate. A BUILD01 eredményét a következő dokumentációs módosításban rögzítjük.
+
+## BUILD01 – 2026-10-11: VERIFIED
+
+- BUILD01 full Next.js build: PASS (104/104 statikus oldal, 274 standalone chunk, TypeScript PASS).
+- Run ID: project-license-v0938-cfe0d9b33-20261011-build01-b1
+- Source commit: cfe0d9b330cb2e27345bf35cced979d3d102dec2
+- Build ID: 3A8mX36H5jfBnm-pWwIpK
+- Artifact SHA-256: 866cfbaac86ac5bdaad11ae3287c34b6364db3704c0520cea0a6f140420e0196
+- BUILD gateway hash, metadata és tényleges artifact SHA egyezik, kész artifact ~92 MiB.
+- A buildbe bekerült /api/dimpro-identity/admin/project-product-licenses, /api/projects/[projectId]/project-gate/license és /projektkapu/project/[projectId]/licenc.
+- Nem történt telepítés, PM2 restart, DB-migráció, SMTP-küldés, destruktív művelet vagy PROD hozzáférés.
+
+### További QA, 2026-10-11
+
+- 14/14 korábbi Drive notification contract-tesztcsoport PASS.
+- 18/18 Drive projektlicenc + 21/21 Projektkapu/Drive ACL forrás contract PASS.
+- 11/11 közös projekt-termék PostgreSQL 014+015 migráció PASS.
+- 15/15 PostgreSQL 014+015+016 pending issue + approval PASS.
+- 15/15 központi admin release gate futtatási teszt PASS: jóváhagyott admin key mellett is POST/PATCH 423 és semmilyen DB/SSO write hívás; jogosulatlan user és PROD host deny.
+- További 12/12 korábbi Drive licenc PGlite, 13/13 user license, 5/5 recent, 11/11 operator-email gate PASS.
+- TypeScript, célzott ESLint és git diff whitespace ellenőrzés PASS.
+
+### DEV és kiadási kapu
+
+- DEV tárhely 2026-10-11 ellenőrzés: 118 GiB összes, 116 GiB foglalt, 1.9 GiB szabad, 99%.
+- DEV HTTP candidate c74326afd / V0.9.33; korábbi felhasználói UI V0.9.32 megjelenítést mutatott (külön vizsgálandó version-label eltérés).
+- A V0.9.38 source és BUILD artifact NINCS telepítve; az ACTIVE licencek csak izolált tesztadatbázisban jöttek létre, a valós AUTH-DB-ben NINCS új licenc.
+- PROD DENY teljesült.
