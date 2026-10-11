@@ -29,19 +29,20 @@ export type ProjectLicenseSummary = {
 /** Call only after requireProjectPermission(project.read). Read-only, no ACL bypass.
  * No source migration means no trustworthy paid license, never an inferred ACTIVE.
  */
-export async function getProjectDriveLicense(
+export async function getProjectProductLicense(
   projectId: string,
   canManageBilling: boolean,
+  productCode: "DRIVE" | "PROJECT_GATE" = "DRIVE",
 ): Promise<ProjectLicenseSummary> {
   let result;
   try {
     result = await authQuery<ProjectLicenseRow>(
       "SELECT l.license_code,l.plan_code,l.status,l.payer_type," +
       " l.storage_quota_bytes::text AS storage_quota_bytes,l.max_project_members,l.starts_at,l.expires_at" +
-      " FROM public.auth_drive_project_licenses l" +
+      " FROM public.auth_project_product_licenses l" +
       " JOIN public.auth_projects ap ON ap.id=l.auth_project_id" +
-      " WHERE ap.external_project_id=$1 LIMIT 1",
-      [projectId],
+      " WHERE ap.external_project_id=$1 AND l.product_code=$2 LIMIT 1",
+      [projectId,productCode],
     );
   } catch(error) {
     if((error as {code?:string})?.code==="42P01") {
@@ -56,7 +57,7 @@ export async function getProjectDriveLicense(
   if(!row) return {status:"NOT_ASSIGNED",licenseCode:null,planCode:null,
     quotaBytes:null,maxProjectMembers:null,startsAt:null,expiresAt:null,
     enforcementActive:false,
-    note:"Ehhez a projekthez még nincs hitelesített DIMPRO Drive projektlicenc hozzárendelve."};
+    note:"Ehhez a projekthez még nincs hitelesített terméklicenc hozzárendelve."};
   return {
     status:projectLicenseStatus(row.status,row.expires_at,Date.now()),
     licenseCode:canManageBilling?row.license_code:null,

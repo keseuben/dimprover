@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Archive,
+  BadgeCheck,
   BarChart3,
   CalendarDays,
   ChevronsLeft,
@@ -105,6 +106,7 @@ export default function ProjectGateProjectBoard({
         <span className={styles.boardSectionLabel}>Projektmunka</span>
         <div className={styles.boardNav}>
           <Link href="/naptar"><CalendarDays size={16} /> Naptár</Link>
+          <Link href={"/projektkapu/project/"+encodeURIComponent(projectId)+"/licenc"}><BadgeCheck size={16} /> Projektkapu licenc</Link>
           <Link href={`/projektkapu/project/${encodeURIComponent(projectId)}/reports`}><BarChart3 size={16} /> Jelentések</Link>
           <Link href={`/projektkapu/project/${encodeURIComponent(projectId)}/settings`}><Users size={16} /> Résztvevők és projektadatok</Link>
           <Link href={`/projektkapu/project/${encodeURIComponent(projectId)}/reports`}><Archive size={16} /> Projektarchívum</Link>

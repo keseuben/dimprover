@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
+  BadgeCheck,
   Bell,
   CalendarDays,
   CheckCircle2,
@@ -531,6 +532,12 @@ export default function ProjectGateShell({ projectId = DEFAULT_PROJECT_ID, activ
             </div>
           </div>
           <div className={styles.headerActions}>
+            {dashboard?.permissions.includes("project.read")&&
+              <Link className={styles.projectLicenseHeaderLink}
+                href={"/projektkapu/project/"+encodeURIComponent(projectId)+"/licenc"}
+                title="DIMPRO Projektkapu licenc és előfizetés">
+                <BadgeCheck size={17}/><span>Projektlicenc</span>
+              </Link>}
             <button type="button" className={styles.headerAction} onClick={toggleContext} title={contextOpen ? "Projektkontextus bezárása" : "Projektkontextus megnyitása"}>
               {contextOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}<span>Kontextus</span>
             </button>

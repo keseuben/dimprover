@@ -7,6 +7,7 @@ import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicType
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
 import OrganizationLicenseMembers from "@/components/license/OrganizationLicenseMembers";
+import ProjectProductLicensesAdmin from "@/components/license/ProjectProductLicensesAdmin";
 import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 
 type User = { id: string; public_user_code: string; full_name: string; email: string; status: string; email_verified_at: string | null };
@@ -844,6 +845,8 @@ export default function DimproLicenseCenterPage() {
           </table>
         </div>
       </BenjadminDataWorkspace>
+
+      <ProjectProductLicensesAdmin adminKey={adminKey}/>
 
       {expiryReminderOpen ? <button className="benjadmin-data-drawer-backdrop" type="button" aria-label="Lejárati értesítések bezárása" onClick={() => setExpiryReminderOpen(false)} /> : null}
       {expiryReminderOpen ? (

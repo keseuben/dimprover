@@ -620,3 +620,10 @@
   .workspacePanel { padding: 16px; }
   .workspaceIntro { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* Compact Projectkapu product license action in laptop header */
+.projectLicenseHeaderLink{display:inline-flex;align-items:center;gap:6px;border:1px solid #b9d2dd;border-radius:7px;background:#eef8fa;padding:7px 9px;color:#205e72;text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap}
+.projectLicenseHeaderLink:hover{background:#dcf1f5}
+.projectLicenseHeaderLink:focus-visible{outline:2px solid #0c91ab;outline-offset:2px}
+@media(max-width:1390px){.projectLicenseHeaderLink{padding:7px}.projectLicenseHeaderLink span{display:none}}

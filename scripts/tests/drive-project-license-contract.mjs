@@ -12,14 +12,15 @@ const api=readFileSync("app/api/projects/[projectId]/drive/license/route.ts","ut
 assert.ok(api.includes('requireProjectPermission(request,projectId,"project.read")'),"membership gate");
 assert.ok(api.includes('project.manage_members'),"billing restricted to manager");
 assert.ok(api.includes('project.update'),"manager requires TWO ACL permissions");
-assert.ok(api.includes('getProjectDriveLicense(projectId,canManageBilling)'),"permission flag forwarded");
+assert.ok(api.includes('getProjectProductLicense(projectId,canManageBilling)'),"permission flag forwarded");
 assert.ok(!api.includes("export async function POST"),"no customer write");
 const query=readFileSync("app/lib/drive-core/projectLicense.ts","utf8");
 assert.ok(query.includes("ap.external_project_id=$1"),"project link must use canonical external Project Core ID");
+assert.ok(query.includes("l.product_code=$2"),"independent product license query");
 assert.ok(query.includes('code==="42P01"'),"missing migration is NOT active");
 assert.ok(query.includes("licenseCode:canManageBilling?"),"license code hidden from guests");
 assert.ok(query.includes('enforcementActive:false'),"no access/quotas gated by this release");
 const projectUI=readFileSync("components/drive/DriveWorkspace.tsx","utf8");
 assert.ok(projectUI.includes('href={"/drive/licenc?project="+encodeURIComponent(projectId)}'),"project header opens matching license");
 assert.ok(projectUI.includes('effectivePermissions.includes("project.read")'),"header link respects rights");
-console.log("DIMPRO DRIVE PROJECT LICENSE CONTRACT 17/17 PASS");
+console.log("DIMPRO DRIVE PROJECT LICENSE CONTRACT 18/18 PASS");

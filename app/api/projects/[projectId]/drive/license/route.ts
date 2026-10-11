@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getProjectDriveLicense } from "@/app/lib/drive-core/projectLicense";
+import { getProjectProductLicense } from "@/app/lib/drive-core/projectLicense";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ export async function GET(request:NextRequest,context:RouteContext) {
   try {
     const canManageBilling=access.access.permissions.includes("project.manage_members")
       && access.access.permissions.includes("project.update");
-    const license=await getProjectDriveLicense(projectId,canManageBilling);
+    const license=await getProjectProductLicense(projectId,canManageBilling);
     return NextResponse.json({ok:true,projectId,canManageBilling,license},{headers});
   } catch {
     return NextResponse.json({ok:false,error:"A projektlicenc adatai nem érhetők el."},

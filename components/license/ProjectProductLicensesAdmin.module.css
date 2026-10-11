@@ -1,0 +1,22 @@
+.panel{background:#fff;border:1px solid #d7e4ee;border-radius:10px;padding:20px;margin:18px 0;color:#203d55}
+.heading{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.heading h2{display:flex;align-items:center;gap:9px;margin:0 0 6px;font-size:17px}
+.heading p{margin:0 0 14px;color:#6a8095;font-size:12px}
+.reload{border:1px solid #cadce6;border-radius:6px;background:white;padding:8px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.note{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #c5dce7;background:#edf6f9;border-radius:7px;color:#2e6480;font-size:12px}
+.stats{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0}
+.stats span{display:flex;align-items:center;gap:6px;background:#f3f7fa;border:1px solid #e1ebef;border-radius:6px;padding:8px 11px;font-size:12px}
+.form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;background:#f8fafc;border:1px solid #e4edf4;border-radius:8px;padding:15px;margin-bottom:15px}
+.form h3{grid-column:1/-1;font-size:14px;margin:0 0 6px}
+.form label,.approval label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#547187;min-width:0}
+.form input,.form select,.form textarea,.approval input{width:100%;min-width:0;border:1px solid #c9dbe6;border-radius:6px;padding:9px;background:white;color:#223e54;font:inherit;font-size:12px}
+.form .wide{grid-column:1/-1}
+.form button,.approval button{border:0;border-radius:6px;background:#087c91;color:white;padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer}
+.form button:disabled,.approval button:disabled{opacity:.45;cursor:not-allowed}
+.list{display:grid;gap:7px}
+.list article{border:1px solid #dde7ee;border-radius:7px;padding:11px 12px}
+.list strong,.list small{display:block;font-size:12px}
+.list small{margin-top:5px;font-size:10px;color:#7a91a5}
+.approval{display:grid;grid-template-columns:170px 1fr auto;gap:10px;align-items:end;margin-top:10px}
+@media(max-width:800px){.form{grid-template-columns:repeat(2,minmax(0,1fr))}.approval{grid-template-columns:1fr}.heading{flex-wrap:wrap}}
+@media(max-width:500px){.form{grid-template-columns:1fr}.panel{padding:12px}}
