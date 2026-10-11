@@ -34,3 +34,20 @@ TypeScript, ESLint, új UX contract, korábbi projekt/user admin release gate é
 Későbbi, külön engedélyezett DEV publikálás után valódi böngészős ellenőrzés szükséges a világos/sötét témákra és laptop méretekre, valamint keresés, sortolás, szűrők, lapozás, drawer és moduljogok helyes megjelenítésére. Oszlopok méretezése és oszlopláthatóság egy további jóváhagyható UX kör lehet.
 
 PROD DENY, az üzemi DEV változatlan.
+
+## BUILD01 ellenőrzött kiadásjelölt – 2026-10-11
+
+- Run: benjadmin-license-grid-v0947-b7f791586-20261011-build01-b1.
+- Forráscommit: b7f791586e620861d8d4a7ea82ee19c130eb7fdd.
+- Teljes Next.js 16.2.6 fordítás PASS, TypeScript PASS, 104/104 oldal, 274 standalone chunk ellenőrizve.
+- Build ID: pHGXJJupAHhRzGRaiGXot.
+- Artifact SHA-256: 4c2b5026b8bb134a264e53064310fff0d56f90d2c2b9cd4512baf2d195c3fbe3.
+- Artifact tényleges SHA, gateway státusz és build metadata megegyezik.
+- A standalone artifactban az új app/admin/licenckozpont/license-center.css jelen van, és a lefordított .next/static/chunks/*.css kimenetben a dimpro-license-center .benjadmin-data-workspace szabály ténylegesen megtalálható.
+- QA: új UX contract PASS, TypeScript PASS, ESLint PASS, 15/15 admin release gate PASS, 11/11 projektlicenc ACL API-guard PASS, személyeslicenc API guard PASS, 13/13 Drive license read PASS, mini app és Drop product contract PASS, 14/14 értesítési regressziós tesztcsoport PASS.
+- DEV disk ellenőrzés: 78 GiB, 71 GiB foglalt, 5.8 GiB szabad (93%). Nem történt DEV deploy, PM2 restart, auth DB migráció vagy PROD művelet.
+- A jelenlegi browser screenshot még nem az új UI-t mutatja. A valódi vizuális és működésbeli smoke csak a külön jóváhagyott DEV deployment után történhet.
+
+## Kiadási követelmény
+
+A kötelező következő lépés a license.dev.dimpro.hu jelenlegi CANONICAL runtime/service és annak release pipeline-jának beazonosítása. Csak az eredeti BENJADMIN admin host alkalmazásba szabad integrálni, új külön app nélkül. Nem deployolható vakon a Drive runtime-ra vagy másik porton új admin instance-ként. Kiépített rollback terv, változatlan ügyféllincenckészlet és böngészős smoke ellenőrzés kötelező.
