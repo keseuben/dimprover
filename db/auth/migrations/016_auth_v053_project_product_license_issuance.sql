@@ -27,6 +27,14 @@ DECLARE
   v_license_id uuid;
   v_prefix text;
 BEGIN
+  -- Both role isolation AND API release-gate are required. The ordinary app
+  -- role must not impersonate a SUPERADMIN merely by knowing a user UUID.
+  IF current_setting('role',true) NOT IN (
+    'dimpro_auth_migrator_dev','dimpro_auth_migrator_prod',
+    'dimpro_auth_license_operator_dev','dimpro_auth_license_operator_prod'
+  ) THEN
+    RAISE EXCEPTION 'AUTH_LICENSE_CALLER_ROLE_DENIED' USING ERRCODE='42501';
+  END IF;
   IF p_product_code NOT IN ('DRIVE','PROJECT_GATE') THEN
      RAISE EXCEPTION 'AUTH_LICENSE_PRODUCT_INVALID' USING ERRCODE='22023';
   END IF;
@@ -103,6 +111,12 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog
 AS $$
 DECLARE v_updated integer;
 BEGIN
+  IF current_setting('role',true) NOT IN (
+    'dimpro_auth_migrator_dev','dimpro_auth_migrator_prod',
+    'dimpro_auth_license_operator_dev','dimpro_auth_license_operator_prod'
+  ) THEN
+    RAISE EXCEPTION 'AUTH_LICENSE_CALLER_ROLE_DENIED' USING ERRCODE='42501';
+  END IF;
   IF length(btrim(coalesce(p_reason,'')))<12 OR length(btrim(p_reason))>500 THEN
     RAISE EXCEPTION 'AUTH_LICENSE_APPROVAL_REASON_REQUIRED' USING ERRCODE='22023';
   END IF;
@@ -125,17 +139,15 @@ END $$;
 
 REVOKE ALL ON FUNCTION public.auth_issue_project_product_license_pending(text,text,text,text,uuid,bigint,integer,uuid,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.auth_approve_project_product_license(uuid,uuid,timestamptz,text) FROM PUBLIC;
+-- SECURITY: the ordinary app role must NEVER be able to impersonate an
+-- operator by supplying someone else's SUPERADMIN UUID.
+-- Keep EXECUTE denied to PUBLIC and dimpro_auth_app_*.
+-- Future deployment requires a separate tightly scoped operator DB role,
+-- explicit identity binding and security review. DO NOT grant here.
 DO $$
-DECLARE app_role text;
 BEGIN
  IF current_user !~ '^dimpro_auth_migrator_(dev|prod)$' THEN
    RAISE EXCEPTION 'AUTH_LICENSE_MIGRATOR_ONLY' USING ERRCODE='42501';
  END IF;
- app_role:=regexp_replace(current_user,'_migrator_','_app_');
- IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=app_role) THEN
-   RAISE EXCEPTION 'AUTH_LICENSE_APP_ROLE_MISSING' USING ERRCODE='42501';
- END IF;
- EXECUTE format('GRANT EXECUTE ON FUNCTION public.auth_issue_project_product_license_pending(text,text,text,text,uuid,bigint,integer,uuid,text) TO %I',app_role);
- EXECUTE format('GRANT EXECUTE ON FUNCTION public.auth_approve_project_product_license(uuid,uuid,timestamptz,text) TO %I',app_role);
 END $$;
 COMMIT;

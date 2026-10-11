@@ -21,6 +21,9 @@ try{
  for(const filename of ["014_auth_v051_drive_project_licenses.sql","015_auth_v052_project_product_licenses.sql","016_auth_v053_project_product_license_issuance.sql"])
    await db.exec(readFileSync("db/auth/migrations/"+filename,"utf8"));
  await db.exec("RESET ROLE;SET ROLE dimpro_auth_app_dev;");
+ await assert.rejects(()=>callCreate("DRIVE",10737418240,admin),/CALLER_ROLE_DENIED|permission denied/i,
+   "ordinary app role may not issue even with admin UUID");
+ await db.exec("RESET ROLE;SET ROLE dimpro_auth_migrator_dev;");
  await assert.rejects(()=>callCreate("DRIVE",10737418240,user),/OPERATOR_UNAUTHORIZED/);
  await assert.rejects(()=>callCreate("PROJECT_GATE",1000),/QUOTA_INVALID/);
  await assert.rejects(()=>callCreate("DRIVE",0),/QUOTA_INVALID/);
@@ -43,9 +46,10 @@ try{
  r=await db.query("SELECT product_code,status,revision FROM public.auth_project_product_licenses ORDER BY product_code");
  assert.deepEqual(r.rows.map(row=>row.status),["PENDING_APPROVAL","ACTIVE"],"product licenses independent");
  assert.deepEqual(r.rows.map(row=>row.revision),[1,2]);
+ await db.exec("RESET ROLE;SET ROLE dimpro_auth_app_dev;");
  await assert.rejects(()=>db.query("SELECT * FROM public.auth_project_product_license_audit"),/permission denied/);
  await db.exec("RESET ROLE;");
  r=await db.query("SELECT operation FROM public.auth_project_product_license_audit ORDER BY id");
  assert.deepEqual(r.rows.map(row=>row.operation),["CREATE","CREATE","CHANGE"]);
- console.log("DIMPRO PROJECT DRIVE + PROJEKTKAPU ISSUANCE PGLITE 15/15 PASS");
+ console.log("DIMPRO PROJECT DRIVE + PROJEKTKAPU ISSUANCE PGLITE 16/16 PASS");
 }finally{await db.close();}
