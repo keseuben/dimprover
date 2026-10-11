@@ -57,6 +57,24 @@ A korábbi, még nem telepített AUTH migrációk 014–017 közül a projektlic
 - Az új, kizárólag a hitelesített fiókhoz tartozó API kereskedelmi státuszt ad vissza, nem tényleges termék-, hozzáférés- vagy tárhelyjogosultságot.
 - Részletes fejlesztési átadó: DIMPROVER_PRODUCT_DOCS/DIMPRO_LICENSE_V0944_PERSONAL_SCOPE_SOURCE_20261011.md.
 
+## V0.9.45 – önálló digitális segédappok
+
+Az elfogadott ötszintű DIMPRO struktúra és a közös DIMPRO Drive mellett külön **DIGITÁLIS SEGÉDAPP** termékcsoport létezik. Ez NEM hatodik építőipari/enterprise szint; az alkalmazások egyenként, az adott célcsoport számára értékesíthetők, függetlenül a többi termék előfizetésétől.
+
+| Segédapp | AUTH termékkód | Előzetes licencscope |
+| --- | --- | --- |
+| DIMPRO Árutér | DIMPRO_ARUTER | ORGANIZATION |
+| DIMPRO Felújítási Gyorskalkulátor | DIMPRO_FELUJITASI_GYORSKALKULATOR | USER, ORGANIZATION |
+| DIMPRO Ingatlanfelmérő | DIMPRO_INGATLANFELMERO | USER, ORGANIZATION |
+| DIMPRO Gazdasegéd | DIMPRO_GAZDASEGED | USER, ORGANIZATION |
+| DIMPRO ONE Egészség | DIMPRO_ONE_EGESZSEG | USER |
+
+A termékek a központi licenckatalógusban külön azonosítóval szerepelnek. A DIMPRO ONE Egészség a DIMPROONE családhoz kapcsolódik, de **nem azonos** a DIMPROONE főtermékkel, és a kapcsolata nem jelent kötelező másik előfizetést. A felhasználó egészségügyi rekordjai nem kerülnek a licencnyilvántartásba.
+
+V0.9.45 source-only implementáció: app/lib/license/dimproMiniAppCatalog.ts, db/auth/migrations/020_auth_v057_dimpro_mini_app_catalog.sql, components/license/MiniAppLicenseCatalog.tsx. Új termékek DISABLED státusszal; licencscope tervezet; kereskedelmi státusz PLANNED; automatikus entitlement false. Valós díj, fizetési/aktiválási adat, storage quota, AUTH grant, modullicenc és ügyfélfiók még nincs.
+
+A segédappok nem adhatnak egymásnak vagy a DIMPRO Drive-nak jogosultságot csupán a termékregisztráció alapján. Később bármely mini appnak lehetnek önálló éves/havi, esetleges tranzakcióalapú csomagjai, de azok és a valós scope-ok külön üzleti döntés tárgyai.
+
 ## Kötelező fejlesztési szabályok
 
 - Felhasználói jogosultság és fizetős előfizetés két külön dolog.
