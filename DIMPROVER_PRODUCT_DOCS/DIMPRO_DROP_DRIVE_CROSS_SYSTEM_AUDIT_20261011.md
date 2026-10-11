@@ -1,6 +1,6 @@
 # DIMPRO Drop + Drive – közös integrációs audit, 2026-10-11
 
-Scope: DEV/source-readonly audit; PROD DENY. Git baseline: 4d61f4733. 
+Scope: DEV/source-readonly audit; PROD DENY. Git baseline: 4d61f4733.
 No deployment, database change, file transfer, license change or PM2 restart.
 
 ## Verified current behavior
