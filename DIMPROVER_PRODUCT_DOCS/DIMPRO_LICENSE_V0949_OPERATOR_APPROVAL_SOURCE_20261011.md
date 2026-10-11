@@ -84,3 +84,19 @@ Fájl: db/auth/migrations/022_auth_v059_license_operator_approval_review.sql.
 5. Végső PROD licencaktiváló motor, új release és önálló jóváhagyás, nem automatikusan.
 
 Nincs fizikai szervermódosítás, adatbázis-migráció vagy deploy; PROD DENY.
+
+## BUILD01 végleges, ellenőrzött eredmény – 2026-10-11
+
+- Run: benjadmin-license-operator-v0949-af7539fe4-20261011-build01-b1
+- Hiteles forráscommit: af7539fe4068096d4b0d47dd5bf2a000faad7966
+- BUILD01 állapot: PASS, Next.js 16.2.6, TypeScript PASS, 104/104 oldal, 274 standalone statikus chunk ellenőrizve.
+- Build ID: uLSrgO4KW0L2vFOZ4zj7C
+- Artifact SHA-256: 7e862c2909b4f9ada75a02188cf8f52ff8c3c03850f54e446c640cffb7be6dd4
+- A tényleges build-artifact.tar.gz SHA-256, a build gateway státusz és a metadata ellenőrzőösszege megegyezik.
+- A csomag tartalmazza a LicenseOperatorReviewOverview.tsx / CSS modul, az app/lib/license/licenseOperatorPolicy.ts és a db/auth/migrations/022_auth_v059_license_operator_approval_review.sql fájlokat. A lefordított CSS chunkokban az új licencoperátori UI stílusai szintén jelen vannak.
+- Regresszió: 18/18 szerződéses tesztcsoport, 7/7 izolált PostgreSQL/PGlite tesztcsoport, 14/14 Drive értesítési tesztcsoport, TypeScript és célzott ESLint PASS.
+- A BUILD01 infrastruktúra-összesítő útvonalához tartozó régi fordítói figyelmeztetés nem akadályozta meg a build PASS eredményét.
+- DEV root lemez read-only ellenőrzése a záráskor: 118 GiB, 117 GiB használt, kb. 911 MiB szabad, df szerint 100% kihasználtság. DEV Licencközpont HTTP 200; a régi kiadás fut.
+- Sem DEV vagy PROD runtime telepítés, PM2 restart, Nginx módosítás, sem valós AUTH vagy Drop licencadatbázis-migráció, SMTP vagy ügyféllicenc-módosítás nem történt. PROD DENY.
+
+**Biztonsági figyelmeztetés**: a ROLE/PERMISSION katalógus és SQL queue jelenleg forrás + izolált adatbázisteszt. Nem hoztunk létre a felhasználónak vagy másnak valós AUTH operátori szerepkört, és a UI interaktív jóváhagyási szimulációja nem hiteles operátori felület. A valós DEV/PROD adatforrás-szeparáció még nem bizonyított. A V0.9.48-as fail-closed legacy írásvédelem aktiválása beavatkozhatna a régi, jelenleg működő adminisztrációs folyamatokba, ezért deploymenthez külön host/szolgáltatás és rollback tervezés szükséges.
