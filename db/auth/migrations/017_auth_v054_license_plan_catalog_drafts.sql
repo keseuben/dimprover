@@ -75,21 +75,29 @@ CREATE TRIGGER auth_license_plan_catalog_delete_trg
   BEFORE DELETE ON public.auth_license_plan_catalog
   FOR EACH ROW EXECUTE FUNCTION public.auth_audit_plan_catalog();
 
--- The nine suggested packages are all DRAFT, unpublished, without prices.
+-- User-selected storage variants: 7 PERSONAL + 7 PROJECT, plus 3 PROJECT_GATE packages = 17 DRAFT.
 -- No records are inserted into auth_project_product_licenses.
 INSERT INTO public.auth_license_plan_catalog(
   product_code,license_scope,plan_code,display_name,description,
   storage_quota_bytes,max_members,proposed_features
 ) VALUES
-('DRIVE','PERSONAL','DRIVE_PERSONAL_START','Saját Drive Start','Javaslat – személyes',5::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
-('DRIVE','PERSONAL','DRIVE_PERSONAL_PLUS','Saját Drive Plus','Javaslat – személyes',25::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD","FILE_HISTORY"]'::jsonb),
-('DRIVE','PERSONAL','DRIVE_PERSONAL_PRO','Saját Drive Pro','Javaslat – személyes',100::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD","FILE_HISTORY","DESKTOP_SYNC_CANDIDATE"]'::jsonb),
-('DRIVE','PROJECT','DRIVE_PROJECT_START','Projekt Drive Start','Javaslat – projekttár',25::bigint*1073741824,10,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
-('DRIVE','PROJECT','DRIVE_PROJECT_TEAM','Projekt Drive Team','Javaslat – projekttár',100::bigint*1073741824,25,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL","EXTERNAL_PARTNERS_CANDIDATE"]'::jsonb),
-('DRIVE','PROJECT','DRIVE_PROJECT_ENTERPRISE','Projekt Drive Enterprise','Javaslat – projekttár',500::bigint*1073741824,100,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL","AUDIT_CANDIDATE","EXTERNAL_PARTNERS_CANDIDATE"]'::jsonb),
-('PROJECT_GATE','PROJECT','GATE_PROJECT_BASIC','Projektkapu Alap','Javaslat – projektkezelés',NULL,10,'["PROJECT_OVERVIEW","PROJECT_MEMBERS"]'::jsonb),
-('PROJECT_GATE','PROJECT','GATE_PROJECT_PRO','Projektkapu Pro','Javaslat – projektkezelés',NULL,25,'["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE"]'::jsonb),
-('PROJECT_GATE','PROJECT','GATE_PROJECT_ENTERPRISE','Projektkapu Enterprise','Javaslat – projektkezelés',NULL,100,'["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE","REPORTS_CANDIDATE"]'::jsonb);
+('DRIVE','PERSONAL','DRIVE_PERSONAL_START','Saját Drive · 5 GiB','Személyes dokumentumtár',5::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_10G','Saját Drive · 10 GiB','Személyes dokumentumtár',10::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_PLUS','Saját Drive · 25 GiB','Személyes dokumentumtár',25::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_50G','Saját Drive · 50 GiB','Személyes dokumentumtár',50::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_PRO','Saját Drive · 100 GiB','Személyes dokumentumtár',100::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_250G','Saját Drive · 250 GiB','Személyes dokumentumtár',250::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PERSONAL','DRIVE_PERSONAL_500G','Saját Drive · 500 GiB','Személyes dokumentumtár',500::bigint*1073741824,1,'["PERSONAL_FILES","MANUAL_UPLOAD"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_5G','Projekt Drive · 5 GiB','Közös projektfájlok, verziók és külsős résztvevők',5::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_10G','Projekt Drive · 10 GiB','Közös projektfájlok, verziók és külsős résztvevők',10::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_START','Projekt Drive · 25 GiB','Közös projektfájlok, verziók és külsős résztvevők',25::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_50G','Projekt Drive · 50 GiB','Közös projektfájlok, verziók és külsős résztvevők',50::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_TEAM','Projekt Drive · 100 GiB','Közös projektfájlok, verziók és külsős résztvevők',100::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_250G','Projekt Drive · 250 GiB','Közös projektfájlok, verziók és külsős résztvevők',250::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('DRIVE','PROJECT','DRIVE_PROJECT_ENTERPRISE','Projekt Drive · 500 GiB','Közös projektfájlok, verziók és külsős résztvevők',500::bigint*1073741824,NULL,'["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"]'::jsonb),
+('PROJECT_GATE','PROJECT','GATE_PROJECT_BASIC','Projektkapu Alap','Projektirányítás, modulok és munkafolyamatok – alap',NULL,10,'["PROJECT_OVERVIEW","PROJECT_MEMBERS"]'::jsonb),
+('PROJECT_GATE','PROJECT','GATE_PROJECT_PRO','Projektkapu Pro','Projektirányítás, modulok és munkafolyamatok – Pro',NULL,25,'["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE"]'::jsonb),
+('PROJECT_GATE','PROJECT','GATE_PROJECT_ENTERPRISE','Projektkapu Enterprise','Projektirányítás, modulok és munkafolyamatok – Enterprise',NULL,100,'["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE","REPORTS_CANDIDATE"]'::jsonb);
 
 REVOKE ALL ON public.auth_license_plan_catalog FROM PUBLIC;
 REVOKE ALL ON public.auth_license_plan_catalog_audit FROM PUBLIC;

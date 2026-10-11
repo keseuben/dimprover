@@ -30,26 +30,41 @@ const featureLabels:Record<string,string>={
 };
 export default function PlanDraftCatalogue(){
   const [groupId,setGroupId]=useState("own");
+  const [selectedStorageGiB,setSelectedStorageGiB]=useState(5);
   const selected=groups.find(group=>group.id===groupId)||groups[0];
   const plans=useMemo(()=>INITIAL_LICENSE_PLAN_DRAFTS.filter(
     plan=>plan.productCode===selected.product&&plan.scope===selected.scope),
     [selected.product,selected.scope]);
+  const visiblePlans=selected.product==="DRIVE"
+    ? plans.filter(plan=>plan.proposedStorageGiB===selectedStorageGiB)
+    : plans;
   return <section className={styles.wrapper} aria-label="Előkészített DIMPRO csomagjavaslatok">
     <div className={styles.header}>
       <div>
         <h2><Database size={18}/> DIMPRO csomagkatalógus – tervezetek</h2>
-        <p>A méretek és a szolgáltatások döntési javaslatok. A csomagok nem publikusak, nincs hozzájuk ár és nem módosítják a működő tárhelyeket.</p>
+        <p>A Saját Drive és a Projekt Drive egyaránt hét választható tárhelyméretet kapott. A tárhelyválasztás nem határozza meg automatikusan a funkciókat vagy a résztvevők számát. Az árak még nincsenek meghatározva.</p>
       </div>
       <span className={styles.draft}><LockKeyhole size={14}/> Nem aktivált</span>
     </div>
     <div className={styles.switch} role="group" aria-label="Csomagtípus választása">
       {groups.map(group=><button type="button" key={group.id}
-        onClick={()=>setGroupId(group.id)}
+        onClick={()=>{setGroupId(group.id);setSelectedStorageGiB(5);}}
         aria-pressed={group.id===groupId}
         className={group.id===groupId?styles.active:""}>{group.title}</button>)}
     </div>
-    <div className={styles.plans}>
-      {plans.map(plan=><article className={styles.plan} key={plan.planCode}>
+    {selected.product==="DRIVE"&&<div className={styles.capacityChooser}>
+      <span>Tárhelyméret · GiB</span>
+      <div className={styles.capacityOptions} role="group" aria-label="Javasolt tárhelyméret">
+        {plans.map(plan=><button key={plan.planCode} type="button"
+          aria-pressed={selectedStorageGiB===plan.proposedStorageGiB}
+          className={selectedStorageGiB===plan.proposedStorageGiB?styles.capacityActive:""}
+          onClick={()=>setSelectedStorageGiB(plan.proposedStorageGiB!)}>
+          {plan.proposedStorageGiB} GiB
+        </button>)}
+      </div>
+    </div>}
+    <div className={styles.plans} data-single={selected.product==="DRIVE"?"true":"false"}>
+      {visiblePlans.map(plan=><article className={styles.plan} key={plan.planCode}>
         <div className={styles.planTop}>
           <strong>{plan.label}</strong>
           <span>TERVEZET</span>
@@ -60,7 +75,7 @@ export default function PlanDraftCatalogue(){
           <small>{plan.proposedStorageGiB===null?"Projektkapu funkciócsomag":"Tervezett tárhelyméret"}</small>
         </div>
         <div className={styles.detail}>
-          <span>Résztvevői keret</span><strong>{plan.proposedMemberLimit??"Egyedi"}</strong>
+          <span>Résztvevői keret</span><strong>{plan.proposedMemberLimit??"Még nincs meghatározva"}</strong>
         </div>
         <div className={styles.detail}>
           <span>Havidíj / éves díj</span><strong>Még nincs meghatározva</strong>
@@ -68,6 +83,7 @@ export default function PlanDraftCatalogue(){
         <div className={styles.features}>
           {plan.proposedFeatureCodes.map(feature=><span key={feature}>{featureLabels[feature]||feature}</span>)}
         </div>
+        <small className={styles.proposalDisclaimer}>A fenti funkciók és résztvevői keretek csak előzetes javaslatok; a tárhelyméret önmagában nem ad további moduljogosultságot.</small>
         <code>{plan.planCode}</code>
       </article>)}
     </div>

@@ -23,42 +23,61 @@ export type LicensePlanDraft = {
   published: false;
 };
 
-/** Draft figures: proposed only; can be changed before approval, no fixed pricing. */
+/**
+ * User-approved capacity choices (GiB), 2026-10-11.
+ * Storage tier != feature tier, seat entitlement or commercial price.
+ * Labels/features/seats remain PROPOSALS, to be approved independently.
+ */
+export const USER_SELECTED_DRIVE_SIZES_GIB = [5,10,25,50,100,250,500] as const;
+
+/** Keep existing V0.9.39 identifiers stable for source compatibility. */
+const personalTierCodes: readonly [number,string][] = [
+  [5,"DRIVE_PERSONAL_START"],[10,"DRIVE_PERSONAL_10G"],
+  [25,"DRIVE_PERSONAL_PLUS"],[50,"DRIVE_PERSONAL_50G"],
+  [100,"DRIVE_PERSONAL_PRO"],[250,"DRIVE_PERSONAL_250G"],
+  [500,"DRIVE_PERSONAL_500G"],
+];
+const projectTierCodes: readonly [number,string][] = [
+  [5,"DRIVE_PROJECT_5G"],[10,"DRIVE_PROJECT_10G"],
+  [25,"DRIVE_PROJECT_START"],[50,"DRIVE_PROJECT_50G"],
+  [100,"DRIVE_PROJECT_TEAM"],[250,"DRIVE_PROJECT_250G"],
+  [500,"DRIVE_PROJECT_ENTERPRISE"],
+];
+
+function draftDriveTiers(
+  scope: "PERSONAL" | "PROJECT",
+  tiers: readonly [number,string][],
+): LicensePlanDraft[] {
+  const isPersonal=scope==="PERSONAL";
+  return tiers.map(([gib,code])=>({
+    planCode:code,productCode:"DRIVE",scope,
+    label:(isPersonal?"Saját Drive":"Projekt Drive")+" · "+gib+" GiB",
+    description:isPersonal?"Személyes dokumentumtár":"Közös projektfájlok, verziók és külsős résztvevők",
+    proposedStorageGiB:gib,
+    // Project seats are a separate commercial decision; never infer seats from GiB.
+    proposedMemberLimit:isPersonal?1:null,
+    // Identical baseline functionality for all capacities. Advanced features
+    // and user seats are licensed separately, not automatically from GiB.
+    proposedFeatureCodes:isPersonal
+      ? ["PERSONAL_FILES","MANUAL_UPLOAD"]
+      : ["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"],
+    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false,
+  }));
+}
+
 export const INITIAL_LICENSE_PLAN_DRAFTS: readonly LicensePlanDraft[] = [
-  {planCode:"DRIVE_PERSONAL_START",productCode:"DRIVE",scope:"PERSONAL",
-    label:"Saját Drive Start",description:"Kisebb személyes dokumentumtár",
-    proposedStorageGiB:5,proposedMemberLimit:1,proposedFeatureCodes:["PERSONAL_FILES","MANUAL_UPLOAD"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
-  {planCode:"DRIVE_PERSONAL_PLUS",productCode:"DRIVE",scope:"PERSONAL",
-    label:"Saját Drive Plus",description:"Rendszeres saját műszaki dokumentumkezelés",
-    proposedStorageGiB:25,proposedMemberLimit:1,proposedFeatureCodes:["PERSONAL_FILES","MANUAL_UPLOAD","FILE_HISTORY"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
-  {planCode:"DRIVE_PERSONAL_PRO",productCode:"DRIVE",scope:"PERSONAL",
-    label:"Saját Drive Pro",description:"Nagyobb, személyes szakmai fájltér",
-    proposedStorageGiB:100,proposedMemberLimit:1,proposedFeatureCodes:["PERSONAL_FILES","MANUAL_UPLOAD","FILE_HISTORY","DESKTOP_SYNC_CANDIDATE"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
-  {planCode:"DRIVE_PROJECT_START",productCode:"DRIVE",scope:"PROJECT",
-    label:"Projekt Drive Start",description:"Kisebb projekt közös műszaki fájltára",
-    proposedStorageGiB:25,proposedMemberLimit:10,proposedFeatureCodes:["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
-  {planCode:"DRIVE_PROJECT_TEAM",productCode:"DRIVE",scope:"PROJECT",
-    label:"Projekt Drive Team",description:"Több szakági szereplős projekt",
-    proposedStorageGiB:100,proposedMemberLimit:25,proposedFeatureCodes:["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL","EXTERNAL_PARTNERS_CANDIDATE"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
-  {planCode:"DRIVE_PROJECT_ENTERPRISE",productCode:"DRIVE",scope:"PROJECT",
-    label:"Projekt Drive Enterprise",description:"Nagy, sok résztvevős beruházás",
-    proposedStorageGiB:500,proposedMemberLimit:100,proposedFeatureCodes:["PROJECT_FILES","FILE_HISTORY","PROJECT_ACL","AUDIT_CANDIDATE","EXTERNAL_PARTNERS_CANDIDATE"],
-    proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
+  ...draftDriveTiers("PERSONAL",personalTierCodes),
+  ...draftDriveTiers("PROJECT",projectTierCodes),
   {planCode:"GATE_PROJECT_BASIC",productCode:"PROJECT_GATE",scope:"PROJECT",
-    label:"Projektkapu Alap",description:"Projektáttekintés és alapmunkafolyamatok",
+    label:"Projektkapu Alap",description:"Projektirányítás, modulok és munkafolyamatok – alap",
     proposedStorageGiB:null,proposedMemberLimit:10,proposedFeatureCodes:["PROJECT_OVERVIEW","PROJECT_MEMBERS"],
     proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
   {planCode:"GATE_PROJECT_PRO",productCode:"PROJECT_GATE",scope:"PROJECT",
-    label:"Projektkapu Pro",description:"Kiterjesztett projektmunkafolyamatok",
+    label:"Projektkapu Pro",description:"Projektirányítás, modulok és munkafolyamatok – Pro",
     proposedStorageGiB:null,proposedMemberLimit:25,proposedFeatureCodes:["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE"],
     proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
   {planCode:"GATE_PROJECT_ENTERPRISE",productCode:"PROJECT_GATE",scope:"PROJECT",
-    label:"Projektkapu Enterprise",description:"Nagyobb projekt és bővített modulkeretek",
+    label:"Projektkapu Enterprise",description:"Projektirányítás, modulok és munkafolyamatok – Enterprise",
     proposedStorageGiB:null,proposedMemberLimit:100,proposedFeatureCodes:["PROJECT_OVERVIEW","PROJECT_MEMBERS","DIALOG_CANDIDATE","DECIDE_CANDIDATE","REPORTS_CANDIDATE"],
     proposedMonthlyPriceHuf:null,proposedAnnualPriceHuf:null,status:"DRAFT",published:false},
 ] as const;
