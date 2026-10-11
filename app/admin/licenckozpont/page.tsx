@@ -9,6 +9,7 @@ import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimpro
 import OrganizationLicenseMembers from "@/components/license/OrganizationLicenseMembers";
 import ProjectProductLicensesAdmin from "@/components/license/ProjectProductLicensesAdmin";
 import PlanDraftCatalogue from "@/components/license/PlanDraftCatalogue";
+import PricingProposalWorkshop from "@/components/license/PricingProposalWorkshop";
 import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 
 type User = { id: string; public_user_code: string; full_name: string; email: string; status: string; email_verified_at: string | null };
@@ -849,6 +850,7 @@ export default function DimproLicenseCenterPage() {
 
       <ProjectProductLicensesAdmin adminKey={adminKey}/>
       <PlanDraftCatalogue/>
+      <PricingProposalWorkshop/>
 
       {expiryReminderOpen ? <button className="benjadmin-data-drawer-backdrop" type="button" aria-label="Lejárati értesítések bezárása" onClick={() => setExpiryReminderOpen(false)} /> : null}
       {expiryReminderOpen ? (
