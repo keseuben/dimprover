@@ -349,6 +349,11 @@ export function DimproAppOtpLogin({ showDriveRegistration = false }: { showDrive
                       placeholder="nev@ceg.hu"
                       className="w-full bg-transparent text-base text-slate-950 outline-none placeholder:text-slate-400"
                       autoComplete="email"
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                        event.preventDefault();
+                        if (canSendCode) void sendCode();
+                      }}
                       disabled={loading}
                     />
                     {codeSent ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : null}

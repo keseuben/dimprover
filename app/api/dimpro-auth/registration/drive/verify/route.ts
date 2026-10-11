@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 import { verifyDriveRegistration } from "@/app/lib/dimpro-auth/drive-registration";
+import { deliverDriveRegistrationOperatorNotice } from "@/app/lib/dimpro-auth/drive-registration-operator";
 import { recordAuthAuditEvent } from "@/app/lib/dimpro-auth/repository";
 import { getDimproAuthRequestIp, getDimproAuthUserAgent, isValidDimproAuthEmail, newDimproAuthCorrelationId, normalizeDimproAuthEmail, validateSameOriginMutation } from "@/app/lib/dimpro-auth/security";
 import { DimproAuthError } from "@/app/lib/dimpro-auth/types";
@@ -20,6 +21,12 @@ export async function POST(request: NextRequest){
   try{
     const result=await verifyDriveRegistration({registrationId,email,code,ip:getDimproAuthRequestIp(request.headers),userAgent:getDimproAuthUserAgent(request.headers),correlationId});
     await recordAuthAuditEvent({eventType:"DRIVE_REGISTRATION_EMAIL_VERIFIED",userId:result.userId,email,method:"EMAIL_OTP",result:"SUCCESS",ip:getDimproAuthRequestIp(request.headers),userAgent:getDimproAuthUserAgent(request.headers),correlationId,metadata:{registrationId:result.registrationId,status:result.status}});
+    // A migration creates a durable, unique operator notice within the OTP transaction.
+    // Delivery is additionally hard-disabled until explicit email configuration and release.
+    after(async()=>{
+      try{await deliverDriveRegistrationOperatorNotice(result.registrationId);}
+      catch{console.error("AUTH_DRIVE_OPERATOR_NOTICE_DISPATCH_UNAVAILABLE",correlationId);}
+    });
     return NextResponse.json({ok:true,status:result.status,message:"Az e-mail-cím igazolva. A Saját Drive aktiválása jogosultság/licenc jóváhagyás után történik.",correlationId},{headers:{"cache-control":"no-store"}});
   }catch(error){
     if(error instanceof DimproAuthError) return NextResponse.json({ok:false,error:error.code,message:error.publicMessage,correlationId},{status:error.status,headers:{"cache-control":"no-store"}});
