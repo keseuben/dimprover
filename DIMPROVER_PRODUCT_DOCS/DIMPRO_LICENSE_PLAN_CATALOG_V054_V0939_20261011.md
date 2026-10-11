@@ -58,3 +58,16 @@ Ezek sem valódi csomagok, sem ajánlatok, sem a jelenlegi Drive-tárhelykonfigu
 ## Kiadásvédelmi szabály
 
 A csomagok végleges, díjakkal ellátott jóváhagyásáig nem jelennek meg publikus vásárlási ajánlatként, és nem érvényesülnek a Drive/Projektkapu runtime hozzáférésben vagy tárolásban. Az eddigi felhasználóknál semmilyen automatikus kvótacsökkentés/törlés nem engedélyezett.
+
+## BUILD01 VERIFIED – 2026-10-11
+
+- Run: license-plans-v0939-1d004e2f6-20261011-build01-b1
+- Source commit: 1d004e2f64252d93e46d01bdcb3994a0477089dc
+- BUILD01 full Next.js build: **PASS**, 104/104 oldal, TypeScript és 274 standalone chunk PASS.
+- Build ID: heCinRFFKi5dfR5UapfC8
+- Artifact SHA-256: e102bbcd83f476fbaf8744cdf304d81c417d9a1039c36151e1463d81f1fda893
+- Kész artifact: ~92 MiB, a metaadat, gateway státusz és fizikailag olvasott artifact SHA-256 értéke egyezik.
+- /admin/licenckozpont része az elkészült buildnek.
+- QA: 14/14 Drive értesítési tesztcsoport PASS, 22/22 csomagkatalógus forráscontract PASS, 14/14 izolált PostgreSQL katalógusteszt PASS, 16/16 operator-isolation licenckiadás PostgreSQL PASS, 15/15 admin release gate PASS, régi Drive és Projektkapu license contractok PASS.
+- DEV aktuális szabad tárhely 1.8 GiB (99% foglaltság), ezért nem telepítettünk és semmilyen élő adatbázismigráció sem történt.
+- Nincs ár vagy active package; a meglévő személyes/project quota nem változott. PROD DENY.
