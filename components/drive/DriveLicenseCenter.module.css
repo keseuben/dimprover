@@ -1,0 +1,69 @@
+.surface { min-height:100vh; background:#f3f7fb; color:#17334c; font-family:var(--dimpro-font-ui,Inter,Arial,sans-serif); }
+.topline { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px clamp(16px,3vw,40px); background:#071e35; color:white; }
+.back,.brand { display:inline-flex; align-items:center; gap:9px; font-size:13px; color:#e6f6ff; text-decoration:none; font-weight:700; }
+.back:hover { color:#63d8df; }
+.brand { color:#b8e2e9; }
+.container { max-width:1180px; margin:0 auto; padding:clamp(15px,3vw,35px); }
+.intro { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:20px; }
+.eyebrow { display:block; color:#148d96; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+.intro h1 { margin:5px 0 7px; display:flex; gap:11px; align-items:center; color:#102f4b; font-size:clamp(19px,2.2vw,28px); }
+.intro h1 svg { color:#0d8891; }
+.intro p { margin:0; color:#617991; font-size:13px; max-width:650px; line-height:1.5; }
+.refresh { display:inline-flex; gap:8px; align-items:center; padding:9px 12px; background:white; border:1px solid #cfdee9; color:#315a77; font-size:12px; border-radius:7px; cursor:pointer; white-space:nowrap; }
+.refresh:hover { background:#edf8fa; }
+.refresh:disabled { opacity:.55; cursor:wait; }
+.state,.error { display:flex; align-items:center; gap:10px; padding:22px; background:white; color:#42617c; border:1px solid #dce7ef; border-radius:9px; }
+.error { color:#8b3234; border-color:#efcdcf; }
+.error button { border:0; color:#0d7795; cursor:pointer; background:transparent; font-weight:700; }
+.spin { animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin-bottom:16px; }
+.metrics article,.panel { padding:17px; border:1px solid #dbe7f1; background:white; border-radius:9px; box-shadow:0 2px 8px #12355308; }
+.metrics article { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.metrics article > span { display:flex; align-items:center; gap:6px; color:#527188; font-size:11px; font-weight:700; }
+.metrics article > span svg { color:#0b8b92; }
+.metrics article > strong { font-size:clamp(15px,1.5vw,19px); color:#193951; overflow-wrap:anywhere; }
+.metrics article > small { font-size:10px; color:#7a90a4; }
+.columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-bottom:16px; }
+.panel { margin-bottom:16px; min-width:0; }
+.columns .panel { margin-bottom:0; }
+.panel h2 { display:flex; align-items:center; gap:8px; margin:0 0 15px; font-size:15px; color:#1a3e5d; }
+.panel h2 svg { color:#118994; }
+.dataRows { margin:0; }
+.dataRows div { display:flex; justify-content:space-between; gap:15px; padding:10px 0; border-bottom:1px solid #edf1f5; font-size:12px; }
+.dataRows dt { color:#678097; }
+.dataRows dd { margin:0; font-weight:800; text-align:right; overflow-wrap:anywhere; }
+.neutralNotice { display:flex; gap:10px; padding:12px; background:#f3fafb; color:#23646c; border:1px solid #cce7e8; border-radius:7px; margin:3px 0 12px; }
+.neutralNotice > svg { flex-shrink:0; }
+.neutralNotice strong { display:block; font-size:12px; margin-bottom:5px; }
+.neutralNotice small { display:block; font-size:11px; line-height:1.5; }
+.secondaryLink { display:inline-flex; gap:8px; align-items:center; text-decoration:none; color:#0b777c; font-size:12px; font-weight:800; border:1px solid #a8d3d2; border-radius:7px; padding:9px 11px; background:#f3fcfb; margin-top:13px; }
+.secondaryLink:hover { background:#e1f7f4; }
+.scopePicker { display:flex; gap:12px; align-items:center; font-size:12px; font-weight:700; color:#527087; }
+.scopePicker select { flex:1; min-width:0; max-width:550px; border:1px solid #c9deea; border-radius:7px; background:white; color:#17334c; padding:9px 12px; }
+.quota { margin:18px 0 3px; }
+.quotaMain { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin-bottom:11px; }
+.quotaMain strong { font-size:24px; color:#123952; }
+.quotaMain span { color:#758da0; font-size:12px; }
+.quotaMain b { margin-left:auto; color:#0b848b; }
+.progress { height:10px; overflow:hidden; background:#e3eef4; border-radius:7px; }
+.progress div { height:100%; background:linear-gradient(90deg,#0f85ae,#0ca693); border-radius:7px; }
+.quotaDetails { display:flex; flex-wrap:wrap; gap:10px 20px; margin-top:12px; font-size:11px; color:#6e8498; }
+.quotaDetails strong { color:#284962; }
+.projectList,.grantList { border:1px solid #e4edf4; border-radius:7px; overflow:hidden; }
+.projectList > div,.grant { display:flex; align-items:center; gap:11px; padding:11px 12px; border-bottom:1px solid #edf2f5; font-size:12px; }
+.projectList > div:last-child,.grant:last-child { border-bottom:0; }
+.projectList svg,.grant svg { flex-shrink:0; color:#268e97; }
+.projectList span,.grant span { flex:1; min-width:0; }
+.projectList span strong,.grant span strong { display:block; color:#2a4963; }
+.projectList span small,.grant span small { display:block; margin-top:4px; font-size:10px; color:#8395a4; }
+.projectList b { color:#506983; font-size:10px; }
+.grantDate { font-size:10px; color:#7891a3; text-align:right; }
+.grant b { padding:4px 7px; border-radius:5px; background:#edf2f5; color:#546779; font-size:10px; white-space:nowrap; }
+.grant b[data-status="ACTIVE"] { background:#e7f7ee; color:#196c4f; }
+.grant b[data-status="REVOKED"],.grant b[data-status="EXPIRED"] { background:#faeded; color:#984648; }
+.muted,.helper { color:#788c9d; font-size:12px; line-height:1.5; }
+.helper { margin-bottom:0; font-size:11px; }
+.footer { display:flex; align-items:center; gap:8px; padding:10px 0 22px; color:#7890a1; font-size:11px; }
+@media(max-width:850px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .columns { grid-template-columns:1fr; } }
+@media(max-width:520px) { .intro { align-items:flex-start; flex-direction:column; } .metrics { gap:8px; } .metrics article { padding:11px; } .dataRows div { flex-direction:column; gap:3px; } .dataRows dd { text-align:left; } .grant { flex-wrap:wrap; } .grantDate { flex-basis:100%; text-align:left; padding-left:27px; } .topline { padding:11px 15px; } .container { padding:14px; } }

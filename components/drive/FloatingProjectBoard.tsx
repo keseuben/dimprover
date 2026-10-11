@@ -17,6 +17,7 @@ import {
   Sun,
   Plus,
   Settings,
+  BadgeCheck,
   Star,
 } from "lucide-react";
 import { DRIVE_VERSION_DISPLAY, type DriveNavigationTarget } from "./driveBuildInfo";
@@ -291,6 +292,7 @@ export default function FloatingProjectBoard({
         </div>
         <div className={styles.boardNav}>
           <button type="button" onClick={onOpenHelp}><HelpCircle size={16} /> Súgó</button>
+          <Link href="/drive/licenc" title="Drive licenc, hozzáférések és tárhelykeretek"><BadgeCheck size={16} /> Licenc és előfizetés</Link>
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>
 
@@ -300,7 +302,7 @@ export default function FloatingProjectBoard({
               <div className={styles.storageBarFill} style={{ width: `${storagePercent}%` }} />
             </div>
             {storageError ? <div className={styles.storageError}>{storageError}</div> : null}
-            <button type="button" className={styles.storageButton}>Tárhely bővítése</button>
+            <Link href="/drive/licenc" className={styles.storageButton} title="Tárhely és előfizetés áttekintése, bővítési lehetőségek">Tárhely / licenc</Link>
           </div>
       </div>
     </aside>

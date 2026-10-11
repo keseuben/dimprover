@@ -3,6 +3,8 @@ import { authQuery } from "./db";
 import { sendDimproMail } from "@/app/lib/license/mail-profiles";
 import { recordAuthAuditEvent } from "./repository";
 
+// BenjAdmin-approved operational inbox. Hard release gate still blocks all mail.
+export const APPROVED_DRIVE_OPERATOR_EMAIL = "admin@dimpro.hu";
 // SAFETY RELEASE GATE: no real outbound notifications until explicit release approval.
 const DRIVE_OPERATOR_MAIL_RELEASED: boolean = false;
 
@@ -22,7 +24,7 @@ export function registrationOperatorRecipients(raw:string|undefined): string[] {
 export function isDriveOperatorMailEnabled() {
   return DRIVE_OPERATOR_MAIL_RELEASED
     && process.env.DIMPRO_AUTH_DRIVE_OPERATOR_NOTIFY_ENABLED==="true"
-    && registrationOperatorRecipients(process.env.DIMPRO_AUTH_DRIVE_OPERATOR_TO).length>0;
+    && registrationOperatorRecipients(process.env.DIMPRO_AUTH_DRIVE_OPERATOR_TO ?? APPROVED_DRIVE_OPERATOR_EMAIL).length>0;
 }
 
 export function authorizeDriveRegistrationOperator(headers:Headers):boolean {
@@ -70,7 +72,7 @@ export async function deliverDriveRegistrationOperatorNotice(registrationId:stri
   if(!isDriveOperatorMailEnabled()) return "DISABLED";
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(registrationId))
     return "UNAVAILABLE";
-  const recipients=registrationOperatorRecipients(process.env.DIMPRO_AUTH_DRIVE_OPERATOR_TO);
+  const recipients=registrationOperatorRecipients(process.env.DIMPRO_AUTH_DRIVE_OPERATOR_TO ?? APPROVED_DRIVE_OPERATOR_EMAIL);
   const claimed=await authQuery<Claimed>(
     "SELECT * FROM public.auth_claim_drive_registration_operator_notice($1::uuid)",[registrationId]);
   const row=claimed.rows[0];

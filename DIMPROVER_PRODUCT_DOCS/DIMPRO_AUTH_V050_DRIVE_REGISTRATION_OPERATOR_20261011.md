@@ -36,3 +36,11 @@ A V0.4.0 regisztrációs forrásban még nem volt üzemeltetői e-mail-értesít
 - További védelmi unit: scripts/tests/auth-drive-registration-operator-gate.mjs, 11/11 PASS. Vizsgálja a hard OFF tiltást, címzettvalidációt, XSS HTML escape-t és a védett operator kulcsot.
 - DEV tárhely továbbra is 99%, 2,2 GiB szabad; build/deploy DEV-en tiltva a külön kapu-jóváhagyásig.
 - A regisztrációs üzemeltetői email címzett és az admin felület véglegesítése külön emberi jóváhagyást igényel.
+
+
+## 2026-10-11: jóváhagyott üzemeltetői címzett
+
+- Az admin@dimpro.hu a jóváhagyott elsődleges üzemeltetői email cím; ez a forrás alapértelmezett címzettje.
+- A forrás-szintű DRIVE_OPERATOR_MAIL_RELEASED=false változatlan, ezért SEMMILYEN automatikus küldés nem indul.
+- A DIMPRO_AUTH_DRIVE_OPERATOR_NOTIFY_ENABLED külön kapcsoló és a kiadási jóváhagyás később is kötelező.
+- Sem DB migráció, sem SMTP aktiválás, sem szerver deploy nem történt.
