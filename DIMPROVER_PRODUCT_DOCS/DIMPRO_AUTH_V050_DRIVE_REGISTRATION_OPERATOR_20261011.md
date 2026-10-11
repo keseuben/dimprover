@@ -24,3 +24,15 @@ A V0.4.0 regisztrációs forrásban még nem volt üzemeltetői e-mail-értesít
 - Az AUTH DB migráció csak külön DBA jóváhagyással, később; PROD DENY.
 - 18/18 izolált PostgreSQL próbateszt: sor-létrejötte, nem igazolt kérés kizárása, deduplikáció, claim, sender ACK, AMBIGUOUS, role denial PASS.
 - TypeScript és célzott ESLint PASS. A böngészős Enter/fókusz UX E2E a későbbi DEV telepítés után végzendő.
+
+## BUILD01 ellenőrzött kiadási jelölt – 2026-10-11
+
+- Source commit: 991971a273cb512bb09555b37c1944f18da15755.
+- Run ID: auth-v050-991971a27-20261011-build01-b1.
+- Full Next.js BUILD01: PASS, 103 oldal, 270 asset ellenőrizve.
+- Build ID: _f5IomIWn85-ATdpF82AF.
+- Artifact SHA-256: 0befc0e3093462bb023292fec6c4dc413a2002763bd5369f9bf34425a34f60cb.
+- Artifact tárolása: BUILD gateway ellenőrzött futásmappa; NEM telepítve.
+- További védelmi unit: scripts/tests/auth-drive-registration-operator-gate.mjs, 11/11 PASS. Vizsgálja a hard OFF tiltást, címzettvalidációt, XSS HTML escape-t és a védett operator kulcsot.
+- DEV tárhely továbbra is 99%, 2,2 GiB szabad; build/deploy DEV-en tiltva a külön kapu-jóváhagyásig.
+- A regisztrációs üzemeltetői email címzett és az admin felület véglegesítése külön emberi jóváhagyást igényel.
