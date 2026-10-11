@@ -36,3 +36,16 @@ Dátum: 2026-10-11
 - 17/17 Projektlicenc contract teszt PASS.
 - 12/12 izolált PGlite PostgreSQL migráció teszt PASS: no-seed, payer-constraint, approval, egy-projekt-egy-licenc, audit, monoton revízió, immutable hard-delete, SELECT-only app role.
 - TypeScript noEmit és célzott ESLint PASS.
+
+## BUILD01 full release candidate – ellenőrzött, 2026-10-11
+
+- Build run: drive-v0937-3768eb108-20261011-build01-b1
+- Source Git: 3768eb10811eafc27e080952eca94a18de3f482b
+- BUILD01 state: PASS, Next.js build + TypeScript + 272 statikus chunk ellenőrzés.
+- Build ID: shZFHNgSFYfjDhJuL9E0V
+- Artifact SHA-256: 43091c16d134629f8a1ee1939280ab089f3eb968f3661680aa570731c4f1e759
+- Artifact tényleges hash / BUILD gateway hash megegyezik.
+- A buildnaplóban jelen van az új /api/projects/[projectId]/drive/license és /drive/licenc.
+- Nincs DEV/PROD install. DEV szabad tárhely 2.0 GiB, kihasználtság 99%.
+- A projektlicenc DB migrációja továbbra is NINCS alkalmazva. Ezt a standalone build nem helyettesíti.
+- A fizetős projektlicenc vásárlás, admin jóváhagyás, tényleges enforcement/renewal nem aktivált.
