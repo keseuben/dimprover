@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getLicenseAdminKeyFilePath,
@@ -26,6 +27,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export async function POST(request: NextRequest) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
 
   const payload: unknown = await request.json().catch(() => null);
   if (!isRecord(payload) || typeof payload.licenseId !== "string") {

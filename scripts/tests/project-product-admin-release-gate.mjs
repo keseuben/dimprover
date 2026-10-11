@@ -10,6 +10,9 @@ let userSessionCalls=0;
 let isAdmin=true;
 const mockRequire=id=>{
  if(id==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
+ if(id.includes("licenseEnvironmentPolicy"))return {
+   denyUnauthorizedLicenseMutation:()=>({status:423,body:{ok:false,code:"LICENSE_ENV_MISSING_OR_INVALID"}}),
+ };
  if(id.includes("license/admin-auth"))return {isLicenseAdminAuthorized:async()=>isAdmin};
  if(id.includes("project-core/auth"))return {resolveProjectCoreAuth:async()=>{userSessionCalls++;throw Error("SSO_USED")}};
  if(id.includes("dimpro-auth/db"))return {authQuery:async()=>{databaseCalls++;throw Error("DB_USED")}};

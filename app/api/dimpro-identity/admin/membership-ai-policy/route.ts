@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import { updateDimproMembershipAiPolicyAdmin } from "@/app/lib/identity-core/admin";
 import {
@@ -19,6 +20,8 @@ function unauthorized() {
 
 export async function PATCH(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     return dimproIdentityJson({

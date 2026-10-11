@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation, publicLicenseEnvironmentStatus } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import {
   createDimproLicenseAdmin,
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       ok: true,
       version: "LICENSE CENTER 0.3.0",
       identityCoreVersion: "0.2.0",
+      licenseEnvironment: publicLicenseEnvironmentStatus(),
       ...(await getDimproLicenseCenterOverview()),
     });
   } catch (error) {
@@ -37,6 +39,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     return dimproIdentityJson({
@@ -50,6 +54,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     return dimproIdentityJson({

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BellRing, Bot, Check, Coins, ContactRound, CreditCard, KeyRound, Laptop, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Ban, BellRing, Bot, Check, Coins, Columns3, ContactRound, CreditCard, Expand, KeyRound, Laptop, LoaderCircle, Minimize, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -16,6 +16,12 @@ import MiniAppLicenseCatalog from "@/components/license/MiniAppLicenseCatalog";
 import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 import UnifiedProductGrid from "@/components/license/UnifiedProductGrid";
 import {sortLicenseGrid,type LicenseGridSortKey,type LicenseGridSortOrder} from "@/app/lib/license/licenseGrid";
+import {
+  LICENSE_GRID_PREFERENCES_KEY,LICENSE_GRID_COLUMNS,
+  defaultLicenseGridPreferences,parseLicenseGridPreferences,updateLicenseGridColumnWidth,
+  toggleLicenseGridColumn,visibleLicenseGridColumns,
+  type LicenseGridColumnKey,type LicenseGridPreferences,
+} from "@/app/lib/license/licenseGridPreferences";
 import "./license-center.css";
 
 type User = { id: string; public_user_code: string; full_name: string; email: string; status: string; email_verified_at: string | null };
@@ -327,6 +333,11 @@ export default function DimproLicenseCenterPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [licenseEnvironment,setLicenseEnvironment]=useState<{
+    environment:"DEV"|"PROD"|"UNKNOWN";
+    writeMode:"DEV_TEST"|"LOCKED";
+    writesAllowed:boolean;
+  }|null>(null);
   const [licenses, setLicenses] = useState<License[]>([]);
   const [modules, setModules] = useState<LicenseModule[]>([]);
   const [membershipModules, setMembershipModules] = useState<MembershipModule[]>([]);
@@ -357,6 +368,45 @@ export default function DimproLicenseCenterPage() {
   };
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [gridPreferences,setGridPreferences]=useState<LicenseGridPreferences>(defaultLicenseGridPreferences);
+  const [gridPreferencesLoaded,setGridPreferencesLoaded]=useState(false);
+  const [gridColumnsOpen,setGridColumnsOpen]=useState(false);
+  const [gridFullWindow,setGridFullWindow]=useState(false);
+  const [columnResize,setColumnResize]=useState<{
+    key:LicenseGridColumnKey;startX:number;initialWidth:number;
+  }|null>(null);
+  const shownColumns=useMemo(()=>visibleLicenseGridColumns(gridPreferences),[gridPreferences]);
+  useEffect(()=>{
+    try{setGridPreferences(parseLicenseGridPreferences(window.localStorage.getItem(LICENSE_GRID_PREFERENCES_KEY)));}
+    catch{setGridPreferences(defaultLicenseGridPreferences());}
+    setGridPreferencesLoaded(true);
+  },[]);
+  useEffect(()=>{
+    if(!gridPreferencesLoaded)return;
+    try{window.localStorage.setItem(LICENSE_GRID_PREFERENCES_KEY,JSON.stringify(gridPreferences));}
+    catch{/* Private browsing / blocked local storage: use session-only settings. */}
+  },[gridPreferences,gridPreferencesLoaded]);
+  useEffect(()=>{
+    if(!columnResize)return;
+    const onMove=(event:PointerEvent)=>setGridPreferences(current=>
+      updateLicenseGridColumnWidth(current,columnResize.key,
+        columnResize.initialWidth+event.clientX-columnResize.startX));
+    const onStop=()=>setColumnResize(null);
+    window.addEventListener("pointermove",onMove);
+    window.addEventListener("pointerup",onStop);
+    window.addEventListener("pointercancel",onStop);
+    return ()=>{
+      window.removeEventListener("pointermove",onMove);
+      window.removeEventListener("pointerup",onStop);
+      window.removeEventListener("pointercancel",onStop);
+    };
+  },[columnResize]);
+  useEffect(()=>{
+    if(!gridFullWindow)return;
+    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")setGridFullWindow(false);};
+    window.addEventListener("keydown",onKey);
+    return ()=>window.removeEventListener("keydown",onKey);
+  },[gridFullWindow]);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
   const [selectedLicenseId, setSelectedLicenseId] = useState("");
   const [expiryReminderOpen, setExpiryReminderOpen] = useState(false);
@@ -390,6 +440,14 @@ export default function DimproLicenseCenterPage() {
     setUsers(licensePayload.users || []);
     setOrganizations(licensePayload.organizations || []);
     setMemberships(licensePayload.organizationMemberships || []);
+    setLicenseEnvironment(
+      licensePayload?.licenseEnvironment?.writesAllowed===true &&
+      licensePayload?.licenseEnvironment?.writeMode==="DEV_TEST"
+        ?{environment:"DEV",writeMode:"DEV_TEST",writesAllowed:true}
+        :{environment:licensePayload?.licenseEnvironment?.environment==="PROD"?"PROD":
+            licensePayload?.licenseEnvironment?.environment==="DEV"?"DEV":"UNKNOWN",
+          writeMode:"LOCKED",writesAllowed:false},
+    );
     setLicenses(nextLicenses);
     setModules(nextModules);
     setMembershipModules(licensePayload.membershipModules || []);
@@ -775,6 +833,7 @@ export default function DimproLicenseCenterPage() {
   }
 
   function openEdit(license: License) {
+    setGridFullWindow(false);
     setSelectedLicenseId(license.id);
     setDrawerMode("edit");
     setCreatedCode("");
@@ -804,7 +863,16 @@ export default function DimproLicenseCenterPage() {
             onClick={()=>setActiveView(id)}>{label}</button>
         )}
       </nav>
-      {activeView==="licenses"&&<BenjadminDataWorkspace
+      <div className="dimpro-license-center__environment" role="status" data-testid="license-environment-status">
+        <strong>{licenseEnvironment?.environment==="DEV"?"DEV · TESZTKÖRNYEZET":
+          licenseEnvironment?.environment==="PROD"?"PROD · ÉLES KÖRNYEZET":
+          "KÖRNYEZET NINCS IGAZOLVA"}</strong>
+        <span>{licenseEnvironment?.writesAllowed
+          ?"Kizárólag elkülönített, jóváhagyott DEV-tesztadatokon engedélyezett írás."
+          :"Licenckiadás és módosítás zárolva. Az éles licencek csak a később jóváhagyott PROD Licencközpontban kezelhetők."}</span>
+      </div>
+      {activeView==="licenses"&&<div className={gridFullWindow?"dimpro-license-center__grid-full-window":""}>
+      <BenjadminDataWorkspace
         eyebrow="BENJADMIN · LICENCKÖZPONT"
         title="Központi licencek és jogosultságok"
         description="Szervezeti és felhasználói licencek, modulok, eszközkeretek és Send-jogosultságok (entitlement) táblázatos kezelése."
@@ -813,7 +881,11 @@ export default function DimproLicenseCenterPage() {
             <Link href="/admin?legacyLicense=1" className="benjadmin-data-secondary-action" title="Régi licencadmin kompatibilitási felület">Régi licencadmin</Link>
             <button type="button" className="benjadmin-data-secondary-action" onClick={() => { setExpiryReminderOpen(true); void loadExpiryReminderStatus(); }}><BellRing size={16} /> Lejárati értesítések</button>
             <button type="button" className="benjadmin-data-secondary-action" onClick={() => void load(adminKey)}><RefreshCw size={16} /> Frissítés</button>
-            <button type="button" className="benjadmin-data-primary-action" onClick={() => { setCreateDraft(initialCreate()); setDrawerMode("new"); }}><Plus size={16} /> Új licenc</button>
+            <button type="button" className="benjadmin-data-primary-action"
+              disabled={!licenseEnvironment?.writesAllowed}
+              title={!licenseEnvironment?.writesAllowed?"Környezeti licencírás zárolva": "Új DEV-tesztlicenc"}
+              onClick={() => { setCreateDraft(initialCreate()); setDrawerMode("new"); }}>
+              <Plus size={16} /> Új licenc</button>
           </>
         )}
         metrics={(
@@ -840,6 +912,39 @@ export default function DimproLicenseCenterPage() {
               <option value="all">Minden termék</option>
               {productOptions.map(product=><option key={product} value={product}>{product}</option>)}
             </select>
+            <div className="dimpro-license-center__grid-controls">
+              <div className="dimpro-license-center__columns-wrap">
+                <button type="button" className="benjadmin-data-secondary-action" aria-expanded={gridColumnsOpen}
+                  aria-controls="dimpro-license-visible-columns" onClick={()=>setGridColumnsOpen(value=>!value)}>
+                  <Columns3 size={14}/> Oszlopok ({shownColumns.length}/{LICENSE_GRID_COLUMNS.length})
+                </button>
+                {gridColumnsOpen&&<div id="dimpro-license-visible-columns"
+                  className="dimpro-license-center__column-picker" role="group" aria-label="Megjelenített oszlopok">
+                  {LICENSE_GRID_COLUMNS.map(column=><label key={column.key}>
+                    <input type="checkbox" checked={shownColumns.some(item=>item.key===column.key)}
+                      disabled={column.required} onChange={()=>setGridPreferences(current=>
+                        toggleLicenseGridColumn(current,column.key))}/>
+                    <span>{column.label}</span>
+                  </label>)}
+                  <button type="button" className="benjadmin-data-secondary-action"
+                    onClick={()=>setGridPreferences(defaultLicenseGridPreferences())}>
+                    Alapbeállítás visszaállítása
+                  </button>
+                </div>}
+              </div>
+              <button type="button" className="benjadmin-data-secondary-action"
+                aria-pressed={gridPreferences.density==="compact"}
+                onClick={()=>setGridPreferences(current=>({...current,
+                  density:current.density==="compact"?"normal":"compact"}))}>
+                {gridPreferences.density==="compact"?"Normál sormagasság":"Kompakt sorok"}
+              </button>
+              <button type="button" className="benjadmin-data-secondary-action"
+                title={gridFullWindow?"Vissza a normál ablakba (Esc)":"Teljes ablakos licenctábla"}
+                aria-pressed={gridFullWindow} onClick={()=>setGridFullWindow(value=>!value)}>
+                {gridFullWindow?<Minimize size={14}/>:<Expand size={14}/>}
+                {gridFullWindow?"Visszaállítás":"Teljes ablak"}
+              </button>
+            </div>
             <div className="benjadmin-data-allowed"><KeyRound size={15} /><span>Identity Core <b>0.2.0</b></span></div>
           </>
         )}
@@ -850,48 +955,73 @@ export default function DimproLicenseCenterPage() {
           </>
         )}
       >
-        <div className="benjadmin-data-table-scroll">
-          <table className="benjadmin-data-table" data-testid="benjadmin-license-table">
+        <div className={"benjadmin-data-table-scroll "+(gridPreferences.density==="compact"?"is-license-compact":"")}>
+          <table className="benjadmin-data-table dimpro-license-center__resizable-table" data-testid="benjadmin-license-table"
+            style={{width:shownColumns.reduce((total,column)=>total+gridPreferences.widths[column.key],0)}}>
+            <colgroup>{shownColumns.map(column=><col key={column.key}
+              style={{width:gridPreferences.widths[column.key]}}/>)}</colgroup>
             <thead>
               <tr>
-                <th aria-sort={sortKey==="code"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Licenckód","code")}</th>
-                <th aria-sort={sortKey==="owner"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Tulajdonos","owner")}</th>
-                <th aria-sort={sortKey==="product"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Termék / csomag","product")}</th>
-                <th aria-sort={sortKey==="status"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Státusz","status")}</th>
-                <th aria-sort={sortKey==="users"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Felhasználók","users")}</th>
-                <th>Eszközök</th>
-                <th>Modulok</th>
-                <th>Send-jog</th>
-                <th aria-sort={sortKey==="expiry"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Lejárat","expiry")}</th>
-                <th>Művelet</th>
+                {shownColumns.map(column=>{
+                  const sortable=["code","owner","product","status","users","expiry"].includes(column.key);
+                  const key=column.key as LicenseGridSortKey;
+                  return <th key={column.key}
+                    aria-sort={sortable?(sortKey===key?(sortOrder==="asc"?"ascending":"descending"):"none"):undefined}>
+                    <span className="dimpro-license-center__column-title">
+                      {sortable?sortHeader(column.label,key):column.label}
+                    </span>
+                    <span role="separator" aria-orientation="vertical"
+                      aria-label={column.label+" oszlop szélességének módosítása"}
+                      aria-valuemin={76} aria-valuemax={480} aria-valuenow={gridPreferences.widths[column.key]}
+                      tabIndex={0} className="dimpro-license-center__resize-handle"
+                      title="Húzással vagy nyilakkal méretezhető"
+                      onPointerDown={event=>{
+                        if(event.button!==0)return;
+                        event.preventDefault();event.stopPropagation();
+                        setColumnResize({key:column.key,startX:event.clientX,
+                          initialWidth:gridPreferences.widths[column.key]});
+                      }}
+                      onKeyDown={event=>{
+                        if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+                        event.preventDefault();
+                        const delta=event.key==="ArrowRight"?12:-12;
+                        setGridPreferences(current=>updateLicenseGridColumnWidth(current,column.key,
+                          current.widths[column.key]+delta));
+                      }}/>
+                  </th>;
+                })}
               </tr>
             </thead>
             <tbody>
               {pagedLicenses.length === 0 ? (
-                <tr><td colSpan={10} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő licenc.</td></tr>
+                <tr><td colSpan={shownColumns.length} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő licenc.</td></tr>
               ) : pagedLicenses.map((license) => {
                 const moduleCount = modules.filter((module) => module.license_id === license.id && module.enabled).length;
                 const sendCount = entitlements.filter((entitlement) => entitlement.license_id === license.id && entitlement.status === "active").length;
                 const organizationMembers = license.owner_type === "organization" ? memberships.filter((membership) => membership.organization_id === license.owner_organization_id && ["invited", "active", "suspended"].includes(membership.status)).length : 1;
                 return (
                   <tr key={license.id} className={selectedLicenseId===license.id&&drawerMode==="edit"?"is-selected":""}>
-                    <td className="is-mono"><strong>{license.public_license_code}</strong></td>
-                    <td><strong>{ownerName(license, users, organizations)}</strong><br /><small>{license.owner_type === "organization" ? "Szervezet" : "Felhasználó"}</small></td>
-                    <td><strong>{license.product_code}</strong>{license.plan_code ? <><br /><small>{license.plan_code}</small></> : null}</td>
-                    <td><BenjadminStatusPill tone={statusTone(license.status)}>{statusLabels[license.status] || license.status}</BenjadminStatusPill></td>
-                    <td>{organizationMembers} / {license.max_users}</td>
-                    <td>{license.max_devices}</td>
-                    <td>{moduleCount}</td>
-                    <td>{sendCount}</td>
-                    <td className="is-nowrap">{displayDate(license.expires_at)}</td>
-                    <td><button type="button" className="benjadmin-data-row-action" onClick={() => openEdit(license)}>Szerkesztés</button></td>
+                    {shownColumns.map(column=>{
+                      switch(column.key){
+                        case "code":return <td key="code" className="is-mono"><strong>{license.public_license_code}</strong></td>;
+                        case "owner":return <td key="owner"><strong>{ownerName(license,users,organizations)}</strong><br/><small>{license.owner_type==="organization"?"Szervezet":"Felhasználó"}</small></td>;
+                        case "product":return <td key="product"><strong>{license.product_code}</strong>{license.plan_code?<><br/><small>{license.plan_code}</small></>:null}</td>;
+                        case "status":return <td key="status"><BenjadminStatusPill tone={statusTone(license.status)}>{statusLabels[license.status]||license.status}</BenjadminStatusPill></td>;
+                        case "users":return <td key="users">{organizationMembers} / {license.max_users}</td>;
+                        case "devices":return <td key="devices">{license.max_devices}</td>;
+                        case "modules":return <td key="modules">{moduleCount}</td>;
+                        case "send":return <td key="send">{sendCount}</td>;
+                        case "expiry":return <td key="expiry" className="is-nowrap">{displayDate(license.expires_at)}</td>;
+                        case "action":return <td key="action"><button type="button" className="benjadmin-data-row-action" onClick={()=>openEdit(license)}>Szerkesztés</button></td>;
+                      }
+                    })}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-      </BenjadminDataWorkspace>}
+      </BenjadminDataWorkspace></div>}
 
       {activeView==="modules"&&<section className="benjadmin-data-workspace dimpro-license-center__tab-panel">
         <header className="dimpro-license-center__panel-head"><div>
@@ -986,8 +1116,8 @@ export default function DimproLicenseCenterPage() {
               <header><strong>Kézi ellenőrzés</strong><span>e-mail küldés szabályozva</span></header>
               <p>Az előnézet nem küld levelet. Az éles futtatás csak külön megerősítés után indul, és a korábban már kiküldött aktuális fokozatokat nem küldi újra.</p>
               <div className="benjadmin-expiry-reminder-actions">
-                <button type="button" className="benjadmin-data-secondary-action" disabled={expiryReminderLoading} onClick={() => void runExpiryReminderCheck(true)}>{expiryReminderLoading ? <LoaderCircle className="is-spinning" size={16} /> : <BellRing size={16} />} Előnézet küldés nélkül</button>
-                <button type="button" className="benjadmin-data-danger-action" disabled={expiryReminderLoading} onClick={() => { if (window.confirm("Elindítod a lejárati értesítések kézi kiküldését? Csak a még nem küldött aktuális fokozatok mennek ki.")) void runExpiryReminderCheck(false); }}><BellRing size={16} /> Értesítések futtatása</button>
+                <button type="button" className="benjadmin-data-secondary-action" disabled={expiryReminderLoading||!licenseEnvironment?.writesAllowed} onClick={() => void runExpiryReminderCheck(true)}>{expiryReminderLoading ? <LoaderCircle className="is-spinning" size={16} /> : <BellRing size={16} />} Előnézet küldés nélkül</button>
+                <button type="button" className="benjadmin-data-danger-action" disabled={expiryReminderLoading||!licenseEnvironment?.writesAllowed} onClick={() => { if (window.confirm("Elindítod a lejárati értesítések kézi kiküldését? Csak a még nem küldött aktuális fokozatok mennek ki.")) void runExpiryReminderCheck(false); }}><BellRing size={16} /> Értesítések futtatása</button>
               </div>
               {expiryReminderSummary ? <p className="benjadmin-expiry-reminder-summary">{expiryReminderSummary}</p> : null}
             </section>

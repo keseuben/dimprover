@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import {type NextRequest, NextResponse} from "next/server";
 import {isLicenseAdminAuthorized} from "@/app/lib/license/admin-auth";
 import {resolveProjectCoreAuth} from "@/app/lib/project-core/auth";
@@ -57,6 +58,8 @@ export async function GET(request:NextRequest){
 export async function POST(request:NextRequest){
  const auth=await authorize(request);
  if(!auth.ok)return reply({ok:false,error:auth.error},auth.status);
+ const mutationDenied=denyUnauthorizedLicenseMutation();
+ if(mutationDenied)return mutationDenied;
  if(!PROJECT_LICENSE_ADMIN_WRITES_RELEASED)
     return reply({ok:false,error:"CENTRAL_LICENSE_ISSUANCE_NOT_RELEASED"},423);
  const session=await resolveProjectCoreAuth(request);
@@ -88,6 +91,8 @@ export async function POST(request:NextRequest){
 export async function PATCH(request:NextRequest){
  const auth=await authorize(request);
  if(!auth.ok)return reply({ok:false,error:auth.error},auth.status);
+ const mutationDenied=denyUnauthorizedLicenseMutation();
+ if(mutationDenied)return mutationDenied;
  if(!PROJECT_LICENSE_ADMIN_WRITES_RELEASED)
     return reply({ok:false,error:"CENTRAL_LICENSE_APPROVAL_NOT_RELEASED"},423);
  const session=await resolveProjectCoreAuth(request);

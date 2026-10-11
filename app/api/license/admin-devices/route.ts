@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { NextRequest, NextResponse } from "next/server";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import {
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   const body = await request.json().catch(() => null);
   if (!body) return json({ ok: false, error: "Érvénytelen gépkezelési kérés." }, 400);
   const result = await applyLicenseDeviceAdminAction(body);

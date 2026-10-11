@@ -89,6 +89,18 @@ SOURCE ONLY előkészítés: app/lib/license/dimproDropServiceCatalog.ts, db/aut
 
 Következő külön jóváhagyandó lépések: meglévő Identity Core állomány read-only discovery, hiteles központi AUTH user/org megfeleltetés, régi és új licenc rekordok idempotens mappingja (unique source+target), pontos modul/limit/kód/lejárat összevetés és párhuzamos működés; explicit operátori migrációs engedély és hozzáférési E2E; végső cutover csak tesztelt rollbackkel és az ügyfelek jogainak megőrzésével. Nem megengedett a régi Send-kód automatikus újragenerálása vagy deaktiválása.
 
+## V0.9.48 – DEV és PROD licencírási szabály
+
+A DIMPRO kereskedelmi, valós ügyféllicenceinek hiteles központja a PROD Licencközpont. Csak magas jogosultságú központi AUTH operátor és üzleti, pénzügyi jóváhagyás adhat ki, változtathat vagy vonhat vissza éles licenceket. A DEV kizárólag külön fizikai/logikai adatforráson tárolhat tesztlicenceket.
+
+Az app/lib/license/licenseEnvironmentPolicy.ts a szerveroldali runtime és adatforrás-környezet megfelelését vizsgálja. Hibás, nem konfigurált vagy ellentmondó környezetben a szerver 423 LOCKED állapottal elutasítja a licencírást. A NODE_ENV változó DEV-ben is production lehet, ezért nem használható környezet-azonosításra. A kliensoldali Host fejléc szintén nem jogosultság.
+
+DEV-ben egy elkülönített adatforrás külön üzemeltetői igazolása és DEV-tesztkiadási kapu szükséges. V0.9.48-ban PROD-licencírás minden esetben tiltva marad kódba épített release flaggel. A későbbi éles licenckezeléshez új kiadás és szabályozott AUTH adminszerep szükséges; a régi admin key önmagában nem elegendő. A legacy Identity Core DEV/PROD adatkapcsolatok tényleges elkülönítése továbbra is UNKNOWN, hiteles preflight szükséges, mielőtt e kapu aktiválható.
+
+Az új táblázati beállítások csak helyi böngészőeszközön mentődnek, kizárólag oszlop-szélesség, láthatóság és sormagasság formájában; nincs licencadat, admin token vagy személyes adat.
+
+Részletek: DIMPROVER_PRODUCT_DOCS/DIMPRO_LICENSE_V0948_GRID_DEV_PROD_GUARD_20261011.md.
+
 ## Kötelező fejlesztési szabályok
 
 - Felhasználói jogosultság és fizetős előfizetés két külön dolog.

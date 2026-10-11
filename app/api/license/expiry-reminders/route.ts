@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getLicenseExpiryReminderStatus,
@@ -34,6 +35,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
 
   let body: { source?: string; dryRun?: boolean } = {};
   try {

@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import {
   createDimproOrganizationInvitationAdmin,
@@ -31,6 +32,8 @@ function appOrigin(request: Request) {
 
 export async function POST(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     const created = await createDimproOrganizationInvitationAdmin(body);
@@ -72,6 +75,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     return dimproIdentityJson({

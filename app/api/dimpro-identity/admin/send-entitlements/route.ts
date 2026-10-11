@@ -1,3 +1,4 @@
+import { denyUnauthorizedLicenseMutation } from "@/app/lib/license/licenseEnvironmentPolicy";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import {
   createDimproSendEntitlementAdmin,
@@ -84,6 +85,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     if (body.action === "linkLegacy") {
@@ -134,6 +137,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (!(await isLicenseAdminAuthorized(request.headers))) return unauthorized();
+  const mutationDenied=denyUnauthorizedLicenseMutation();
+  if(mutationDenied)return mutationDenied;
   try {
     const body = await readDimproIdentityJsonBody(request);
     return dimproIdentityJson({
