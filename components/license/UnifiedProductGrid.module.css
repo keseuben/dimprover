@@ -1,0 +1,22 @@
+.shell{background:var(--admin-surface,#fff);border:1px solid var(--admin-border,#d7e3ec);border-radius:10px;padding:14px;min-width:0;color:var(--admin-text,#12263b)}
+.heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:3px 0 12px}
+.heading h2{font-size:17px;font-weight:800;margin:0 0 5px}
+.heading p{color:var(--admin-text-muted,#65758a);font-size:12px;margin:0;line-height:1.45}
+.heading>strong{font-size:11px;color:#167d95;white-space:nowrap}
+.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:11px}
+.search{display:flex;gap:7px;align-items:center;border:1px solid var(--admin-border,#cadbe6);background:var(--admin-surface,#fff);border-radius:6px;padding:8px 10px;min-width:min(100%,330px)}
+.search input{font-size:12px;border:0;background:transparent;color:inherit;min-width:0;width:100%;outline:none}
+.toolbar select,.toolbar button{border:1px solid var(--admin-border,#cadbe6);background:var(--admin-surface,#fff);color:inherit;border-radius:6px;padding:8px 10px;font-size:11px;cursor:pointer}
+.toolbar button{display:flex;align-items:center;gap:6px}
+.scroll{max-width:100%;overflow:auto;border:1px solid var(--admin-border,#cadbe6);border-radius:6px;max-height:67vh}
+.table{border-collapse:separate;border-spacing:0;width:100%;min-width:990px;font-size:11px}
+.table th{position:sticky;top:0;z-index:1;text-align:left;background:var(--admin-surface-muted,#edf3f7);border-bottom:1px solid var(--admin-border,#d7e5ed);text-transform:uppercase;letter-spacing:.035em;font-size:10px;font-weight:900;color:var(--admin-text-soft,#536a7d);padding:11px;white-space:nowrap}
+.table td{padding:11px;border-bottom:1px solid var(--admin-border,#e6edf2);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table tbody tr:hover{background:color-mix(in srgb,var(--admin-accent,#0891b2) 6%,var(--admin-surface,#fff))}
+.table td:first-child strong{display:block;font-weight:800}
+.table td:first-child small{display:block;margin-top:3px;color:var(--admin-text-muted,#667b8c);font-size:10px;font-family:ui-monospace,Consolas,monospace}
+.status{display:inline-block;padding:4px 7px;border:1px solid var(--admin-border,#d7e3ed);background:var(--admin-surface-soft,#f8fafc);border-radius:4px;max-width:250px}
+.empty{text-align:center;padding:27px!important}
+.notice{color:var(--admin-text-muted,#667b8a);font-size:11px;line-height:1.5;margin:11px 0 0}
+@media(max-width:680px){.heading{flex-direction:column;align-items:flex-start}.toolbar .search{width:100%}}

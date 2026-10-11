@@ -14,6 +14,9 @@ import SubscriptionImpactPreview from "@/components/license/SubscriptionImpactPr
 import ProductArchitectureOverview from "@/components/license/ProductArchitectureOverview";
 import MiniAppLicenseCatalog from "@/components/license/MiniAppLicenseCatalog";
 import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
+import UnifiedProductGrid from "@/components/license/UnifiedProductGrid";
+import {sortLicenseGrid,type LicenseGridSortKey,type LicenseGridSortOrder} from "@/app/lib/license/licenseGrid";
+import "./license-center.css";
 
 type User = { id: string; public_user_code: string; full_name: string; email: string; status: string; email_verified_at: string | null };
 type Organization = { id: string; public_organization_code: string; display_name: string | null; legal_name: string; email: string | null; status: string };
@@ -343,6 +346,15 @@ export default function DimproLicenseCenterPage() {
   const [createdCode, setCreatedCode] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [activeView,setActiveView]=useState<"licenses"|"modules"|"products"|"projects"|"plans">("licenses");
+  const [productFilter,setProductFilter]=useState("all");
+  const [sortKey,setSortKey]=useState<LicenseGridSortKey>("code");
+  const [sortOrder,setSortOrder]=useState<LicenseGridSortOrder>("asc");
+  const toggleSort=(key:LicenseGridSortKey)=>{
+    if(sortKey===key)setSortOrder(order=>order==="asc"?"desc":"asc");
+    else{setSortKey(key);setSortOrder("asc");}
+    setPage(1);
+  };
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
@@ -420,16 +432,31 @@ export default function DimproLicenseCenterPage() {
     const clean = query.trim().toLowerCase();
     return licenses.filter((license) => {
       if (statusFilter !== "all" && license.status !== statusFilter) return false;
+      if (productFilter !== "all" && license.product_code !== productFilter) return false;
       if (!clean) return true;
       const owner = ownerName(license, users, organizations);
       return [license.public_license_code, owner, license.product_code, license.plan_code || "", license.status, license.legacy_license_ref || ""]
         .some((value) => value.toLowerCase().includes(clean));
     });
-  }, [licenses, organizations, query, statusFilter, users]);
+  }, [licenses, organizations, query, statusFilter, productFilter, users]);
 
   const pageCount = Math.max(1, Math.ceil(visibleLicenses.length / pageSize));
   const safePage = Math.min(page, pageCount);
-  const pagedLicenses = visibleLicenses.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const sortedLicenses=useMemo(()=>sortLicenseGrid(visibleLicenses.map(license=>({
+    ...license,
+    ownerName:ownerName(license,users,organizations),
+    memberCount:license.owner_type==="organization"
+      ?memberships.filter(item=>item.organization_id===license.owner_organization_id&&
+          ["invited","active","suspended"].includes(item.status)).length:1,
+  })),sortKey,sortOrder),[visibleLicenses,users,organizations,memberships,sortKey,sortOrder]);
+  const pagedLicenses=sortedLicenses.slice((safePage-1)*pageSize,safePage*pageSize);
+  const productOptions=useMemo(()=>[...new Set(licenses.map(license=>license.product_code))].sort((a,b)=>a.localeCompare(b,"hu-HU")),[licenses]);
+  const sortHeader=(label:string,key:LicenseGridSortKey)=>(
+    <button type="button" onClick={()=>toggleSort(key)}
+      title={sortKey===key?"Rendezés irányának megfordítása":"Rendezés e szerint: "+label}>
+      {label}<span aria-hidden="true">{sortKey===key?(sortOrder==="asc"?"↑":"↓"):"↕"}</span>
+    </button>
+  );
   const selectedLicense = licenses.find((license) => license.id === selectedLicenseId) || null;
 
   async function loadExpiryReminderStatus(announce = true) {
@@ -755,7 +782,7 @@ export default function DimproLicenseCenterPage() {
 
   if (authorized !== "yes") {
     return (
-      <main className="benjadmin-data-page">
+      <main className="dimpro-license-center">
         <section className="benjadmin-data-auth-card">
           <KeyRound size={22} />
           <h1>{authorized === "checking" ? "Licencközpont betöltése" : "Licencadmin belépés szükséges"}</h1>
@@ -766,8 +793,18 @@ export default function DimproLicenseCenterPage() {
   }
 
   return (
-    <>
-      <BenjadminDataWorkspace
+    <div className="dimpro-license-center">
+      <nav className="dimpro-license-center__tabs" aria-label="Licencközpont táblázati nézetek">
+        {([
+          ["licenses","Licencek"],["modules","Moduljogok"],
+          ["products","Termékek"],["projects","Projektlicencek"],
+          ["plans","Csomagok és díjak"],
+        ] as const).map(([id,label])=>
+          <button type="button" key={id} aria-pressed={activeView===id}
+            onClick={()=>setActiveView(id)}>{label}</button>
+        )}
+      </nav>
+      {activeView==="licenses"&&<BenjadminDataWorkspace
         eyebrow="BENJADMIN · LICENCKÖZPONT"
         title="Központi licencek és jogosultságok"
         description="Szervezeti és felhasználói licencek, modulok, eszközkeretek és Send-jogosultságok (entitlement) táblázatos kezelése."
@@ -798,6 +835,11 @@ export default function DimproLicenseCenterPage() {
               ))}
             </div>
             <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Keresés licenckód, tulajdonos, termék, csomag vagy státusz alapján" /></label>
+            <select className="dimpro-license-center__product-select" aria-label="Termék szerinti szűrés"
+              value={productFilter} onChange={event=>{setProductFilter(event.target.value);setPage(1);}}>
+              <option value="all">Minden termék</option>
+              {productOptions.map(product=><option key={product} value={product}>{product}</option>)}
+            </select>
             <div className="benjadmin-data-allowed"><KeyRound size={15} /><span>Identity Core <b>0.2.0</b></span></div>
           </>
         )}
@@ -812,15 +854,15 @@ export default function DimproLicenseCenterPage() {
           <table className="benjadmin-data-table" data-testid="benjadmin-license-table">
             <thead>
               <tr>
-                <th>Licenckód</th>
-                <th>Tulajdonos</th>
-                <th>Termék / csomag</th>
-                <th>Státusz</th>
-                <th>Felhasználók</th>
+                <th aria-sort={sortKey==="code"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Licenckód","code")}</th>
+                <th aria-sort={sortKey==="owner"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Tulajdonos","owner")}</th>
+                <th aria-sort={sortKey==="product"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Termék / csomag","product")}</th>
+                <th aria-sort={sortKey==="status"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Státusz","status")}</th>
+                <th aria-sort={sortKey==="users"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Felhasználók","users")}</th>
                 <th>Eszközök</th>
                 <th>Modulok</th>
                 <th>Send-jog</th>
-                <th>Lejárat</th>
+                <th aria-sort={sortKey==="expiry"?(sortOrder==="asc"?"ascending":"descending"):"none"}>{sortHeader("Lejárat","expiry")}</th>
                 <th>Művelet</th>
               </tr>
             </thead>
@@ -832,7 +874,7 @@ export default function DimproLicenseCenterPage() {
                 const sendCount = entitlements.filter((entitlement) => entitlement.license_id === license.id && entitlement.status === "active").length;
                 const organizationMembers = license.owner_type === "organization" ? memberships.filter((membership) => membership.organization_id === license.owner_organization_id && ["invited", "active", "suspended"].includes(membership.status)).length : 1;
                 return (
-                  <tr key={license.id}>
+                  <tr key={license.id} className={selectedLicenseId===license.id&&drawerMode==="edit"?"is-selected":""}>
                     <td className="is-mono"><strong>{license.public_license_code}</strong></td>
                     <td><strong>{ownerName(license, users, organizations)}</strong><br /><small>{license.owner_type === "organization" ? "Szervezet" : "Felhasználó"}</small></td>
                     <td><strong>{license.product_code}</strong>{license.plan_code ? <><br /><small>{license.plan_code}</small></> : null}</td>
@@ -849,14 +891,72 @@ export default function DimproLicenseCenterPage() {
             </tbody>
           </table>
         </div>
-      </BenjadminDataWorkspace>
+      </BenjadminDataWorkspace>}
 
-      <ProductArchitectureOverview/>
-      <MiniAppLicenseCatalog/>
-      <ProjectProductLicensesAdmin adminKey={adminKey}/>
-      <PlanDraftCatalogue/>
-      <PricingProposalWorkshop/>
-      <SubscriptionImpactPreview/>
+      {activeView==="modules"&&<section className="benjadmin-data-workspace dimpro-license-center__tab-panel">
+        <header className="dimpro-license-center__panel-head"><div>
+          <h2>Modul- és Send-jogosultságok</h2>
+          <p>Az aktív licencekhez rendelt moduljogok. Szerkesztés a meglévő licencszerkesztőben történik.</p>
+        </div><span>{modules.length} modulrekord · {entitlements.length} Send-jog</span></header>
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table" data-testid="license-module-grid">
+            <thead><tr><th>Licenc</th><th>Termék</th><th>Modulkód</th>
+              <th>Állapot</th><th>Érvényes ettől</th><th>Érvényes eddig</th><th>Művelet</th></tr></thead>
+            <tbody>{modules.map(module=>{
+              const license=licenses.find(item=>item.id===module.license_id);
+              return <tr key={module.id}>
+                <td className="is-mono">{license?.public_license_code??"—"}</td>
+                <td>{license?.product_code??"—"}</td>
+                <td><strong>{module.module_code}</strong></td>
+                <td><BenjadminStatusPill tone={module.enabled?"ok":"warning"}>{module.enabled?"Engedélyezett":"Tiltott"}</BenjadminStatusPill></td>
+                <td>{displayDate(module.valid_from)}</td><td>{displayDate(module.valid_until)}</td>
+                <td>{license?<button type="button" className="benjadmin-data-row-action" onClick={()=>openEdit(license)}>Licenc szerkesztése</button>:"—"}</td>
+              </tr>;
+            })}
+            {modules.length===0&&<tr><td className="benjadmin-data-empty" colSpan={7}>Nincs moduljog a nyilvántartásban.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="dimpro-license-center__panel-head"><div><h2>Send-jogosultságok</h2>
+          <p>Csak áttekintés; az új Drop AUTH-átállás jelenleg nincs aktiválva.</p></div></div>
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table" data-testid="license-send-grid">
+            <thead><tr><th>Licenc</th><th>Felhasználó</th><th>Státusz</th><th>Send-kód azonosító</th>
+              <th>Havi küldés</th><th>Lejárat</th><th>Művelet</th></tr></thead>
+            <tbody>{entitlements.map(entitlement=>{
+              const license=licenses.find(item=>item.id===entitlement.license_id);
+              return <tr key={entitlement.id}>
+                <td className="is-mono">{license?.public_license_code??"—"}</td>
+                <td>{users.find(item=>item.id===entitlement.user_id)?.full_name??"—"}</td>
+                <td><BenjadminStatusPill tone={statusTone(entitlement.status)}>{statusLabels[entitlement.status]??entitlement.status}</BenjadminStatusPill></td>
+                <td className="is-mono">{entitlement.code_hint??"—"}</td>
+                <td>{entitlement.current_month_send_count} / {entitlement.monthly_send_limit??"∞"}</td>
+                <td>{displayDate(entitlement.expires_at)}</td>
+                <td>{license?<button type="button" className="benjadmin-data-row-action" onClick={()=>openEdit(license)}>Licenc szerkesztése</button>:"—"}</td>
+              </tr>;
+            })}
+            {entitlements.length===0&&<tr><td colSpan={7} className="benjadmin-data-empty">Nincs Send-jogosultság a nyilvántartásban.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>}
+
+      {activeView==="products"&&<section className="dimpro-license-center__tab-panel">
+        <UnifiedProductGrid/>
+        <details className="dimpro-license-center__detail-toggle">
+          <summary>Részletes termékarchitektúra és segédappkártyák megjelenítése</summary>
+          <ProductArchitectureOverview/>
+          <MiniAppLicenseCatalog/>
+        </details>
+      </section>}
+      {activeView==="projects"&&<section className="dimpro-license-center__tab-panel">
+        <ProjectProductLicensesAdmin adminKey={adminKey}/>
+      </section>}
+      {activeView==="plans"&&<section className="dimpro-license-center__tab-panel">
+        <PlanDraftCatalogue/>
+        <PricingProposalWorkshop/>
+        <SubscriptionImpactPreview/>
+      </section>}
 
       {expiryReminderOpen ? <button className="benjadmin-data-drawer-backdrop" type="button" aria-label="Lejárati értesítések bezárása" onClick={() => setExpiryReminderOpen(false)} /> : null}
       {expiryReminderOpen ? (
@@ -1132,6 +1232,6 @@ export default function DimproLicenseCenterPage() {
           </div>
         </aside>
       ) : null}
-    </>
+    </div>
   );
 }
