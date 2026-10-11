@@ -44,3 +44,17 @@ A kliens nem tárol signed URL-t, S3 tokent vagy File bájtokat tartós webtárh
 V0.9.52: Drive authenticated S3 multipart protokoll, init/sign/PUT/confirm/status/complete/abort, egyes részek SHA-256/ETag ellenőrzése, hard quota, projekt- és mappa-ACL, orphan session cleanup, folytatható checkpoint metadata és szerveroldali automatikus újrapróbálási/scan reconciler. Ez új adatbázis-séma és izolált DEV acceptance nélkül NEM aktiválható.
 
 PROD DENY. A jelenlegi DEV kiadásjelölt telepítése is külön, rollbackel és tárhelyellenőrzéssel jóváhagyandó.
+
+## BUILD01 V0.9.51 – végleges ellenőrzött kiadásjelölt
+
+- Forráscommit: 410c24b4cfab0239a40b609c812c288e89aa882d.
+- Remote runner: BUILD01 · build PASS · Next.js 16.2.6 · 104/104 oldal · teljes TypeScript PASS · 274 statikus chunk.
+- Build run: benjadmin-transfer-v0951-410c24b4c-20261011-build01-b1.
+- Build ID: OYwrAU3AePxjluXmuU2pa.
+- SHA-256 artifact: a5a7b34a04968ff40e44fda10b4d07df2426d4d5596c0a5f2dad2d242ea1b4ba.
+- A build gateway metaadat és a tényleges tar.gz SHA-256 értéke egyezik.
+- Artifactban ellenőrizve: Transfer Center, retryPolicy.mjs, scanStatus.ts, dropResumeAdapter.ts és a védett upload-session GET status route.
+- Előző V0.9.50 szerződéses tesztek, új V0.9.51 scan/retry és 11/11 kiválasztott biztosan non-destructive regressziós teszt PASS, célzott ESLint és TypeScript PASS. Nincs hitelesített futó böngészős upload/ACL E2E a V0.9.51-hez.
+- DEV root tárhelyellenőrzés SSH, kizárólag olvasás: 118 GiB, 117 GiB használt, kb. 714 MiB szabad, df 100%. A DotRoll VPS kapacitás rendezéséig különösen tilos új DEV telepítés.
+- A futó Drive DEV oldal HTTP 307 átirányítása ellenőrzött, a helyes autentikációs viselkedés miatt önmagában nem bizonyítja, hogy V0.9.51 fent lenne – NINCS feltéve.
+- ÉLES PROD ÉRINTETLEN · DEV runtime érintetlen · PROD DENY.
