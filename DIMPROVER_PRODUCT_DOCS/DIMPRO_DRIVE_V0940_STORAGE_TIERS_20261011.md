@@ -30,3 +30,16 @@ A Saját Drive Content Core aktuális forrásbeli alapértéke 50 GiB. A Projekt
 A szerver, mentés, verziótár, letöltési forgalom és ügyféltámogatás várható költsége alapján kialakítandó külön havi/éves díjak. A funkció-/moduljogosultságok, csapatlétszám és tárhelyméret külön kapcsolása, régi ügyfelek kvótáinak védelme. A Projektkapu és a Drive közös fájlja ne kerüljön kétszer fizikai tárolásra vagy üzleti elszámolásra.
 
 Nem történt DEV/PROD deploy, AUTH migráció, SMTP, fizetős licenckiadás vagy korlátaktiválás. PROD DENY.
+
+## BUILD01 – teljes fordítás ellenőrizve
+
+- Run ID: license-capacity-v0940-af4eef006-20261011-build01-b1
+- Forráscommit: af4eef0067f70527c80fd09f2db59e934e7e9192
+- Teljes BUILD01 állapot: PASS, TypeScript PASS, 104/104 oldal, 274 standalone chunk.
+- Build ID: f8xi0nGgbm1e9z_TpXK-E
+- Artifact SHA-256: 676caa118f7833dfa4f697167ec0b85c2749391e38fba5d5fe60acffc8265399
+- A tényleges artifact SHA, a BUILD gateway státusz és a metaadat SHA megegyezik.
+- Artifact méret kb. 92 MiB, BUILD01 tárolva, nem telepítve.
+- Forráscontract 30/30, izolált PostgreSQL 18/18, TypeScript és célzott ESLint PASS.
+- A működő DEV-t nem módosítottuk. Ellenőrzött DEV header: c74326afd, Drive V0.9.33; szabad lemez kb. 1.7 GiB, 99% foglaltság.
+- DEV/PROD deploy, DB migráció, kvótaátrendezés, licenckiadás nem történt. PROD DENY.
