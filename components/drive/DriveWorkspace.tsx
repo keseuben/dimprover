@@ -21,6 +21,9 @@ import DrivePremiumLoader from "./DrivePremiumLoader";
 import DrivePreviewDrawer from "./DrivePreviewDrawer";
 import DriveNotificationSettings from "./DriveNotificationSettings";
 import DriveToolbar from "./DriveToolbar";
+import DriveTransferCenter from "./DriveTransferCenter";
+import { transferHttpUpload } from "@/app/lib/transfer-core/uploadHttp";
+import { isTransferTerminal, transferSpeedSample, type TransferTask } from "@/app/lib/transfer-core/transferModel";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
@@ -289,6 +292,30 @@ export default function DriveWorkspace({
   const bootLoaderVisibleRef = useRef(true);
   const bootLoaderHoldTimerRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [transferPanelOpen, setTransferPanelOpen] = useState(false);
+  const [transferPanelMinimized, setTransferPanelMinimized] = useState(false);
+  const transferActiveRef = useRef(false);
+  const transferAbortRef = useRef(new Map<string, AbortController>());
+  const transferCancelledRef = useRef(new Set<string>());
+  function patchTransferTask(id: string, patch: Partial<TransferTask>) {
+    setTransferTasks(current => current.map(task => task.id === id
+      ? {...task, ...patch, updatedAt: Date.now()} : task));
+  }
+  function cancelTransferTask(id: string) {
+    transferCancelledRef.current.add(id);
+    transferAbortRef.current.get(id)?.abort();
+    patchTransferTask(id, {phase:"CANCELLED",speedBps:null});
+  }
+  useEffect(() => {
+    const warnOnUnload = (event: BeforeUnloadEvent) => {
+      if (!transferActiveRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnOnUnload);
+    return () => window.removeEventListener("beforeunload", warnOnUnload);
+  }, []);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -1465,32 +1492,64 @@ export default function DriveWorkspace({
       setError("A feltöltés célmappája nem található. Válassz ki egy célmappát, majd próbáld újra.");
       return;
     }
+    if (transferActiveRef.current) {
+      setError("Egy korábbi feltöltési sor még fut. Várd meg a végét az Átvitelek panelen.");
+      return;
+    }
+
+    transferActiveRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
+    setTransferPanelOpen(true);
+    setTransferPanelMinimized(false);
+
+    const entries = files.map((file, index) => ({
+      id: crypto.randomUUID(),
+      file,
+      relativePath: originalRelativePaths?.[index] || file.name,
+    }));
+    const folderName = targetFolder.displayPath || targetFolder.path || targetFolder.name;
+    setTransferTasks(current => [...current, ...entries.map(({id,file}): TransferTask => ({
+      id, fileName: file.name, folderName,
+      sizeBytes: file.size, uploadedBytes: 0, phase: "QUEUED",
+      speedBps: null, error: null, updatedAt: Date.now(),
+    }))]);
 
     let uploadedCount = 0;
     let cleanCount = 0;
     let lastDocumentId = "";
     const failures: string[] = [];
-
     try {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+      const processEntry = async (index: number) => {
+        const { id, file, relativePath } = entries[index];
+        if (transferCancelledRef.current.has(id)) return;
+        const controller = new AbortController();
+        transferAbortRef.current.set(id, controller);
         let abortUrl = "";
         try {
-          const progressLabel = files.length > 1 ? `${index + 1}/${files.length} · ` : "";
-          setNotice(`${progressLabel}Feltöltés előkészítése: ${file.name}`);
-
-          const initResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/uploads/init`, {
+          const progressLabel = files.length > 1 ? String(index + 1) + "/" + files.length + " · " : "";
+          const maxUploadMb = health?.storage?.maxUploadMb;
+          const maxScanMb = health?.security?.maxScanMb;
+          const limitMb = Math.min(
+            Number.isFinite(maxUploadMb) && maxUploadMb! > 0 ? maxUploadMb! : 100,
+            Number.isFinite(maxScanMb) && maxScanMb! > 0 ? maxScanMb! : 550,
+          );
+          if (file.size > limitMb * 1024 * 1024) {
+            throw new Error("A fájl meghaladja a biztonságosan fogadható " + limitMb + " MiB/fájl korlátot.");
+          }
+          patchTransferTask(id, {phase: "INITIALIZING"});
+          setNotice(progressLabel + "Feltöltés előkészítése: " + file.name);
+          const initResponse = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/uploads/init", {
             method: "POST",
             credentials: "same-origin",
-            headers: { "content-type": "application/json" },
+            signal: controller.signal,
+            headers: {"content-type":"application/json"},
             body: JSON.stringify({
               folderId: targetFolder.id,
               documentName: file.name,
               originalName: file.name,
-              originalRelativePath: originalRelativePaths?.[index] || file.name,
+              originalRelativePath: relativePath,
               mimeType: file.type || "application/octet-stream",
               sizeBytes: file.size,
               versionKind: "INITIAL",
@@ -1506,22 +1565,43 @@ export default function DriveWorkspace({
           }
 
           abortUrl = initPayload.abortUrl || "";
-          setNotice(`${progressLabel}Feltöltés a privát tárhelyre: ${file.name}`);
-          const objectResponse = await fetch(uploadTarget.url, {
+          patchTransferTask(id, {phase: "UPLOADING"});
+          setNotice(progressLabel + "Feltöltés a privát tárhelyre: " + file.name);
+          let sample: {loaded:number;at:number;smoothedBps:number|null} | null = null;
+          let lastProgressRenderAt = 0;
+          await transferHttpUpload({
+            url: uploadTarget.url,
             method: uploadTarget.method,
-            credentials: initPayload.browserUpload ? "same-origin" : "omit",
             headers: uploadTarget.headers,
-            body: file,
+            file,
+            sameOrigin: Boolean(initPayload.browserUpload),
+            signal: controller.signal,
+            onProgress: loaded => {
+              if (controller.signal.aborted) return;
+              const now = performance.now();
+              sample = transferSpeedSample(sample, loaded, now);
+              if (loaded !== file.size && now-lastProgressRenderAt<160) return;
+              lastProgressRenderAt = now;
+              patchTransferTask(id, {
+                phase: "UPLOADING",
+                uploadedBytes: loaded,
+                speedBps: sample.smoothedBps,
+              });
+            },
           });
-          if (!objectResponse.ok) {
-            throw new Error(`A privát tárhely feltöltése sikertelen (${objectResponse.status}).`);
+          if (controller.signal.aborted) {
+            throw new DOMException("A feltöltés megszakadt.", "AbortError");
           }
+          patchTransferTask(id, {phase: "VERIFYING", uploadedBytes: file.size, speedBps: null});
+          setNotice(progressLabel + "SHA-256 ellenőrzés: " + file.name);
 
-          setNotice(`${progressLabel}SHA-256 és biztonsági ellenőrzés: ${file.name}`);
+          // Server completion performs authoritative SHA-256 verification and ClamAV scan.
+          // The transfer meter is already 100%; security must remain a separate phase.
+          patchTransferTask(id, {phase: "SCANNING"});
           const completeResponse = await fetch(initPayload.completeUrl, {
             method: "POST",
             credentials: "same-origin",
-            headers: { "content-type": "application/json" },
+            headers: {"content-type":"application/json"},
             body: "{}",
           });
           const completePayload = await completeResponse.json() as {
@@ -1539,43 +1619,61 @@ export default function DriveWorkspace({
           if (!completeResponse.ok || !completePayload.ok) {
             throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
           }
-
           uploadedCount += 1;
-          if (completePayload.securityScan?.scan?.status === "CLEAN") cleanCount += 1;
+          const scan = completePayload.securityScan;
+          const scanStatus = scan?.scan?.status;
+          if (scanStatus === "CLEAN") {
+            cleanCount += 1;
+            patchTransferTask(id, {phase: "AWAITING_REVIEW"});
+          } else if (scanStatus === "INFECTED") {
+            patchTransferTask(id, {phase: "INFECTED", error: "A szerver vírusveszélyt jelzett."});
+          } else if (scan?.ok === false || scanStatus === "ERROR") {
+            patchTransferTask(id, {phase: "SCAN_FAILED", error: scan?.error || scan?.code || "A vírusellenőrzés sikertelen."});
+          } else {
+            patchTransferTask(id, {phase: "SCAN_PENDING"});
+          }
           if (completePayload.document?.id) lastDocumentId = completePayload.document.id;
         } catch (caught) {
           if (abortUrl) {
             await fetch(abortUrl, {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ reason: "Web Drive kliensoldali feltöltés megszakadt." }),
+              method: "POST", credentials: "same-origin",
+              headers: {"content-type":"application/json"},
+              body: JSON.stringify({reason:"DIMPRO Transfer Center webes munkamenet megszakadt."}),
             }).catch(() => undefined);
           }
+          const cancelled = transferCancelledRef.current.has(id) || controller.signal.aborted;
           const message = caught instanceof Error ? caught.message : "A fájlfeltöltés sikertelen.";
-          failures.push(`${file.name}: ${message}`);
+          patchTransferTask(id, {phase: cancelled ? "CANCELLED" : "ERROR", error: cancelled ? null : message, speedBps: null});
+          if (!cancelled) failures.push(file.name + ": " + message);
+        } finally {
+          transferAbortRef.current.delete(id);
         }
-      }
-
+      };
+      // Two independent bounded transfers; each completes server SHA/ClamAV
+      // before its worker starts another file. No uncontrolled Promise.all(files).
+      let nextTransferIndex = 0;
+      const transferWorker = async () => {
+        while (nextTransferIndex < entries.length) {
+          const index = nextTransferIndex++;
+          await processEntry(index);
+        }
+      };
+      await Promise.all(Array.from({length: Math.min(2, entries.length)}, () => transferWorker()));
+      entries.forEach(({id}) => transferCancelledRef.current.delete(id));
       await load();
       if (lastDocumentId) setSelectedDocumentId(lastDocumentId);
-
       if (failures.length) {
-        setNotice(uploadedCount ? `${uploadedCount}/${files.length} fájl sikeresen feltöltve.` : "");
-        setError(`${failures.length}/${files.length} fájl feltöltése sikertelen. ${failures.slice(0, 3).join(" · ")}${failures.length > 3 ? ` · +${failures.length - 3} további hiba` : ""}`);
-      } else if (files.length > 1) {
+        setNotice(uploadedCount ? uploadedCount + "/" + files.length + " fájl szerverre feltöltve." : "");
+        setError(failures.length + "/" + files.length + " hiba. " + failures.slice(0,3).join(" · "));
+      } else if (uploadedCount) {
         setError("");
-        setNotice(cleanCount === uploadedCount
-          ? uploadedCount + "/" + files.length + " fájl feltöltve · Biztonsági ellenőrzés rendben. Jóváhagyásig karanténban maradnak."
-          : uploadedCount + "/" + files.length + " fájl feltöltve. Jóváhagyásig karanténban maradnak.");
-      } else if (cleanCount === 1) {
-        setError("");
-        setNotice("Feltöltés kész · Biztonsági ellenőrzés rendben. Jóváhagyásig karanténban marad.");
+        setNotice(uploadedCount + "/" + files.length + " fájl átküldve · " + cleanCount +
+          " vírusmentes, de jóváhagyásig karanténban marad.");
       } else {
-        setError("");
-        setNotice("A fájl feltöltődött és biztonsági ellenőrzésre vár. Jóváhagyásig karanténban marad.");
+        setNotice("Nem került új fájl a szerverre.");
       }
     } finally {
+      transferActiveRef.current = false;
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -3905,6 +4003,16 @@ export default function DriveWorkspace({
         shelfHeight={boxShelfHeight}
         onShelfHeightChange={setBoxShelfHeight}
         onResetShelfHeight={() => setBoxShelfHeight(Math.max(118, Math.round(window.innerHeight * 0.5)))}
+      />
+      <DriveTransferCenter
+        tasks={transferTasks}
+        open={transferPanelOpen}
+        minimized={transferPanelMinimized}
+        onOpen={() => setTransferPanelOpen(true)}
+        onMinimize={() => setTransferPanelMinimized(value => !value)}
+        onClose={() => setTransferPanelOpen(false)}
+        onCancel={cancelTransferTask}
+        onClearFinished={() => setTransferTasks(tasks => tasks.filter(task => !isTransferTerminal(task.phase)))}
       />
     </div>
   );

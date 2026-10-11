@@ -57,6 +57,10 @@ function scannerError(error: unknown) {
   };
 }
 
+export function getDriveScannerUploadLimitBytes(): number {
+  return getDriveScannerConfig().maxScanBytes;
+}
+
 export async function getDriveSecurityScannerHealth() {
   const config = getDriveScannerConfig();
   if (!config.enabled || config.scannerMode !== "clamd-instream") {

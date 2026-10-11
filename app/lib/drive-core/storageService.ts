@@ -16,6 +16,7 @@ import {
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
 import { requireDriveCleanSecurityScan } from "./securityScanRepository";
+import { getDriveScannerUploadLimitBytes } from "./securityScanService";
 import { requireDriveDocumentAccess, requireDriveFolderAccess } from "./folderAccess";
 import {
   abortDriveUploadSessionRecord,
@@ -180,6 +181,16 @@ export async function initDriveObjectUpload(input: {
     throw new DriveCoreRepositoryError(
       `A fájl meghaladja a ${status.maxUploadMb} MB-os DRIVE feltöltési korlátot.`,
       "DRIVE_UPLOAD_TOO_LARGE",
+      413,
+    );
+  }
+
+  const scannerLimitBytes = getDriveScannerUploadLimitBytes();
+  if (sizeBytes > scannerLimitBytes) {
+    throw new DriveCoreRepositoryError(
+      "A fájl meghaladja a jelenleg biztonságosan vírusellenőrizhető "
+        + Math.floor(scannerLimitBytes / (1024 * 1024)) + " MiB-os határt.",
+      "DRIVE_SECURITY_SCAN_SIZE_LIMIT",
       413,
     );
   }

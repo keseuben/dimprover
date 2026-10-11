@@ -6,7 +6,7 @@ import { DRIVE_HELP_ACTIONS, DRIVE_HELP_TOPICS, DRIVE_ROLE_HELP, driveHelpStatus
 import styles from "./DriveHelpCenter.module.css";
 
 type Props = { open:boolean; workspace:"PERSONAL"|"PROJECT"; workspaceName:string; onClose:()=>void };
-const TOPIC_ICONS:Record<string,typeof HelpCircle>={start:BookOpen,views:FileSearch2,personal:FolderKanban,project:FolderKanban,permissions:ShieldCheck,"upload-names":Upload,downloads:Download,favorites:Star,boxes:Box,review:ShieldCheck,security:ShieldCheck,viewer:FileSearch2,"button-index":HelpCircle,troubleshooting:HelpCircle};
+const TOPIC_ICONS:Record<string,typeof HelpCircle>={start:BookOpen,views:FileSearch2,personal:FolderKanban,project:FolderKanban,permissions:ShieldCheck,"transfer":Upload,"upload-names":Upload,downloads:Download,favorites:Star,boxes:Box,review:ShieldCheck,security:ShieldCheck,viewer:FileSearch2,"button-index":HelpCircle,troubleshooting:HelpCircle};
 function matchWorkspace(value:DriveHelpWorkspace,workspace:"PERSONAL"|"PROJECT"){return value==="ALL"||value===workspace}
 function normalize(value:string){return value.toLocaleLowerCase("hu-HU").normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
 
