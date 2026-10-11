@@ -1,0 +1,44 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
+const ts=require("typescript");
+const file=readFileSync("app/api/projects/[projectId]/licenses/readiness/route.ts","utf8");
+const code=ts.transpileModule(file,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+let allowed=false,projectReads=0,dbReads=0,backendFails=false;
+const load=id=>{
+ if(id==="next/server")return {NextResponse:{json:(value,options)=>({body:value,status:options?.status||200,headers:options?.headers})}};
+ if(id.includes("project-core/auth"))return {requireProjectPermission:async(_request,id,permission)=>{
+  projectReads++;
+  assert.equal(id,"p-001");
+  assert.equal(permission,"project.read");
+  return allowed?{ok:true,access:{permissions:["project.read"]}}:{ok:false,status:404,error:"ACCESS_DENIED"};
+ }};
+ if(id.includes("projectCommercialReadiness"))return {readProjectCommercialReadiness:async(id)=>{
+  dbReads++;
+  assert.equal(id,"p-001");
+  if(backendFails)throw Error("BACKEND_UNAVAILABLE");
+  return [{productCode:"DRIVE",recordStatus:"NOT_ASSIGNED",enforcementActive:false}];
+ }};
+ throw Error("UNEXPECTED_MODULE:"+id);
+};
+const exports={};
+new Function("require","exports",code)(load,exports);
+const context={params:Promise.resolve({projectId:"p-001"})};
+const denied=await exports.GET({},context);
+assert.equal(denied.status,404,"cross-project membership denied");
+assert.equal(dbReads,0,"no commercial DB before ACL");
+allowed=true;
+const allowedResponse=await exports.GET({},context);
+assert.equal(allowedResponse.status,200);
+assert.equal(allowedResponse.headers["cache-control"],"private, no-store");
+assert.equal(allowedResponse.body.entitlementEnforcementReleased,false);
+assert.equal(allowedResponse.body.effectiveAccessNotEvaluated,true);
+assert.ok(!JSON.stringify(allowedResponse.body).includes("payer"));
+assert.equal(dbReads,1);
+backendFails=true;
+const error=await exports.GET({},context);
+assert.equal(error.status,503,"DB unavailable fails closed");
+assert.ok(!JSON.stringify(error.body).includes("BACKEND_UNAVAILABLE"),"no internal DB details");
+assert.equal(projectReads,3);
+console.log("DIMPRO PROJECT READINESS ROUTE ACL 11/11 PASS");
