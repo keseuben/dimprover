@@ -383,6 +383,32 @@ export async function uploadDriveObjectThroughServer(input: {
   };
 }
 
+/**
+ * Strictly actor-bound and project/folder ACL-bound read of a previous upload.
+ * Do not disclose storage keys, URLs, hash state or other tenants' metadata.
+ */
+export async function getDriveObjectUploadStatus(input: {
+  projectId:string;
+  uploadId:string;
+  actorUserId:string;
+  access:ProjectAccessContext;
+}) {
+  const session=await getDriveUploadSessionRecord(input.projectId,input.uploadId);
+  if(!session)throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.","DRIVE_UPLOAD_NOT_FOUND",404);
+  if(session.createdBy!==input.actorUserId) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet nem ehhez a felhasználóhoz tartozik.","DRIVE_UPLOAD_ACTOR_MISMATCH",403);
+  }
+  await requireDriveUploadSessionAccess(input.projectId,session,input.access);
+  return {
+    ok:true as const,
+    uploadId:session.id,
+    status:session.status,
+    finalizedDocumentId:session.status==="FINALIZED"?session.finalizedDocumentId:null,
+    finalizedVersionId:session.status==="FINALIZED"?session.finalizedVersionId:null,
+    expiresAt:session.expiresAt,
+  };
+}
+
 export async function completeDriveObjectUpload(input: {
   projectId: string;
   uploadId: string;

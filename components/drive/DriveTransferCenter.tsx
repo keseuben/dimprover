@@ -22,7 +22,7 @@ function durationLabel(seconds: number | null) {
 }
 
 export default function DriveTransferCenter({
-  tasks, open, minimized, onOpen, onMinimize, onClose, onCancel, onClearFinished,
+  tasks, open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
 }: {
   tasks: readonly TransferTask[];
   open: boolean;
@@ -31,6 +31,8 @@ export default function DriveTransferCenter({
   onMinimize: () => void;
   onClose: () => void;
   onCancel: (taskId: string) => void;
+  onRetry: (taskId: string) => void;
+  retryDisabled: boolean;
   onClearFinished: () => void;
 }) {
   const summary = useMemo(() => summarizeTransfers(tasks), [tasks]);
@@ -99,9 +101,14 @@ export default function DriveTransferCenter({
                   <small>{sizeLabel(task.speedBps)}/s</small>}
               </td>
               <td className={styles.phase}><span>{TRANSFER_LABELS[task.phase]}</span>
+                {task.retryCount ? <small>{"Újraküldés: "+task.retryCount+". alkalom"}</small> : null}
                 {task.error&&<small title={task.error}>{task.error}</small>}
               </td>
-              <td className={styles.action}>{(["QUEUED","INITIALIZING","UPLOADING"] as string[]).includes(task.phase)&&
+              <td className={styles.action}>{task.phase==="ERROR" && task.retryable!==false &&
+                <button type="button" onClick={()=>onRetry(task.id)} disabled={retryDisabled}
+                  title="Új feltöltési munkamenettel a teljes fájl újraküldése"
+                  aria-label={task.fileName+" teljes fájl újrapróbálása"}>Újra</button>}
+                {(["QUEUED","INITIALIZING","UPLOADING"] as string[]).includes(task.phase)&&
                 <button type="button" onClick={()=>onCancel(task.id)} title="Feltöltés megszakítása"
                   aria-label={task.fileName+" feltöltésének megszakítása"}><XCircle size={16}/></button>}
               </td>

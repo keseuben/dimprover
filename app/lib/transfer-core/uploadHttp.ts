@@ -1,6 +1,8 @@
 "use client";
 
 /** Browser XHR adapter for existing Drive signed S3 and same-origin PUT routes. */
+import {classifyTransferRetry,transferRetryDelayMs,waitForTransferDelay} from "./retryPolicy.mjs";
+
 export type TransferUploadHttpOptions = {
   url: string;
   method: string;
@@ -39,7 +41,7 @@ export function transferHttpUpload(input: TransferUploadHttpOptions): Promise<vo
         input.onProgress(input.file.size);
         finish();
       } else {
-        finish(new Error("Fájlfeltöltés sikertelen (HTTP " + xhr.status + ")."));
+        finish(Object.assign(new Error("Fájlfeltöltés sikertelen (HTTP " + xhr.status + ")."), {status:xhr.status}));
       }
     };
     input.signal.addEventListener("abort", onAbort, { once: true });
@@ -47,4 +49,27 @@ export function transferHttpUpload(input: TransferUploadHttpOptions): Promise<vo
       finish(error instanceof Error ? error : new Error("A fájlfeltöltés nem indítható."));
     }
   });
+}
+
+/**
+ * Full-file PUT retry for existing Drive upload sessions. The same signed URL
+ * is reused only for retryable transport errors. This is NOT byte-range resume;
+ * the server still receives a complete object before finalize. This helper
+ * must never retry a POST init or POST complete because they can create versions.
+ */
+export async function transferHttpUploadWithRetry(input: TransferUploadHttpOptions & {
+  maxAttempts?: number;
+  onRetry?: (attempt: number, delayMs: number) => void;
+}): Promise<void> {
+  const attempts = Math.max(1,Math.min(4,input.maxAttempts ?? 3));
+  for (let attempt=1; attempt<=attempts; attempt++){
+    try { await transferHttpUpload(input); return; }
+    catch(error) {
+      if (classifyTransferRetry(error) !== "RETRYABLE" || attempt===attempts || input.signal.aborted) throw error;
+      const waitMs = transferRetryDelayMs(attempt);
+      input.onRetry?.(attempt,waitMs);
+      input.onProgress(0); // next full PUT starts at byte zero
+      await waitForTransferDelay(waitMs,input.signal);
+    }
+  }
 }

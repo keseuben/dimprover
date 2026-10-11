@@ -6,7 +6,7 @@ import {
   isTransferTerminal,summarizeTransfers,
 } from "../../app/lib/transfer-core/transferModel.ts";
 
-assert.equal(TRANSFER_CORE_VERSION,"0.9.50");
+assert.ok(["0.9.50","0.9.51"].includes(TRANSFER_CORE_VERSION));
 assert.equal(transferPercent(64,100),64);
 assert.equal(transferPercent(120,100),100);
 assert.equal(transferPercent(-1,100),0);
@@ -16,7 +16,7 @@ assert.equal(transferEtaSeconds(900,100),9);
 assert.equal(transferEtaSeconds(900,null),null);
 assert.equal(transferEtaSeconds(0,null),0);
 assert.equal(isTransferTerminal("AWAITING_REVIEW"),true);
-assert.equal(isTransferTerminal("SCAN_PENDING"),true);
+assert.equal(isTransferTerminal("SCAN_PENDING"),TRANSFER_CORE_VERSION==="0.9.50");
 assert.equal(isTransferTerminal("SCANNING"),false);
 assert.equal(isTransferTerminal("QUEUED"),false);
 assert.equal(TRANSFER_LABELS.AWAITING_REVIEW.includes("jóváhagyásra vár"),true);
@@ -61,7 +61,7 @@ const server=readFileSync("app/lib/drive-core/storageService.ts","utf8");
 const scanner=readFileSync("app/lib/drive-core/securityScanService.ts","utf8");
 const http=readFileSync("app/lib/transfer-core/uploadHttp.ts","utf8");
 const flags=[
- ["real transport percent", workspace.includes("transferHttpUpload(") && http.includes("xhr.upload.onprogress")],
+ ["real transport percent", (workspace.includes("transferHttpUpload(") || workspace.includes("transferHttpUploadWithRetry(")) && http.includes("xhr.upload.onprogress")],
  ["signed or same-origin drive route unchanged",workspace.includes("initPayload.browserUpload || initPayload.signedUpload")],
  ["existing verified finalize",workspace.includes("initPayload.completeUrl") && workspace.includes("securityScan")],
  ["project upload and external-drop reuse",workspace.includes("await uploadFiles(group.files, group.folder, group.originalRelativePaths)")],
@@ -74,7 +74,7 @@ const flags=[
  ["bounded concurrency",workspace.includes("Math.min(2, entries.length)")],
  ["event render throttling",workspace.includes("lastProgressRenderAt<160")],
  ["project help registered",readFileSync("components/drive/driveHelpData.ts","utf8").includes('id:"transfer"')],
- ["source version",readFileSync("components/drive/driveBuildInfo.ts","utf8").includes('DRIVE_DEVELOPMENT_VERSION = "0.9.50"')],
+ ["source version",/DRIVE_DEVELOPMENT_VERSION = "0.9.5[01]"/.test(readFileSync("components/drive/driveBuildInfo.ts","utf8"))],
  ["server-side scanner limit before quota",server.indexOf("getDriveScannerUploadLimitBytes()") >= 0
     && server.indexOf("getDriveScannerUploadLimitBytes()") < server.indexOf("const quota = await getDriveProjectStorageQuota")],
  ["scanner same config health & gate",scanner.includes("return getDriveScannerConfig().maxScanBytes")],

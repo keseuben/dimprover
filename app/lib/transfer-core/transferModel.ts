@@ -3,11 +3,11 @@
  * No credentials, signed URLs, health/identity payloads, or customer data persisted.
  * Percentages describe network bytes only, never malware scanning or approval.
  */
-export const TRANSFER_CORE_VERSION = "0.9.50" as const;
+export const TRANSFER_CORE_VERSION = "0.9.51" as const;
 export type TransferPhase =
   | "QUEUED" | "INITIALIZING" | "UPLOADING" | "VERIFYING" | "SCANNING"
   | "AWAITING_REVIEW" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"
-  | "ERROR" | "CANCELLED";
+  | "CONFIRMATION_UNKNOWN" | "STATUS_UNAVAILABLE" | "ERROR" | "CANCELLED";
 
 export type TransferTask = {
   id: string;
@@ -19,11 +19,17 @@ export type TransferTask = {
   speedBps: number | null;
   error: string | null;
   updatedAt: number;
+  uploadId?: string;
+  retryCount?: number;
+  retryable?: boolean;
+  documentId?: string;
+  versionId?: string;
+  lastScanCheckedAt?: number;
 };
 
 export const TRANSFER_TERMINAL_PHASES = [
-  "AWAITING_REVIEW", "SCAN_PENDING", "SCAN_FAILED", "INFECTED",
-  "ERROR", "CANCELLED",
+  "AWAITING_REVIEW", "SCAN_FAILED", "INFECTED",
+  "ERROR", "CANCELLED", "STATUS_UNAVAILABLE",
 ] as const satisfies readonly TransferPhase[];
 
 export const TRANSFER_LABELS: Record<TransferPhase, string> = {
@@ -38,6 +44,8 @@ export const TRANSFER_LABELS: Record<TransferPhase, string> = {
   INFECTED: "Vírusveszély · fájl blokkolva",
   ERROR: "Feltöltési hiba",
   CANCELLED: "Megszakítva",
+  CONFIRMATION_UNKNOWN: "Véglegesítés ellenőrzése – új feltöltés tiltva",
+  STATUS_UNAVAILABLE: "Státusz nem ellenőrizhető · hozzáférés szükséges",
 };
 
 export function isTransferTerminal(phase: TransferPhase): boolean {

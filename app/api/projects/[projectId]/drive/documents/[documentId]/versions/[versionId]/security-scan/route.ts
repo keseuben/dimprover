@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
 import { getDriveVersionSecurityStatus, scanDriveQuarantinedVersion } from "@/app/lib/drive-core/securityScanService";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
+import { requireDriveDocumentAccess } from "@/app/lib/drive-core/store";
 
 type RouteContext = {
   params: Promise<{ projectId: string; documentId: string; versionId: string }>;
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
+    await requireDriveDocumentAccess(projectId, documentId, access.access);
     const result = await getDriveVersionSecurityStatus({ projectId, documentId, versionId });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
