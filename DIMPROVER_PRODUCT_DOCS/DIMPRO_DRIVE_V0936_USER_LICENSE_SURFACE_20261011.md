@@ -42,3 +42,16 @@ A jóváhagyott címzett beállítása nem jelenti a migráció/SMTP kiküldés 
 - Külön BUILD01 teljes Next fordítás, böngészős responsive teszt (1366x768 és 1600x900), személyes/project ACL QA szükséges.
 - Új licenc DB migráció NINCS; új auth mail operator migráció (013) továbbra is csak source candidate.
 - Jelenlegi DEV Drive működése és PROD érintetlen.
+
+## BUILD01 teljes build ellenőrzése – 2026-10-11
+
+- Futás: drive-v0936-f97921e46-20261011-build01-b1.
+- Source commit: f97921e46a88ff32f760c24c56236db450c8fffe.
+- Állapot: **PASS**.
+- Build ID: PTu_ZSXs-aCDjXC5HP5bz.
+- Artifact SHA-256: 2db2ba926bff8739db450107ca51d59a7f8daffc8f29059673126e972048bb78.
+- A metadata, gateway status és az artifact tényleges SHA-256 értéke megegyezik.
+- A buildnapló külön felsorolja a /drive/licenc oldalt, Next.js fordítás/TypeScript/standalone PASS.
+- A BUILD01 kizárólag külön build szerver, a DEV működő Drive útvonala nem módosult.
+- DEV 2026-10-11 ellenőrzött lemez: 118 GiB összes / 115 GiB foglalt / 2.1 GiB szabad, 99%.
+- Előfizetési licencadatok összerendelése, AUTH+Identity Core adatmodell és licencjogosultságok, valamint browser QA még külön release gate.
