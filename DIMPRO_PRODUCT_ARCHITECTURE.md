@@ -49,6 +49,14 @@ A licenc fizetője (magánszemély / vállalkozás) külön adat a licenc tulajd
 
 A korábbi, még nem telepített AUTH migrációk 014–017 közül a projektlicenc-adatmodell csak a DRIVE és PROJECT_GATE termékek kereskedelmi rekordjait ismeri. A többi termék fizetős licencforrása NINCS kész. A PRODUCT-topológia nem aktiválja őket automatikusan.
 
+## V0.9.44 – USER-scope kereskedelmi licenc
+
+- A Saját Drive és a DIMPROONE kereskedelmi előfizetés tulajdonosa a központi AUTH felhasználó UUID-ja, nem egy fiktív projekt vagy email-alias.
+- A source-only 019_auth_v056_user_product_licenses.sql megőrzi a tulajdonosi kapcsolatot, az auditálhatóságot és a létező licencforrások különállását.
+- A DIMPROONE nem keletkeztet második fizikai Drive-tárhelyet, a saját 50 GiB-os korábbi alapkvóták továbbra is változatlanok.
+- Az új, kizárólag a hitelesített fiókhoz tartozó API kereskedelmi státuszt ad vissza, nem tényleges termék-, hozzáférés- vagy tárhelyjogosultságot.
+- Részletes fejlesztési átadó: DIMPROVER_PRODUCT_DOCS/DIMPRO_LICENSE_V0944_PERSONAL_SCOPE_SOURCE_20261011.md.
+
 ## Kötelező fejlesztési szabályok
 
 - Felhasználói jogosultság és fizetős előfizetés két külön dolog.

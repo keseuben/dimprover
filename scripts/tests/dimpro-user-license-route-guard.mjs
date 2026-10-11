@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
+const ts=require("typescript");
+const source=readFileSync("app/api/drive/license/self/route.ts","utf8");
+const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+let allowed=false,unavailable=false,authCalls=0,readCalls=0;
+const userId="b2b2fc16-a809-4f35-86ee-81c10841cd51";
+const exports={};
+const loader=id=>{
+ if(id==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status??200,headers:options?.headers})}};
+ if(id.includes("project-core/auth"))return {resolveProjectCoreAuth:async request=>{
+  authCalls++; assert.equal(request?.requestedOtherUserId,"other");
+  return allowed?{ok:true,actor:{userId,email:"own@example.test"}}:{ok:false,status:401,error:"AUTH_REQUIRED"};
+ }};
+ if(id.includes("userCommercialReadiness"))return {readOwnUserCommercialReadiness:async passedUserId=>{
+  readCalls++;assert.equal(passedUserId,userId,"never query any other user");
+  if(unavailable)throw Error("SECRET_DATABASE_CONNECTION");
+  return [{productCode:"DRIVE",status:"SOURCE_NOT_CONFIGURED",enforcementReleased:false}];
+ }};
+ throw Error("Unexpected import: "+id);
+};
+new Function("require","exports",code)(loader,exports);
+const input={requestedOtherUserId:"other"};
+const denied=await exports.GET(input);
+assert.equal(denied.status,401);
+assert.equal(readCalls,0,"no license read before auth");
+allowed=true;
+const result=await exports.GET(input);
+assert.equal(result.status,200);
+assert.equal(result.body.scope,"USER");
+assert.equal(result.body.effectiveEntitlementReleased,false);
+assert.equal(result.body.legacyPersonalAccessUnchanged,true);
+assert.equal(result.headers["cache-control"],"private, no-store");
+assert.ok(!JSON.stringify(result.body).includes("own@example.test"),"no email echoed");
+unavailable=true;
+const failed=await exports.GET(input);
+assert.equal(failed.status,503);
+assert.ok(!JSON.stringify(failed.body).includes("SECRET_DATABASE_CONNECTION"));
+assert.equal(authCalls,3);
+console.log("DIMPRO V0.9.44 SELF LICENSE API AUTH GUARD PASS");

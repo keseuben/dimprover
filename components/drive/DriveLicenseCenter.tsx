@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { DriveStorageQuota } from "./driveTypes";
 import ProjectDriveLicensePanel from "./ProjectDriveLicensePanel";
+import PersonalCommercialReadinessCard from "./PersonalCommercialReadinessCard";
 import styles from "./DriveLicenseCenter.module.css";
 
 type Grant = {
@@ -187,6 +188,8 @@ export default function DriveLicenseCenter() {
             </dl>
           </section>
         </div>
+
+        <PersonalCommercialReadinessCard/>
 
         <section className={styles.panel}>
           <h2><Database size={19}/> Tárhelykeret és használat</h2>
