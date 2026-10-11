@@ -1,5 +1,6 @@
-import {Building2, BriefcaseBusiness, FolderLock, HardDrive, Layers3, ShieldCheck, UserRound} from "lucide-react";
+import {Building2, BriefcaseBusiness, FolderLock, HardDrive, Layers3, Send, ShieldCheck, UserRound} from "lucide-react";
 import {DIMPRO_PRODUCTS,DIMPRO_PRODUCT_ARCHITECTURE_VERSION} from "@/app/lib/license/dimproProductArchitecture";
+import {DIMPRO_DROP_SERVICE} from "@/app/lib/license/dimproDropServiceCatalog";
 import styles from "./ProductArchitectureOverview.module.css";
 
 const icons=[UserRound,BriefcaseBusiness,FolderLock,Building2,Layers3];
@@ -31,13 +32,22 @@ export default function ProductArchitectureOverview(){
         </article>;
       })}
     </div>
-    <div className={styles.drive}>
-      <HardDrive size={21}/>
-      <div><strong>{drive.name} · közös fájlkezelő szolgáltatás</strong>
-        <p>Személyes és projektszintű munkatér. A Projektkapu, BUILD és DIMPROVER az engedélyezett közös dokumentumokat használhatja; nem jöhet létre automatikus duplázott fizikai fájltár.</p>
+    <div className={styles.services}>
+      <div className={styles.drive}>
+        <HardDrive size={21}/>
+        <div><strong>{drive.name} · közös fájlkezelő szolgáltatás</strong>
+          <p>Személyes és projektszintű tartós munkatér, dokumentumverziók és szinkron. Önálló Drive-előfizetés; más termékhez csak megfelelő ACL mellett kapcsolható.</p>
+        </div>
+        <span>USER + PROJECT</span>
       </div>
-      <span>USER + PROJECT</span>
+      <div className={styles.drive}>
+        <Send size={21}/>
+        <div><strong>{DIMPRO_DROP_SERVICE.name} · önálló fájlküldő szolgáltatás</strong>
+          <p>E-mailes DIMPRO Send, Gyors KépSend és meghívásos Drop-munkafolyamatok. Drive-előfizetés nélkül is használható; projektbe/Drive-ba átadás csak külön jogosultsággal.</p>
+        </div>
+        <span>USER + ORGANIZATION</span>
+      </div>
     </div>
-    <p className={styles.note}>Jelenlegi forrás: Drive és Projektkapu kereskedelmi rekordok előkészítve, de nem aktivált licencérvényesítéssel. A többi termék külön licencadatforrása későbbi fejlesztés. AUTH / Project Core / ACL / fizetős licenc egymástól elkülönítve marad.</p>
+    <p className={styles.note}>A Drive és a Drop külön licencelhető, de együttműködő szolgáltatások. A Drop jelenlegi Identity Core / Send entitlement licenceit az egységes központi AUTH-ba később, auditáltan vezetjük át. A régi licencek és Send-kódok addig érvényben maradnak; az új katalógus nem ad vagy von el hozzáférést. A többi termék licencforrása későbbi fejlesztés.</p>
   </section>;
 }

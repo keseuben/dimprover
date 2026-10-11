@@ -75,6 +75,20 @@ V0.9.45 source-only implementáció: app/lib/license/dimproMiniAppCatalog.ts, db
 
 A segédappok nem adhatnak egymásnak vagy a DIMPRO Drive-nak jogosultságot csupán a termékregisztráció alapján. Később bármely mini appnak lehetnek önálló éves/havi, esetleges tranzakcióalapú csomagjai, de azok és a valós scope-ok külön üzleti döntés tárgyai.
 
+## V0.9.46 – DIMPRO Drop mint a Drive önálló társszolgáltatása
+
+A DIMPRO Drop a DIMPRO_DROP termékkóddal a DIMPRO Drive mellé kerül. Külön előfizethető, nincs kötelező Drive licenc. A Drive tartós, verziózott fájltár; a Drop határidős fájlküldési és fájlbekérési munkafolyamatokat szolgál ki. A két rendszer egy projektnél kapcsolódhat, de külön jogosultságok és megőrzési/kvótaszabályok alapján.
+
+A Drop alkalmazásban meglévő munkafolyamatok: DIMPRO Send (e-mailes küldés), Gyors KépSend, CsomagDrop, Beküldőkapu és Drop Tér; a Drop projektbe irányuló átadási funkciója a Projektkapu/Drive ACL-t is figyelembe veszi. A Send Identity Core konkrét moduljogai többek között: DROP_SEND, DROP_QUICK_IMAGE_SEND, DROP_PROJECT_INBOX, DROP_QUICK_VOICE_NOTE. Ezek egyike sem jelent automatikusan Drive tárhely- vagy projektjogosultságot.
+
+Javasolt tulajdonosi scope: USER / ORGANIZATION. A projektes együttműködés kapcsolt moduljog, nem kötelező külön PROJECT-scope terméklicenc. Ezt a termékmarketing és a későbbi üzleti jóváhagyás pontosíthatja.
+
+A Dropnak már van működő Identity Core licencrendszere, külön központi LIC-ÉÉ-XXXX-XXXX terméklicenccel, Drop Send entitlementekkel, HMAC-védett Send-kóddal, modulkorlátokkal és opcionális projektkapcsolattal. Az egységes új AUTH licencmotor nem helyettesítheti ezt egyik napról a másikra. A meglévő ügyfél licencek, jogosult felhasználók, kódok, címzettkonfigurációk, csomagkeretek, lejáratok, auditnaplók és tárolt csomagok jogosultságait az átállás ideje alatt meg kell őrizni.
+
+SOURCE ONLY előkészítés: app/lib/license/dimproDropServiceCatalog.ts, db/auth/migrations/021_auth_v058_dimpro_drop_shared_service.sql, components/license/ProductArchitectureOverview.tsx. Az új termékkatalógus DISABLED / MIGRATION_PLANNED / entitlement_enabled=false / legacy_cutover_released=false állapotú. A régi Identity Core jelenleg authoritative. A previewDropLegacyMigration kizárólag tiszta, semmit nem módosító összerendelési előnézet; stabil tulajdonosi UUID nélkül blokkol, e-mail cím vagy Send-kód alapján nem azonosít.
+
+Következő külön jóváhagyandó lépések: meglévő Identity Core állomány read-only discovery, hiteles központi AUTH user/org megfeleltetés, régi és új licenc rekordok idempotens mappingja (unique source+target), pontos modul/limit/kód/lejárat összevetés és párhuzamos működés; explicit operátori migrációs engedély és hozzáférési E2E; végső cutover csak tesztelt rollbackkel és az ügyfelek jogainak megőrzésével. Nem megengedett a régi Send-kód automatikus újragenerálása vagy deaktiválása.
+
 ## Kötelező fejlesztési szabályok
 
 - Felhasználói jogosultság és fizetős előfizetés két külön dolog.
