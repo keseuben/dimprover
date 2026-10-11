@@ -89,3 +89,15 @@ Jóváhagyandó külön tételek: havi nettó Ft díjak és éves 10× szabály;
 Az árakat mindaddig TERVEZET-ben kell tartani, amíg a felhasználó külön jóvá nem hagyja és a központi admin jogosultsági, számlázási és storage enforcement tesztek el nem készültek.
 
 A BUILD01 ellenőrzés eredménye még hátravan.
+
+## 8. BUILD01 verified (2026-10-11)
+
+- Run: license-pricing-v0941-120f0ef87-20261011-build01-b1
+- Forráscommit: 120f0ef87c4377459ffa350dc324fb9c717cc981
+- Állapot: PASS, teljes Next.js, TypeScript, 104/104 oldal, 274 standalone chunk.
+- Build ID: mvs70LL39DzPvpucxTzqO
+- Artifact SHA-256: bc3af72fcbb04ad1b4aacc4cb1896dc0ab3e5bb20312308e3a4b16f13a017257
+- BUILD gateway metadata és a tényleges artifact SHA-256 értéke egyezett.
+- Artifact kb. 92 MiB. Csak BUILD01-en készült el, nem telepített.
+- QA: 28/28 ármodell-szerződésteszt, 30/30 csomagkatalógus-contract, 18/18 izolált csomagkatalógus PostgreSQL, 15/15 admin release-gate, 21/21 projektlicenc ACL, 14/14 Drive értesítési tesztcsoport PASS.
+- DEV: aktuális header V0.9.33 (c74326afd), szabad tárhely kb. 1,6 GiB, lemez 99%. DEV/PROD telepítés nem történt, PROD DENY.
