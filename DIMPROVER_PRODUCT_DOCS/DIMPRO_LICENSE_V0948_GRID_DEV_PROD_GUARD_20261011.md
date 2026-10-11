@@ -37,3 +37,24 @@ Az Identity Core régi Supabase-alapú terméklicenc adatforrása, DEV/PROD tena
 - További teljes licenc- és Drive regresszió, TypeScript, ESLint és külön BUILD01 fordítás szükséges.
 
 A V0.9.47 telepítési elővizsgálat szerinti blokkolók változatlanok: a DEV szabad tárhelye korábban kb. 1,1 GiB, a license.dev host közös 3100-as BENJADMIN alkalmazáson fut. A DotRoll válasz és a DEV kapacitás helyreállításáig nincs deploy.
+
+## BUILD01 ellenőrzött kiadásjelölt – 2026-10-11
+
+- RUN ID: benjadmin-license-grid-v0948-8ec61b872-20261011-build01-b1
+- Forráscommit: 8ec61b8722498300d475a0adde78b1f338822fb0
+- BUILD01: PASS. Next.js 16.2.6 optimalizált fordítás, TypeScript PASS (2.8 perc), 104/104 oldalgenerálás, 274 standalone statikus chunk.
+- Build ID: RYYQU0gXL7vrh4kkVPbzi
+- Artifact SHA-256: 4b6bf615f026be1f24131ab11e3b7ca2b73c3cdcc3049ce87b16a04c7a16e09d
+- Tényleges artifact fájl SHA-256, BUILD gateway státusz és metadata egyezik.
+- A csomagolt standalone fájlok között a licenseEnvironmentPolicy.ts és license-center.css jelen van; a lefordított CSS chunkokban a dimpro-license-center__resize-handle oszlop-átméretezési szabály is megtalálható.
+- QA: 17/17 szerződéses regressziós csoport, 6/6 izolált PostgreSQL tesztcsoport, 14/14 Drive-értesítési tesztcsoport, TypeScript, célzott ESLint PASS.
+- Feloldatlan üzemeltetési blokk: DEV root 118 GiB, kb. 1004 MiB szabad, 100% foglaltság. A DotRoll tárhelybővítése és a licencadatforrás DEV/PROD szeparációjának ellenőrzése továbbra is szükséges.
+- Sem PROD, sem működő DEV app, sem valódi AUTH/Identity Core licenc vagy Drop Send-jogosultság nem változott. Sem DB migráció, sem PM2 restart, sem Nginx módosítás, sem deploy nem történt.
+- A V0.9.48 forrása BUILD01-en ellenőrzött, nem kiadott, nem telepített fejlesztési candidate.
+
+## Következő szükséges műveletek
+
+1. DotRoll visszajelzés után a DEV virtuális lemez/partíció/fájlrendszer ellenőrzése és biztonságos kapacitásrendezés – adatvesztés, jogosulatlan törlés és PROD változtatás nélkül.
+2. Hiteles read-only AUTH/Identity Core adatforrás-elkülönítés DEV és PROD között. Még nincs bizonyítva.
+3. Az eredeti BENJADMIN DEV runtime és a többdomaines 3100 proxy miatt külön visszaállítható, host-specifikus kiadás előkészítése, jóváhagyott smoke tesztekkel.
+4. PROD licenckiadásra külön, magas jogosultságú AUTH üzemeltetői motor, audit, számlázási jogosultság, megfelelő kiadási kapu szükséges. A V0.9.48 kódjában PROD írás tiltott marad.
