@@ -376,6 +376,45 @@ export async function getDriveUploadSessionRecord(projectId: string, uploadId: s
   return data ? mapUploadSession(data as DbUploadSession) : null;
 }
 
+export async function mutateDriveUploadSessionMetadataRecord(input: {
+  projectId: string;
+  uploadId: string;
+  expectedStatus?: DriveUploadSession["status"];
+  mutate: (metadata: Record<string, unknown>) => Record<string, unknown>;
+}) {
+  const client = await requireReadyClient();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data: current, error: readError } = await client
+      .from("drive_core_upload_sessions")
+      .select("*")
+      .eq("project_id", input.projectId)
+      .eq("id", input.uploadId)
+      .maybeSingle();
+    if (readError) databaseError("A DRIVE feltöltési munkamenet metaadata nem tölthető be.", readError);
+    if (!current) throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.", "DRIVE_UPLOAD_NOT_FOUND", 404);
+    if (input.expectedStatus && current.status !== input.expectedStatus) {
+      throw new DriveCoreRepositoryError("A feltöltési munkamenet állapota közben megváltozott.", "DRIVE_UPLOAD_INVALID_STATE", 409);
+    }
+    const metadata = input.mutate({ ...((current.metadata || {}) as Record<string, unknown>) });
+    const now = new Date().toISOString();
+    let update = client
+      .from("drive_core_upload_sessions")
+      .update({ metadata, updated_at: now })
+      .eq("project_id", input.projectId)
+      .eq("id", input.uploadId)
+      .eq("updated_at", current.updated_at);
+    if (input.expectedStatus) update = update.eq("status", input.expectedStatus);
+    const { data: updated, error: updateError } = await update.select("*").maybeSingle();
+    if (updateError) databaseError("A DRIVE feltöltési munkamenet metaadata nem frissíthető.", updateError);
+    if (updated) return mapUploadSession(updated as DbUploadSession);
+  }
+  throw new DriveCoreRepositoryError(
+    "A feltöltési munkamenet metaadata párhuzamos módosítás miatt nem frissíthető.",
+    "DRIVE_UPLOAD_METADATA_CONFLICT",
+    409,
+  );
+}
+
 export async function finalizeDriveUploadSessionRecord(input: {
   projectId: string;
   uploadId: string;

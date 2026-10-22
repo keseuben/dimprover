@@ -3,7 +3,7 @@
  * No credentials, signed URLs, health/identity payloads, or customer data persisted.
  * Percentages describe network bytes only, never malware scanning or approval.
  */
-export const TRANSFER_CORE_VERSION = "0.9.51" as const;
+export const TRANSFER_CORE_VERSION = "0.9.52" as const;
 export type TransferPhase =
   | "QUEUED" | "INITIALIZING" | "UPLOADING" | "VERIFYING" | "SCANNING"
   | "AWAITING_REVIEW" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"

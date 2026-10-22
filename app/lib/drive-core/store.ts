@@ -31,11 +31,14 @@ export { openDriveBoxZip, openDriveFolderZip } from "./folderDownloadService";
 export {
   abortDriveObjectUpload,
   completeDriveObjectUpload,
+  confirmDriveMultipartUploadPart,
+  getDriveMultipartUploadCheckpoint,
   getDriveObjectStorageHealth,
   getDriveProjectStorageQuota,
   initDriveObjectDownload,
   initDriveObjectPreview,
   initDriveObjectUpload,
+  signDriveMultipartUploadPart,
   uploadDriveObjectThroughServer,
   openDriveObjectPreviewContent,
 } from "./storageService";

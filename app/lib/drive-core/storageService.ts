@@ -5,13 +5,19 @@ import { buildDriveExportFileName } from "./exportNaming";
 import { normalizeDriveFileName, normalizeDriveRelativePath } from "./nameNormalizer";
 import { normalizeDriveExportAlias } from "./exportNaming";
 import {
+  abortDriveS3Multipart,
   buildDriveStorageKey,
   calculateDriveObjectSha256,
+  completeDriveS3Multipart,
+  createDriveS3Multipart,
+  createDriveS3PartUrl,
   createDriveSignedGetUrl,
   createDriveSignedPutUrl,
   deleteDriveObject,
   getDriveObjectStream,
   headDriveObject,
+  inspectDriveS3MultipartPart,
+  listDriveS3MultipartParts,
   putDriveObjectStream,
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
@@ -27,6 +33,7 @@ import {
   getDriveProjectStorageUsageRecord,
   getDriveUploadSessionRecord,
   logDriveDownloadRecord,
+  mutateDriveUploadSessionMetadataRecord,
 } from "./storageRepository";
 import type { DriveDocumentSource, DriveUploadSession } from "./types";
 
@@ -59,6 +66,87 @@ function normalizeSha256(value: unknown) {
 function normalizeSource(value: unknown): DriveDocumentSource {
   if (value === "DESKTOP" || value === "DROP" || value === "SYSTEM") return value;
   return "WEB";
+}
+
+type DriveMultipartPartAudit = {
+  partNumber: number;
+  etag: string;
+  sizeBytes: number;
+  sha256: string;
+  confirmedAt: string;
+};
+
+type DriveMultipartState = {
+  protocol: "multipart";
+  state: "PENDING" | "ACTIVE" | "COMPLETED" | "ABORTED";
+  storageMultipartId: string | null;
+  chunkSizeBytes: number;
+  totalParts: number;
+  completedParts: DriveMultipartPartAudit[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+function normalizeEtag(value: unknown) {
+  return typeof value === "string" ? value.trim().replace(/^"|"$/g, "") : "";
+}
+
+function readDriveMultipartState(session: Pick<DriveUploadSession, "metadata">): DriveMultipartState | null {
+  const raw = session.metadata?.driveMultipart;
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (value.protocol !== "multipart") return null;
+  const chunkSizeBytes = normalizeInteger(value.chunkSizeBytes, 0, 0);
+  const totalParts = normalizeInteger(value.totalParts, 0, 0, 10_000);
+  const completedParts = Array.isArray(value.completedParts)
+    ? value.completedParts.map((part) => part as Record<string, unknown>).map((part) => ({
+        partNumber: normalizeInteger(part.partNumber, 0, 0, 10_000),
+        etag: normalizeEtag(part.etag),
+        sizeBytes: normalizeInteger(part.sizeBytes, 0, 0),
+        sha256: normalizeSha256(part.sha256) || "",
+        confirmedAt: normalizeText(part.confirmedAt),
+      })).filter((part) => part.partNumber > 0 && part.etag && part.sizeBytes > 0)
+    : [];
+  if (chunkSizeBytes < 5 * 1024 * 1024 || totalParts <= 0) return null;
+  const state = value.state === "COMPLETED" || value.state === "ABORTED" || value.state === "PENDING" ? value.state : "ACTIVE";
+  return {
+    protocol: "multipart",
+    state,
+    storageMultipartId: normalizeText(value.storageMultipartId) || null,
+    chunkSizeBytes,
+    totalParts,
+    completedParts,
+    createdAt: normalizeText(value.createdAt),
+    updatedAt: normalizeText(value.updatedAt),
+  };
+}
+
+function driveMultipartPartSize(session: Pick<DriveUploadSession, "sizeBytes">, multipart: DriveMultipartState, partNumber: number) {
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > multipart.totalParts) {
+    throw new DriveCoreRepositoryError("Érvénytelen DRIVE multipart részazonosító.", "DRIVE_MULTIPART_PART_INVALID", 400);
+  }
+  const start = (partNumber - 1) * multipart.chunkSizeBytes;
+  return Math.max(0, Math.min(multipart.chunkSizeBytes, session.sizeBytes - start));
+}
+
+function isNoSuchMultipartUpload(error: unknown) {
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return candidate?.name === "NoSuchUpload" || candidate?.name === "NotFound" || candidate?.$metadata?.httpStatusCode === 404;
+}
+
+async function requireOwnedDriveUploadSession(input: {
+  projectId: string;
+  uploadId: string;
+  actorUserId: string;
+  access: ProjectAccessContext;
+}) {
+  const session = await getDriveUploadSessionRecord(input.projectId, input.uploadId);
+  if (!session) throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.", "DRIVE_UPLOAD_NOT_FOUND", 404);
+  if (session.createdBy !== input.actorUserId) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet más felhasználóhoz tartozik.", "DRIVE_UPLOAD_ACTOR_MISMATCH", 403);
+  }
+  await requireDriveUploadSessionAccess(input.projectId, session, input.access);
+  return session;
 }
 
 async function requireDriveUploadSessionAccess(
@@ -146,6 +234,16 @@ export async function initDriveObjectUpload(input: {
     throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_WRITE_DISABLED", 503);
   }
 
+  const uploadProtocol = input.body.uploadProtocol === "multipart" ? "multipart" as const : "single" as const;
+  const requestedSha256 = normalizeSha256(input.body.sha256);
+  if (uploadProtocol === "multipart" && !requestedSha256) {
+    throw new DriveCoreRepositoryError(
+      "A folytatható DRIVE multipart feltöltéshez a teljes fájl SHA-256 lenyomata kötelező.",
+      "DRIVE_MULTIPART_SHA256_REQUIRED",
+      400,
+    );
+  }
+
   const documentId = normalizeText(input.body.documentId) || null;
   const folderId = normalizeText(input.body.folderId) || null;
   const uploadKind = documentId ? "NEW_VERSION" as const : "NEW_DOCUMENT" as const;
@@ -214,7 +312,14 @@ export async function initDriveObjectUpload(input: {
 
   const now = new Date();
   const uploadId = `drive-upload-${randomUUID().slice(0, 16)}`;
-  const expiresAt = new Date(now.getTime() + Math.max(config.signedUrlTtlSeconds + 300, 1_200) * 1000).toISOString();
+  const multipartChunkSizeBytes = config.multipartChunkSizeBytes;
+  const multipartTotalParts = Math.ceil(sizeBytes / multipartChunkSizeBytes);
+  if (uploadProtocol === "multipart" && multipartTotalParts > 10_000) {
+    throw new DriveCoreRepositoryError("A fájl túl sok multipart részre bomlana.", "DRIVE_MULTIPART_TOO_MANY_PARTS", 413);
+  }
+  const expiresAt = new Date(now.getTime() + (uploadProtocol === "multipart"
+    ? 24 * 60 * 60_000
+    : Math.max(config.signedUrlTtlSeconds + 300, 1_200) * 1000)).toISOString();
   // WEB/DESKTOP feltöltés mindig karanténba kerül. AVAILABLE csak sikeres vírusvizsgálat + jóváhagyás után lehet.
   const finalVersionStatus = "QUARANTINED" as const;
   const storageKey = buildDriveStorageKey({ projectId: input.projectId, uploadId, fileName: normalizedFileName.safeFileName });
@@ -228,7 +333,7 @@ export async function initDriveObjectUpload(input: {
     originalName,
     mimeType: normalizeMimeType(input.body.mimeType),
     sizeBytes,
-    sha256: normalizeSha256(input.body.sha256),
+    sha256: requestedSha256,
     expectedCurrentVersion: normalizeInteger(input.body.expectedCurrentVersion, 0),
     source: normalizeSource(input.body.source),
     clientId: normalizeText(input.clientId || input.body.clientId).slice(0, 160) || null,
@@ -261,12 +366,91 @@ export async function initDriveObjectUpload(input: {
       safeRelativePath: normalizedRelativePath.safeRelativePath,
       pathWasCompacted: Boolean(normalizedRelativePath.pathWasCompacted),
       checksumVerified: false,
-      signedUploadVersion: "0.4.2",
+      signedUploadVersion: uploadProtocol === "multipart" ? "0.9.52-multipart" : "0.4.2",
+      uploadProtocol,
+      ...(uploadProtocol === "multipart" ? {
+        driveMultipart: {
+          protocol: "multipart",
+          state: "PENDING",
+          storageMultipartId: null,
+          chunkSizeBytes: multipartChunkSizeBytes,
+          totalParts: multipartTotalParts,
+          completedParts: [],
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+      } : {}),
     },
   };
 
   const storedSession = await createDriveUploadSessionRecord(session, input.actorUserId, quota.quotaBytes);
+  let multipartUploadId: string | null = null;
   try {
+    if (uploadProtocol === "multipart") {
+      const created = await createDriveS3Multipart({
+        storageKey: storedSession.storageKey,
+        mimeType: storedSession.mimeType,
+      });
+      multipartUploadId = created.uploadId;
+      const activeSession = await mutateDriveUploadSessionMetadataRecord({
+        projectId: input.projectId,
+        uploadId: storedSession.id,
+        expectedStatus: "INITIATED",
+        mutate: (metadata) => {
+          const current = (metadata.driveMultipart && typeof metadata.driveMultipart === "object")
+            ? metadata.driveMultipart as Record<string, unknown>
+            : {};
+          return {
+            ...metadata,
+            uploadProtocol: "multipart",
+            driveMultipart: {
+              ...current,
+              protocol: "multipart",
+              state: "ACTIVE",
+              storageMultipartId: created.uploadId,
+              chunkSizeBytes: multipartChunkSizeBytes,
+              totalParts: multipartTotalParts,
+              completedParts: [],
+              updatedAt: new Date().toISOString(),
+            },
+          };
+        },
+      });
+      const base = `/api/projects/${encodeURIComponent(input.projectId)}/drive/uploads/${encodeURIComponent(activeSession.id)}`;
+      return {
+        ok: true as const,
+        mode: config.mode,
+        upload: {
+          id: activeSession.id,
+          projectId: activeSession.projectId,
+          uploadKind: activeSession.uploadKind,
+          documentId: activeSession.documentId,
+          folderId: activeSession.folderId,
+          documentName: activeSession.documentName,
+          originalName: activeSession.originalName,
+          mimeType: activeSession.mimeType,
+          sizeBytes: activeSession.sizeBytes,
+          status: activeSession.status,
+          expiresAt: activeSession.expiresAt,
+          finalVersionStatus: activeSession.finalVersionStatus,
+          protocol: "multipart" as const,
+        },
+        multipart: {
+          protocol: "multipart" as const,
+          chunkSizeBytes: multipartChunkSizeBytes,
+          totalParts: multipartTotalParts,
+          completedPartNumbers: [] as number[],
+          partUrlTemplate: `${base}/parts/{partNumber}`,
+          checkpointUrl: `${base}/checkpoint`,
+          completeUrl: `${base}/complete`,
+          abortUrl: `${base}/abort`,
+          expiresAt: activeSession.expiresAt,
+        },
+        completeUrl: `${base}/complete`,
+        abortUrl: `${base}/abort`,
+      };
+    }
+
     const signed = await createDriveSignedPutUrl({
       storageKey: storedSession.storageKey,
       mimeType: storedSession.mimeType,
@@ -288,6 +472,7 @@ export async function initDriveObjectUpload(input: {
         status: storedSession.status,
         expiresAt: storedSession.expiresAt,
         finalVersionStatus: storedSession.finalVersionStatus,
+        protocol: "single" as const,
       },
       signedUpload: {
         method: signed.method,
@@ -305,14 +490,20 @@ export async function initDriveObjectUpload(input: {
       abortUrl: `/api/projects/${encodeURIComponent(input.projectId)}/drive/uploads/${encodeURIComponent(storedSession.id)}/abort`,
     };
   } catch (error) {
+    if (multipartUploadId) {
+      await abortDriveS3Multipart({ storageKey: storedSession.storageKey, uploadId: multipartUploadId }).catch(() => undefined);
+    }
     await abortDriveUploadSessionRecord({
       projectId: input.projectId,
       uploadId: storedSession.id,
       actorUserId: input.actorUserId,
-      reason: "A signed feltöltési URL létrehozása sikertelen.",
+      reason: uploadProtocol === "multipart"
+        ? "A DRIVE multipart munkamenet előkészítése sikertelen."
+        : "A signed feltöltési URL létrehozása sikertelen.",
     }).catch(() => undefined);
     throw error;
   }
+
 }
 
 export async function uploadDriveObjectThroughServer(input: {
@@ -338,6 +529,13 @@ export async function uploadDriveObjectThroughServer(input: {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet más felhasználóhoz tartozik.", "DRIVE_UPLOAD_ACTOR_MISMATCH", 403);
   }
   await requireDriveUploadSessionAccess(input.projectId, session, input.access);
+  if (readDriveMultipartState(session)) {
+    throw new DriveCoreRepositoryError(
+      "A multipart DRIVE munkamenet nem fogad egybefüggő böngészős PUT feltöltést.",
+      "DRIVE_MULTIPART_SINGLE_PUT_FORBIDDEN",
+      409,
+    );
+  }
   if (session.status !== "INITIATED") {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet már nem fogad fájlt.", "DRIVE_UPLOAD_INVALID_STATE", 409);
   }
@@ -399,13 +597,203 @@ export async function getDriveObjectUploadStatus(input: {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet nem ehhez a felhasználóhoz tartozik.","DRIVE_UPLOAD_ACTOR_MISMATCH",403);
   }
   await requireDriveUploadSessionAccess(input.projectId,session,input.access);
+  const multipart=readDriveMultipartState(session);
   return {
     ok:true as const,
     uploadId:session.id,
     status:session.status,
+    protocol:multipart?"multipart" as const:"single" as const,
+    multipart:multipart?{
+      state:multipart.state,
+      chunkSizeBytes:multipart.chunkSizeBytes,
+      totalParts:multipart.totalParts,
+      completedPartNumbers:multipart.completedParts.map((part)=>part.partNumber).sort((a,b)=>a-b),
+    }:null,
     finalizedDocumentId:session.status==="FINALIZED"?session.finalizedDocumentId:null,
     finalizedVersionId:session.status==="FINALIZED"?session.finalizedVersionId:null,
     expiresAt:session.expiresAt,
+  };
+}
+
+export async function getDriveMultipartUploadCheckpoint(input: {
+  projectId: string;
+  uploadId: string;
+  actorUserId: string;
+  access: ProjectAccessContext;
+}) {
+  const session = await requireOwnedDriveUploadSession(input);
+  if (session.status !== "INITIATED") {
+    throw new DriveCoreRepositoryError("A multipart munkamenet már nem aktív.", "DRIVE_UPLOAD_INVALID_STATE", 409);
+  }
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    throw new DriveCoreRepositoryError("A multipart feltöltési munkamenet lejárt.", "DRIVE_UPLOAD_EXPIRED", 410);
+  }
+  const multipart = readDriveMultipartState(session);
+  if (!multipart?.storageMultipartId || multipart.state !== "ACTIVE") {
+    throw new DriveCoreRepositoryError("Ez nem aktív DRIVE multipart munkamenet.", "DRIVE_MULTIPART_NOT_ACTIVE", 409);
+  }
+  const parts = await listDriveS3MultipartParts({ storageKey: session.storageKey, uploadId: multipart.storageMultipartId });
+  for (const part of parts) {
+    const expected = driveMultipartPartSize(session, multipart, part.partNumber);
+    if (part.sizeBytes !== expected) {
+      throw new DriveCoreRepositoryError(
+        `A ${part.partNumber}. DRIVE multipart rész mérete eltér a várttól.`,
+        "DRIVE_MULTIPART_PART_SIZE_MISMATCH",
+        409,
+      );
+    }
+  }
+  const confirmedByPart = new Map(multipart.completedParts.map((part) => [part.partNumber, part]));
+  const confirmedPartNumbers = parts.filter((part) => {
+    const audit = confirmedByPart.get(part.partNumber);
+    return Boolean(audit && audit.etag === part.etag && /^[a-f0-9]{64}$/.test(audit.sha256));
+  }).map((part) => part.partNumber).sort((a, b) => a - b);
+  return {
+    ok: true as const,
+    uploadId: session.id,
+    protocol: "multipart" as const,
+    chunkSizeBytes: multipart.chunkSizeBytes,
+    totalParts: multipart.totalParts,
+    uploadedPartNumbers: parts.map((part) => part.partNumber).sort((a, b) => a - b),
+    completedPartNumbers: confirmedPartNumbers,
+    uploadedBytes: parts.reduce((sum, part) => sum + part.sizeBytes, 0),
+    expiresAt: session.expiresAt,
+  };
+}
+
+export async function signDriveMultipartUploadPart(input: {
+  projectId: string;
+  uploadId: string;
+  partNumber: number;
+  actorUserId: string;
+  access: ProjectAccessContext;
+}) {
+  const session = await requireOwnedDriveUploadSession(input);
+  if (session.status !== "INITIATED") {
+    throw new DriveCoreRepositoryError("A multipart munkamenet már nem aktív.", "DRIVE_UPLOAD_INVALID_STATE", 409);
+  }
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    throw new DriveCoreRepositoryError("A multipart feltöltési munkamenet lejárt.", "DRIVE_UPLOAD_EXPIRED", 410);
+  }
+  const multipart = readDriveMultipartState(session);
+  if (!multipart?.storageMultipartId || multipart.state !== "ACTIVE") {
+    throw new DriveCoreRepositoryError("Ez nem aktív DRIVE multipart munkamenet.", "DRIVE_MULTIPART_NOT_ACTIVE", 409);
+  }
+  const expectedSizeBytes = driveMultipartPartSize(session, multipart, input.partNumber);
+  try {
+    const existing = await inspectDriveS3MultipartPart({
+      storageKey: session.storageKey, uploadId: multipart.storageMultipartId, partNumber: input.partNumber,
+    });
+    if (existing.sizeBytes !== expectedSizeBytes) {
+      throw new DriveCoreRepositoryError(
+        "A már feltöltött multipart rész mérete eltér a várttól.",
+        "DRIVE_MULTIPART_PART_SIZE_MISMATCH",
+        409,
+      );
+    }
+    const audited = multipart.completedParts.find((part) => part.partNumber === input.partNumber);
+    const alreadyCompleted = Boolean(audited
+      && audited.etag === existing.etag
+      && audited.sizeBytes === existing.sizeBytes
+      && /^[a-f0-9]{64}$/.test(audited.sha256));
+    return {
+      ok: true as const,
+      signed: {
+        alreadyCompleted,
+        alreadyUploaded: true,
+        requiresConfirmation: !alreadyCompleted,
+        partNumber: input.partNumber,
+        sizeBytes: existing.sizeBytes,
+        etag: existing.etag,
+      },
+    };
+  } catch (error) {
+    if (!(error instanceof DriveCoreRepositoryError && error.code === "DRIVE_S3_PART_NOT_FOUND")) throw error;
+  }
+  const signed = await createDriveS3PartUrl({
+    storageKey: session.storageKey,
+    uploadId: multipart.storageMultipartId,
+    partNumber: input.partNumber,
+  });
+  return {
+    ok: true as const,
+    signed: {
+      alreadyCompleted: false,
+      partNumber: input.partNumber,
+      sizeBytes: expectedSizeBytes,
+      method: signed.method,
+      url: signed.url,
+      headers: { "content-type": "application/octet-stream" },
+      expiresAt: signed.expiresAt,
+    },
+  };
+}
+
+export async function confirmDriveMultipartUploadPart(input: {
+  projectId: string;
+  uploadId: string;
+  partNumber: number;
+  actorUserId: string;
+  access: ProjectAccessContext;
+  body: Record<string, unknown>;
+}) {
+  const session = await requireOwnedDriveUploadSession(input);
+  if (session.status !== "INITIATED") {
+    throw new DriveCoreRepositoryError("A multipart munkamenet már nem aktív.", "DRIVE_UPLOAD_INVALID_STATE", 409);
+  }
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    throw new DriveCoreRepositoryError("A multipart feltöltési munkamenet lejárt.", "DRIVE_UPLOAD_EXPIRED", 410);
+  }
+  const multipart = readDriveMultipartState(session);
+  if (!multipart?.storageMultipartId || multipart.state !== "ACTIVE") {
+    throw new DriveCoreRepositoryError("Ez nem aktív DRIVE multipart munkamenet.", "DRIVE_MULTIPART_NOT_ACTIVE", 409);
+  }
+  const partSha256 = normalizeSha256(input.body.sha256 ?? input.body.checksum);
+  if (!partSha256) {
+    throw new DriveCoreRepositoryError("A multipart fájlrész SHA-256 lenyomata kötelező.", "DRIVE_MULTIPART_PART_SHA256_REQUIRED", 400);
+  }
+  const expectedSizeBytes = driveMultipartPartSize(session, multipart, input.partNumber);
+  const actual = await inspectDriveS3MultipartPart({
+    storageKey: session.storageKey, uploadId: multipart.storageMultipartId, partNumber: input.partNumber,
+  });
+  if (actual.sizeBytes !== expectedSizeBytes) {
+    throw new DriveCoreRepositoryError("A multipart fájlrész mérete eltér a várttól.", "DRIVE_MULTIPART_PART_SIZE_MISMATCH", 409);
+  }
+  const clientEtag = normalizeEtag(input.body.etag);
+  if (clientEtag && clientEtag !== actual.etag) {
+    throw new DriveCoreRepositoryError("A multipart fájlrész ETag értéke eltér az S3 állapottól.", "DRIVE_MULTIPART_PART_ETAG_MISMATCH", 409);
+  }
+  const receivedBytes = normalizeInteger(input.body.receivedBytes, expectedSizeBytes, 0);
+  if (receivedBytes !== expectedSizeBytes) {
+    throw new DriveCoreRepositoryError("A multipart fájlrész visszaigazolt mérete eltér a várttól.", "DRIVE_MULTIPART_PART_SIZE_MISMATCH", 409);
+  }
+  const updated = await mutateDriveUploadSessionMetadataRecord({
+    projectId: input.projectId,
+    uploadId: input.uploadId,
+    expectedStatus: "INITIATED",
+    mutate: (metadata) => {
+      const current = readDriveMultipartState({ metadata });
+      if (!current?.storageMultipartId || current.storageMultipartId !== multipart.storageMultipartId || current.state !== "ACTIVE") {
+        throw new DriveCoreRepositoryError("A multipart munkamenet állapota közben megváltozott.", "DRIVE_MULTIPART_NOT_ACTIVE", 409);
+      }
+      const audit: DriveMultipartPartAudit = {
+        partNumber: input.partNumber, etag: actual.etag, sizeBytes: actual.sizeBytes, sha256: partSha256, confirmedAt: new Date().toISOString(),
+      };
+      const completedParts = current.completedParts.filter((part) => part.partNumber !== input.partNumber);
+      completedParts.push(audit);
+      completedParts.sort((a, b) => a.partNumber - b.partNumber);
+      return {
+        ...metadata,
+        driveMultipart: { ...current, completedParts, updatedAt: new Date().toISOString() },
+      };
+    },
+  });
+  const persisted = readDriveMultipartState(updated);
+  return {
+    ok: true as const,
+    uploadId: updated.id,
+    part: { partNumber: input.partNumber, etag: actual.etag, sizeBytes: actual.sizeBytes, sha256: partSha256 },
+    completedPartNumbers: persisted?.completedParts.map((part) => part.partNumber).sort((a, b) => a - b) || [],
   };
 }
 
@@ -429,6 +817,51 @@ export async function completeDriveObjectUpload(input: {
   }
   if (new Date(session.expiresAt).getTime() <= Date.now()) {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet lejárt.", "DRIVE_UPLOAD_EXPIRED", 410);
+  }
+
+  const multipart = readDriveMultipartState(session);
+  if (multipart) {
+    if (!multipart.storageMultipartId || multipart.state === "ABORTED") {
+      throw new DriveCoreRepositoryError("A DRIVE multipart munkamenet nem véglegesíthető.", "DRIVE_MULTIPART_NOT_ACTIVE", 409);
+    }
+    if (multipart.state !== "COMPLETED") {
+      const confirmed = new Map(multipart.completedParts.map((part) => [part.partNumber, part]));
+      if (confirmed.size !== multipart.totalParts) {
+        throw new DriveCoreRepositoryError("Nem minden multipart fájlrész lett visszaigazolva.", "DRIVE_MULTIPART_PARTS_UNCONFIRMED", 409);
+      }
+      try {
+        const parts = await listDriveS3MultipartParts({ storageKey: session.storageKey, uploadId: multipart.storageMultipartId });
+        if (parts.length !== multipart.totalParts) {
+          throw new DriveCoreRepositoryError("A DRIVE multipart partlista hiányos.", "DRIVE_S3_PARTS_INCOMPLETE", 409);
+        }
+        for (const part of parts) {
+          const expectedSize = driveMultipartPartSize(session, multipart, part.partNumber);
+          const audited = confirmed.get(part.partNumber);
+          if (!audited
+            || part.sizeBytes !== expectedSize
+            || audited.etag !== part.etag
+            || !/^[a-f0-9]{64}$/.test(audited.sha256)) {
+            throw new DriveCoreRepositoryError("A DRIVE multipart partlista eltér a visszaigazolt állapottól.", "DRIVE_MULTIPART_PART_CONFIRMATION_MISMATCH", 409);
+          }
+        }
+        await completeDriveS3Multipart({
+          storageKey: session.storageKey,
+          uploadId: multipart.storageMultipartId,
+          parts: parts.map((part) => ({ partNumber: part.partNumber, etag: part.etag })),
+        });
+        await mutateDriveUploadSessionMetadataRecord({
+          projectId: input.projectId, uploadId: input.uploadId, expectedStatus: "INITIATED",
+          mutate: (metadata) => {
+            const current = readDriveMultipartState({ metadata });
+            if (!current) return metadata;
+            return { ...metadata, driveMultipart: { ...current, state: "COMPLETED", updatedAt: new Date().toISOString() } };
+          },
+        });
+      } catch (error) {
+        if (!isNoSuchMultipartUpload(error)) throw error;
+        // Ha az S3 complete válasza elveszett, az objektum HEAD + teljes SHA-256 ellenőrzése dönti el a folytatást.
+      }
+    }
   }
 
   let object;
@@ -557,14 +990,21 @@ export async function abortDriveObjectUpload(input: {
   projectId: string;
   uploadId: string;
   actorUserId: string;
+  access: ProjectAccessContext;
   reason?: string;
 }) {
-  const session = await getDriveUploadSessionRecord(input.projectId, input.uploadId);
-  if (!session) throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.", "DRIVE_UPLOAD_NOT_FOUND", 404);
+  const session = await requireOwnedDriveUploadSession(input);
   if (session.status === "FINALIZED") {
     throw new DriveCoreRepositoryError("A véglegesített dokumentumfeltöltés nem szakítható meg.", "DRIVE_UPLOAD_ALREADY_FINALIZED", 409);
   }
-  await deleteDriveObject({ storageKey: session.storageKey, bucket: session.storageBucket }).catch(() => undefined);
+  const multipart = readDriveMultipartState(session);
+  if (multipart?.storageMultipartId && multipart.state !== "COMPLETED") {
+    await abortDriveS3Multipart({ storageKey: session.storageKey, uploadId: multipart.storageMultipartId }).catch(() => undefined);
+    // A multipart complete válasza elveszhetett: az egyedi upload-key miatt a kész objektum törlése is biztonságos cleanup.
+    await deleteDriveObject({ storageKey: session.storageKey, bucket: session.storageBucket }).catch(() => undefined);
+  } else {
+    await deleteDriveObject({ storageKey: session.storageKey, bucket: session.storageBucket }).catch(() => undefined);
+  }
   const aborted = await abortDriveUploadSessionRecord({
     projectId: input.projectId,
     uploadId: input.uploadId,
@@ -573,6 +1013,7 @@ export async function abortDriveObjectUpload(input: {
   });
   return { ok: true as const, session: aborted };
 }
+
 
 export async function initDriveObjectDownload(input: {
   projectId: string;

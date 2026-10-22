@@ -17,6 +17,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       projectId,
       uploadId,
       actorUserId: access.actor.userId,
+      access: access.access,
       reason: typeof body.reason === "string" ? body.reason : undefined,
     });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });

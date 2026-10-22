@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
+  UploadPartCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -240,6 +245,150 @@ export async function deleteDriveObject(input: { storageKey: string; bucket?: st
     throw new DriveCoreRepositoryError("A törlendő objektum tárhelye eltér az aktív DRIVE buckettől.", "DRIVE_OBJECT_BUCKET_MISMATCH", 409);
   }
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: input.storageKey }));
+}
+
+
+function normalizeDriveMultipartEtag(value: string | undefined | null) {
+  return (value || "").trim().replace(/^"|"$/g, "");
+}
+
+export async function createDriveS3Multipart(input: { storageKey: string; mimeType: string }) {
+  const { client, config } = getStorageClient();
+  const result = await client.send(new CreateMultipartUploadCommand({
+    Bucket: config.bucket,
+    Key: input.storageKey,
+    ContentType: input.mimeType || "application/octet-stream",
+    Metadata: {
+      "dimpro-component": "drive",
+      "dimpro-state": "quarantine",
+    },
+  }));
+  if (!result.UploadId) {
+    throw new DriveCoreRepositoryError(
+      "A DRIVE S3 multipart azonosító nem jött létre.",
+      "DRIVE_S3_MULTIPART_INIT_FAILED",
+      502,
+    );
+  }
+  return { uploadId: result.UploadId };
+}
+
+export async function createDriveS3PartUrl(input: {
+  storageKey: string;
+  uploadId: string;
+  partNumber: number;
+  expiresIn?: number;
+}) {
+  const { client, config } = getStorageClient();
+  const expiresIn = Math.max(60, Math.min(900, Math.floor(input.expiresIn || config.signedUrlTtlSeconds)));
+  const command = new UploadPartCommand({
+    Bucket: config.bucket,
+    Key: input.storageKey,
+    UploadId: input.uploadId,
+    PartNumber: input.partNumber,
+  });
+  return {
+    method: "PUT" as const,
+    url: await getSignedUrl(client, command, { expiresIn }),
+    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+  };
+}
+
+export async function listDriveS3MultipartParts(input: { storageKey: string; uploadId: string }) {
+  const { client, config } = getStorageClient();
+  const parts: Array<{ partNumber: number; etag: string; sizeBytes: number; lastModified: string | null }> = [];
+  let partNumberMarker: string | undefined;
+  for (let page = 0; page < 20; page += 1) {
+    const result = await client.send(new ListPartsCommand({
+      Bucket: config.bucket,
+      Key: input.storageKey,
+      UploadId: input.uploadId,
+      PartNumberMarker: partNumberMarker,
+      MaxParts: 1000,
+    }));
+    parts.push(...(result.Parts || []).map((part) => ({
+      partNumber: Number(part.PartNumber || 0),
+      etag: normalizeDriveMultipartEtag(part.ETag),
+      sizeBytes: Number(part.Size || 0),
+      lastModified: part.LastModified?.toISOString() || null,
+    })).filter((part) => part.partNumber > 0 && Boolean(part.etag)));
+    if (!result.IsTruncated) return parts;
+    const next = result.NextPartNumberMarker;
+    if (next == null || String(next) === String(partNumberMarker ?? "")) {
+      throw new DriveCoreRepositoryError(
+        "A DRIVE multipart S3 partlista lapozása nem halad előre.",
+        "DRIVE_S3_PART_LIST_PAGINATION_FAILED",
+        502,
+      );
+    }
+    partNumberMarker = String(next);
+  }
+  throw new DriveCoreRepositoryError(
+    "A DRIVE multipart S3 partlista túllépte a biztonságos lapozási határt.",
+    "DRIVE_S3_PART_LIST_TOO_LARGE",
+    502,
+  );
+}
+
+export async function inspectDriveS3MultipartPart(input: {
+  storageKey: string;
+  uploadId: string;
+  partNumber: number;
+}) {
+  const parts = await listDriveS3MultipartParts(input);
+  const part = parts.find((candidate) => candidate.partNumber === input.partNumber);
+  if (!part) {
+    throw new DriveCoreRepositoryError(
+      "A feltöltött DRIVE S3 fájlrész nem található.",
+      "DRIVE_S3_PART_NOT_FOUND",
+      409,
+    );
+  }
+  return part;
+}
+
+export async function completeDriveS3Multipart(input: {
+  storageKey: string;
+  uploadId: string;
+  parts: Array<{ partNumber: number; etag: string }>;
+}) {
+  const { client, config } = getStorageClient();
+  const ordered = [...input.parts].sort((left, right) => left.partNumber - right.partNumber);
+  if (!ordered.length || ordered.some((part, index) => part.partNumber !== index + 1 || !normalizeDriveMultipartEtag(part.etag))) {
+    throw new DriveCoreRepositoryError(
+      "A DRIVE multipart véglegesítés partlistája hiányos.",
+      "DRIVE_S3_PARTS_INCOMPLETE",
+      409,
+    );
+  }
+  const result = await client.send(new CompleteMultipartUploadCommand({
+    Bucket: config.bucket,
+    Key: input.storageKey,
+    UploadId: input.uploadId,
+    MultipartUpload: {
+      Parts: ordered.map((part) => ({ PartNumber: part.partNumber, ETag: normalizeDriveMultipartEtag(part.etag) })),
+    },
+  }));
+  return {
+    etag: normalizeDriveMultipartEtag(result.ETag),
+    versionId: result.VersionId || null,
+    location: result.Location || null,
+  };
+}
+
+export async function abortDriveS3Multipart(input: { storageKey: string; uploadId: string }) {
+  const { client, config } = getStorageClient();
+  try {
+    await client.send(new AbortMultipartUploadCommand({
+      Bucket: config.bucket,
+      Key: input.storageKey,
+      UploadId: input.uploadId,
+    }));
+  } catch (error) {
+    const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+    if (candidate?.name === "NoSuchUpload" || candidate?.name === "NotFound" || candidate?.$metadata?.httpStatusCode === 404) return;
+    throw error;
+  }
 }
 
 export async function createDriveSignedGetUrl(input: {
