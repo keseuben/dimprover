@@ -37,6 +37,7 @@ Ez átmeneti V0.9.52 megoldás. A következő fejlesztési körben külön, perz
 - részméret, S3 ETag és visszaigazolt SHA-256 audit kötelező a complete előtt;
 - teljes objektum szerveroldali SHA-256 ellenőrzése megmarad;
 - a 100% feltöltés továbbra sem jelent vírusmentes/jóváhagyott dokumentumot;
+- explicit `DIMPRO_DRIVE_MAX_SCAN_MB` nélkül a Drive scanner fail-closed **100 MiB** limitet használ, és többé nem örökli automatikusan a DROP történeti 550 MiB-os defaultját; nagyobb Drive feltöltési plafon csak külön, a clamd tényleges limitjéhez igazított Drive scan-konfigurációval engedhető;
 - PROD hozzáférés és deploy: DENY.
 
 ## Forrásváltozások

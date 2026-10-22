@@ -4171,6 +4171,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A multipart session 24 órás, alap chunk mérete 64 MiB, konfigurálható 5–512 MiB között. S3 ListParts 1000-es lapokkal, bounded paginationnel működik.
 - Új SQL-migráció nincs: az átmeneti multipart checkpoint a meglévő upload-session metadata mezőben, `updated_at` alapú optimista CAS védelemmel tárolódik.
 - A meglévő kliens nincs automatikusan átkapcsolva multipartra; valódi felhasználói resumable kliens és tartós TransferJob/reconciler külön következő fejlesztési kör.
+- A friss DEV ClamAV audit `StreamMaxLength=110M`, `MaxFileSize=110M`, `MaxScanSize=120M` értéket igazolt. Emiatt a Drive implicit scanner-default 550 MiB-ról fail-closed 100 MiB-ra változott; a Drive többé nem örökli automatikusan a DROP scan-limit defaultját. Nagyobb feltöltési plafonhoz explicit, daemonhoz igazított `DIMPRO_DRIVE_MAX_SCAN_MB` szükséges.
 - V0.9.52 contract PASS; V0.9.51 16 security/integration PASS; V0.9.50 19 integration PASS; XHR transport PASS; TypeScript PASS; git diff --check PASS.
 - Friss DEV audit: `dimpro-dev` kb. 236 GiB root / 131 GiB szabad / 45% használat; Drive public upstream továbbra is V0.9.33 `c74326afd` port 3412. V0.9.52 nincs deployolva. PROD DENY.
 - Részletes dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_TRANSFER_CENTER_V0952_DRIVE_MULTIPART_SOURCE_20261022.md`.

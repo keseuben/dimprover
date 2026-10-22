@@ -8,6 +8,7 @@ const config = read("app/lib/drive-core/storageConfig.ts");
 const s3 = read("app/lib/drive-core/s3ObjectStorage.ts");
 const repo = read("app/lib/drive-core/storageRepository.ts");
 const service = read("app/lib/drive-core/storageService.ts");
+const scanner = read("app/lib/drive-core/securityScanService.ts");
 const store = read("app/lib/drive-core/store.ts");
 const initRoute = read("app/api/projects/[projectId]/drive/uploads/init/route.ts");
 const partRoute = read("app/api/projects/[projectId]/drive/uploads/[uploadId]/parts/[partNumber]/route.ts");
@@ -28,6 +29,8 @@ for (const symbol of [
 
 assert.match(config, /DIMPRO_DRIVE_MULTIPART_CHUNK_MB/);
 assert.match(config, /multipartChunkSizeBytes/);
+assert.match(scanner, /DIMPRO_DRIVE_MAX_SCAN_MB", "100"/);
+assert.doesNotMatch(scanner, /DIMPRO_DRIVE_MAX_SCAN_MB", env\("DIMPRO_DROP_MAX_SCAN_MB"/);
 assert.match(s3, /MaxParts: 1000/);
 assert.match(s3, /NextPartNumberMarker/);
 assert.match(s3, /DRIVE_S3_PART_LIST_PAGINATION_FAILED/);

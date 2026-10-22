@@ -31,7 +31,9 @@ function getDriveScannerConfig(): DropWorkerConfig {
     scannerMode,
     clamdSocket: env("DIMPRO_DRIVE_CLAMD_SOCKET", env("DIMPRO_DROP_CLAMD_SOCKET", "/var/run/clamav/clamd.ctl")),
     scanTimeoutMs: clampNumber(env("DIMPRO_DRIVE_SCAN_TIMEOUT_SECONDS", env("DIMPRO_DROP_SCAN_TIMEOUT_SECONDS", "900")), 900, 30, 3600) * 1000,
-    maxScanBytes: clampNumber(env("DIMPRO_DRIVE_MAX_SCAN_MB", env("DIMPRO_DROP_MAX_SCAN_MB", "550")), 550, 1, 600) * 1024 * 1024,
+    // Drive fail-closed default: never inherit the historically larger DROP scan limit implicitly.
+    // Raising the Drive upload ceiling therefore also requires an explicit, daemon-verified Drive scan limit.
+    maxScanBytes: clampNumber(env("DIMPRO_DRIVE_MAX_SCAN_MB", "100"), 100, 1, 600) * 1024 * 1024,
     claimLimit: 1,
     leaseSeconds: 1200,
     retrySeconds: 300,
