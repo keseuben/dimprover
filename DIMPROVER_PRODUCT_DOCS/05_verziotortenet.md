@@ -4175,3 +4175,15 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.9.52 contract PASS; V0.9.51 16 security/integration PASS; V0.9.50 19 integration PASS; XHR transport PASS; TypeScript PASS; git diff --check PASS.
 - Friss DEV audit: `dimpro-dev` kb. 236 GiB root / 131 GiB szabad / 45% használat; Drive public upstream továbbra is V0.9.33 `c74326afd` port 3412. V0.9.52 nincs deployolva. PROD DENY.
 - Részletes dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_TRANSFER_CENTER_V0952_DRIVE_MULTIPART_SOURCE_20261022.md`.
+
+### DIMPRO Transfer Center V0.9.52 – BUILD01 b2 és friss DEV gate audit – 2026-10-22
+
+- Végleges source candidate: `1402cd6e5b74233c157a70f1266a37a2495069f6`.
+- BUILD01 manual safe fallback PASS a Build Transport Gateway HTTP 403 miatt: run `benjadmin-transfer-v0952-1402cd6e5-20261022-manual-build01-b2`, Build ID `gcR71rHsVAwbC8B1rk6vz`, artifact SHA-256 `43cf36ceaa96c9d0292082e29b0f0a679ba772dd9874f85e62a43e4a52573cfb`.
+- Artifact source/metadata/result és DEV visszaszinkronizált példány checksum-egyezés PASS; új multipart checkpoint/part route-ok a standalone artifactban jelen vannak.
+- DEV root tárhelybővítés igazolt: kb. 236 GiB teljes / 131 GiB szabad / 45% használat; a korábbi 713 MiB-os G1 blokkoló megszűnt.
+- Publikus Drive továbbra is V0.9.33 `c74326afd`, port 3412; V0.9.52 nincs deployolva.
+- ClamAV DEV: 1.5.4, `StreamMaxLength=110M`, `MaxFileSize=110M`, `MaxScanSize=120M`; a Drive fail-closed implicit scanner-default 100 MiB.
+- Central AUTH DEV DB provenance: `db.dimpro.hu:5432/dimpro_auth_dev`; Drive legacy Supabase DEV/PROD teljes adatforrás-elkülönítés további bizonyítást igényel.
+- Central Developer Grid source provenance jelenleg stale, a korábbi Drive Desktop V0.1.8 worktree/HEAD-re mutat; release előtt szinkronizálandó.
+- Runtime deploy / PM2 / Nginx / DB migration nem történt. PROD DENY.

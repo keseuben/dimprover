@@ -77,3 +77,37 @@ Ez átmeneti V0.9.52 megoldás. A következő fejlesztési körben külön, perz
 - `drop.dev.dimpro.hu` és `license.dev.dimpro.hu` továbbra is eltérő DROP 1.2.13 konfigurációt ad, ezért nem kezelhetők egyetlen kiadási célként.
 
 **Kiadási következtetés:** a tárhely G1 kapu most teljesíthető, de runtime release továbbra is NO-GO mindaddig, amíg a DEV/PROD adatforrás-szétválasztás, ClamAV tényleges daemon limitek, izolált candidate/rollback rehearsal és hitelesített browser E2E külön nem PASS. E dokumentum nem ad deploy-jóváhagyást.
+
+## BUILD01 b2 – végleges source candidate
+
+- source commit: `1402cd6e5b74233c157a70f1266a37a2495069f6`;
+- branch: `worker/benjaminai/drive-desktop-v019-v0924-integration-20261007`;
+- run: `benjadmin-transfer-v0952-1402cd6e5-20261022-manual-build01-b2`;
+- runner: `build01` / `build01.dimpro.hu`;
+- Build ID: `gcR71rHsVAwbC8B1rk6vz`;
+- artifact SHA-256: `43cf36ceaa96c9d0292082e29b0f0a679ba772dd9874f85e62a43e4a52573cfb`;
+- artifact méret: `96,883,523` byte;
+- source / metadata / result / visszaszinkronizált DEV artifact SHA ellenőrzés: PASS;
+- a build artifact tartalmazza az új Drive multipart `checkpoint` és `parts/[partNumber]` route-okat;
+- `productionAccess=DENY`;
+- runtime deploy, PM2 restart, Nginx módosítás, DB-migráció: **nem történt**.
+
+A normál Build Transport Gateway dispatch a build előtt HTTP 403-mal blokkolódott. A dokumentált manual safe fallback ugyanazzal a hardened `/srv/dimpro-build/bin/dimpro-build-runner-executor-v1` végrehajtóval, BUILD01-en futott. A runner a build előtt `READY/FREE`, `Storage Governor=SAFE` állapotú volt. A build provenance és artifact checksum utólag teljesen visszaellenőrzött.
+
+## Friss DEV release-gate – 2026-10-22
+
+| Gate | Friss állapot | Bizonyíték / következő feltétel |
+|---|---|---|
+| G0 – Scope / release approval | **NO-GO** | Source/build engedélyezett; runtime deployra nincs külön célhost-specifikus jóváhagyás. |
+| G1 – DEV tárhely | **PASS** | `dimpro-dev` root kb. 236 GiB / 105 GiB foglalt / 131 GiB szabad / 45%; inode 17%. |
+| G2 – Host routing | **RÉSZBEN PASS / release NO-GO** | `drive.dev.dimpro.hu` jelenleg 3412 / V0.9.33; candidate port/rehearsal még nincs. |
+| G3 – Build provenance | **PASS** | `1402cd6e5...`, BUILD01 b2 PASS, SHA `43cf36ce...73cfb`. |
+| G4 – Runtime isolation | **NO-GO** | V0.9.52 candidate runtime még nincs kibontva/indítva; publikus runtime érintetlen. |
+| G5 – AUTH/DB szétválasztás | **RÉSZBEN IGAZOLT / NO-GO** | Central AUTH explicit `db.dimpro.hu/.../dimpro_auth_dev`; a Drive legacy Supabase adatforrás DEV-vs-PROD teljes provenance-a külön bizonyítandó. |
+| G6 – ClamAV / méret | **PASS a jelenlegi 100 MiB alaplimitre; nagyfájl NO-GO** | clamd aktív; `StreamMaxLength=110M`, `MaxFileSize=110M`, `MaxScanSize=120M`. Drive implicit scanner-default most 100 MiB. 100 MiB fölötti Drive upload csak explicit, daemonhoz igazított új limit + E2E után. |
+| G7 – Regresszió / acceptance | **SOURCE+BUILD PASS / browser E2E HIÁNYZIK** | Transfer contractok, TS/lint és build PASS; valódi böngészős multipart/resume még nincs, kliens sincs átkapcsolva. |
+| G8 – Rollback | **NO-GO** | V0.9.52 candidate cutover/rollback rehearsal még nincs. |
+| G9 – Licencadmin mellékhatás | **NO-GO / nem újramérve** | A monorepo közös License/Admin hatásait candidate runtime előtt ismét ellenőrizni kell. |
+| G10 – PROD védelem | **PASS / DENY** | PROD-hoz nem történt hozzáférés vagy módosítás. |
+
+Külön koordinációs megjegyzés: a Central Developer Grid `state.json` jelenlegi task/session bejegyzése még a korábbi Drive Desktop V0.1.8 source provenance-ét tartalmazza, miközben a V0.9.51 és V0.9.52 BUILD01 futások ugyanennek a task/session azonosítónak a Transfer branchét használták. A Grid provenance ezért **stale**, release-green bizonyítékként nem használható, amíg nincs szabályosan szinkronizálva. A Git local/remote authoritative branch viszont egyezik.
