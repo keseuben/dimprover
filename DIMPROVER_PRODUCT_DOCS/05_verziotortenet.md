@@ -4187,3 +4187,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Central AUTH DEV DB provenance: `db.dimpro.hu:5432/dimpro_auth_dev`; Drive legacy Supabase DEV/PROD teljes adatforrás-elkülönítés további bizonyítást igényel.
 - Central Developer Grid source provenance jelenleg stale, a korábbi Drive Desktop V0.1.8 worktree/HEAD-re mutat; release előtt szinkronizálandó.
 - Runtime deploy / PM2 / Nginx / DB migration nem történt. PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.52 – böngészős DEV cutover
+
+- A BUILD01 b2, SHA-256 `43cf36ceaa96c9d0292082e29b0f0a679ba772dd9874f85e62a43e4a52573cfb` standalone csomag külön candidate kiadásként elindult.
+- Publikus `drive.dev.dimpro.hu/drive` V0.9.52-re váltott (3413), korábbi V0.9.33 visszaállítási példányként 3412-n online.
+- Nginx backup + syntax PASS; publikus 307 AUTH redirect, asset 200, auth ready 200, bejelentkezés nélkül a Drive health 401, PM2 0 restart. Hitelesített teljes browser E2E még hátravan.
+- PROD DENY, adatbázis-migráció nincs. A régi S3 single PUT kliens maradt alapértelmezett.
+
+## 2026-10-23 – DIMPRO Drive V0.9.53 – Transfer Center UI, SOURCE ONLY
+
+- Projektazonos felirat a panelen; Minden / Folyamatban / Jóváhagyásra vár / Figyelmet igényel szűrés darabszámokkal.
+- A legutóbb ismert vírusvizsgálati státusz fájlonkénti összesítése; a hálózati adatátviteli százalék továbbra is külön mérőszám.
+- Fájlsebesség és becsült idő a sorokban; befejezett hálózati átvitelnél megfelelő üzenet; új UI szerződéses teszt.
+- V0.9.53 még nem publikus DEV runtime; előbb QA + külön build/kiadás szükséges. PROD DENY.
+- Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0953_TRANSFER_CENTER_UI_20261023.md`.

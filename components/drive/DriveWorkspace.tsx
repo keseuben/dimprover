@@ -4154,6 +4154,7 @@ export default function DriveWorkspace({
       />
       <DriveTransferCenter
         tasks={transferTasks}
+        projectName={projectName}
         open={transferPanelOpen}
         minimized={transferPanelMinimized}
         onOpen={() => setTransferPanelOpen(true)}

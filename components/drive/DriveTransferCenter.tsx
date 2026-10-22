@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import { Activity, ChevronDown, ChevronUp, CloudUpload, X, XCircle } from "lucide-react";
 import {
-  summarizeTransfers, transferEtaSeconds, transferPercent,
+  summarizeTransfers, summarizeTransferSecurity, isTransferTerminal, transferEtaSeconds, transferPercent,
   TRANSFER_LABELS, type TransferTask,
 } from "@/app/lib/transfer-core/transferModel";
 import styles from "./DriveTransferCenter.module.css";
+
+const TRANSFER_ISSUE_PHASES: readonly string[] = ["ERROR", "SCAN_FAILED", "INFECTED", "STATUS_UNAVAILABLE", "CONFIRMATION_UNKNOWN"];
 
 function sizeLabel(bytes: number) {
   if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(2) + " GiB";
@@ -16,15 +18,17 @@ function sizeLabel(bytes: number) {
 }
 function durationLabel(seconds: number | null) {
   if (seconds === null) return "Becslés folyamatban";
+  if (seconds <= 0) return "Hálózati átvitel kész";
   if (seconds >= 3600) return "kb. " + Math.ceil(seconds / 3600) + " óra";
   if (seconds >= 60) return "kb. " + Math.ceil(seconds / 60) + " perc";
   return "kb. " + Math.max(1, seconds) + " mp";
 }
 
 export default function DriveTransferCenter({
-  tasks, open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
+  tasks, projectName, open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
 }: {
   tasks: readonly TransferTask[];
+  projectName: string;
   open: boolean;
   minimized: boolean;
   onOpen: () => void;
@@ -36,7 +40,17 @@ export default function DriveTransferCenter({
   onClearFinished: () => void;
 }) {
   const summary = useMemo(() => summarizeTransfers(tasks), [tasks]);
+  const security = useMemo(() => summarizeTransferSecurity(tasks), [tasks]);
   const [showAll, setShowAll] = useState(false);
+  const [viewFilter, setViewFilter] = useState<"ALL" | "ACTIVE" | "REVIEW" | "ISSUES">("ALL");
+  const issueCount = tasks.filter(task => TRANSFER_ISSUE_PHASES.includes(task.phase)).length;
+  const filteredTasks = useMemo(() => tasks.filter(task => {
+    if (viewFilter === "ACTIVE") return !isTransferTerminal(task.phase);
+    if (viewFilter === "REVIEW") return task.phase === "AWAITING_REVIEW";
+    if (viewFilter === "ISSUES") return TRANSFER_ISSUE_PHASES.includes(task.phase);
+    return true;
+  }), [tasks, viewFilter]);
+  const visibleTasks = showAll ? filteredTasks : filteredTasks.slice(-60);
   if (!tasks.length) return null;
   if (!open) return (
     <button type="button" className={styles.launcher} onClick={onOpen}
@@ -51,7 +65,7 @@ export default function DriveTransferCenter({
       aria-label="DIMPRO Transfer Center – fájlfeltöltések">
       <header className={styles.header}>
         <div className={styles.headerBrand}><span className={styles.brandIcon}><CloudUpload size={19}/></span>
-          <div><strong>DIMPRO Transfer Center</strong><small>{summary.count} fájl · Projekt Drive feltöltések</small></div>
+          <div><strong>DIMPRO Transfer Center</strong><small>{summary.count} fájl · {projectName || "Projekt Drive"}</small></div>
         </div>
         <div className={styles.headerActions}>
           <button type="button" aria-label={minimized ? "Átvitelek kibontása" : "Átvitelek összecsukása"}
@@ -83,22 +97,51 @@ export default function DriveTransferCenter({
               summary.speedBps>0?summary.speedBps:null))}
           </span>
         </div>
-        <div className={styles.security}><Activity size={15}/>
-          <span>Biztonsági ellenőrzés: {summary.scanning} várakozik vagy folyamatban.
-            A feltöltés 100%-a még nem jelenti a fájl jóváhagyását.</span>
+        <div className={styles.security} aria-label="Vírusellenőrzési státuszok">
+          <Activity size={17} aria-hidden="true"/>
+          <div className={styles.securityBody}>
+            <strong>Biztonsági ellenőrzés · legutóbb ismert fájlállapot</strong>
+            <div className={styles.securityCounts} aria-live="polite">
+              <span><b>{security.clean}</b> vírusmentes, jóváhagyásra vár</span>
+              <span><b>{security.scanning}</b> szerveroldali feldolgozásban</span>
+              <span><b>{security.pending}</b> ellenőrzésre vár</span>
+              {security.infected > 0 && <span className={styles.securityAlert}><b>{security.infected}</b> blokkolt</span>}
+              {security.scanFailed > 0 && <span className={styles.securityAlert}><b>{security.scanFailed}</b> vizsgálati hiba</span>}
+              {security.unknown > 0 && <span className={styles.securityAlert}><b>{security.unknown}</b> nem igazolható állapot</span>}
+              <span><b>{security.notAssessed}</b> még nincs vizsgálati eredmény</span>
+            </div>
+            <small>A hálózati 100% nem vírusvizsgálati vagy jóváhagyási százalék.</small>
+          </div>
+        </div>
+        <div className={styles.filters} role="group" aria-label="Átvitelek szűrése">
+          {([
+            ["ALL", "Minden", summary.count],
+            ["ACTIVE", "Folyamatban", tasks.filter(task => !isTransferTerminal(task.phase)).length],
+            ["REVIEW", "Jóváhagyásra vár", security.clean],
+            ["ISSUES", "Figyelmet igényel", issueCount],
+          ] as const).map(([key, label, count]) => (
+            <button type="button" key={key} aria-pressed={viewFilter === key}
+              onClick={() => { setViewFilter(key); setShowAll(false); }}>
+              {label} <span>{count}</span>
+            </button>
+          ))}
         </div>
         <div className={styles.tableWrap}>
           <table className={styles.table}><thead><tr>
             <th>Fájl és célmappa</th><th>Méret</th><th>Átvitel</th><th>Fázis</th><th>Művelet</th>
           </tr></thead><tbody>
-            {(showAll ? tasks : tasks.slice(-60)).map(task=><tr key={task.id} data-phase={task.phase}>
+            {visibleTasks.length === 0 && <tr><td colSpan={5} className={styles.empty}>
+              Ebben a szűrésben nincs megjeleníthető fájl.
+            </td></tr>}
+            {visibleTasks.map(task=><tr key={task.id} data-phase={task.phase}>
               <td><strong title={task.fileName}>{task.fileName}</strong><small title={task.folderName}>{task.folderName}</small></td>
               <td className={styles.number}>{sizeLabel(task.sizeBytes)}</td>
               <td className={styles.percentCell}>
                 <strong>{transferPercent(task.uploadedBytes,task.sizeBytes)}%</strong>
                 <div className={styles.miniTrack}><div style={{width:transferPercent(task.uploadedBytes,task.sizeBytes)+"%"}}/></div>
                 {task.phase==="UPLOADING" && task.speedBps && task.speedBps>0 &&
-                  <small>{sizeLabel(task.speedBps)}/s</small>}
+                  <small>{sizeLabel(task.speedBps)}/s · {durationLabel(transferEtaSeconds(
+                    task.sizeBytes - task.uploadedBytes, task.speedBps))}</small>}
               </td>
               <td className={styles.phase}><span>{TRANSFER_LABELS[task.phase]}</span>
                 {task.retryCount ? <small>{"Újraküldés: "+task.retryCount+". alkalom"}</small> : null}
@@ -118,8 +161,8 @@ export default function DriveTransferCenter({
         <footer className={styles.footer}>
           <span>{summary.terminal}/{summary.count} átviteli feladat lezárva</span>
           <div>
-            {tasks.length>60&&<button type="button" onClick={()=>setShowAll(value=>!value)}>
-              {showAll ? "Utolsó 60" : "Mind a "+tasks.length+" fájl"}
+            {filteredTasks.length>60&&<button type="button" onClick={()=>setShowAll(value=>!value)}>
+              {showAll ? "Utolsó 60" : "Mind a "+filteredTasks.length+" fájl"}
             </button>}
             <button type="button" onClick={onClearFinished} disabled={summary.terminal===0}
               title="Csak a lezárt sorok eltüntetése, szerveroldali fájlokat nem töröl">Lezárt sorok törlése</button>

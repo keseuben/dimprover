@@ -3,7 +3,7 @@
  * No credentials, signed URLs, health/identity payloads, or customer data persisted.
  * Percentages describe network bytes only, never malware scanning or approval.
  */
-export const TRANSFER_CORE_VERSION = "0.9.52" as const;
+export const TRANSFER_CORE_VERSION = "0.9.53" as const;
 export type TransferPhase =
   | "QUEUED" | "INITIALIZING" | "UPLOADING" | "VERIFYING" | "SCANNING"
   | "AWAITING_REVIEW" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"
@@ -37,7 +37,7 @@ export const TRANSFER_LABELS: Record<TransferPhase, string> = {
   INITIALIZING: "Munkamenet előkészítése",
   UPLOADING: "Átvitel folyamatban",
   VERIFYING: "Szerveroldali SHA-256 ellenőrzés",
-  SCANNING: "Vírusellenőrzés folyamatban",
+  SCANNING: "Szerveroldali ellenőrzés folyamatban",
   AWAITING_REVIEW: "Vírusmentes · jóváhagyásra vár",
   SCAN_PENDING: "Feltöltve · vírusellenőrzésre vár",
   SCAN_FAILED: "Vírusellenőrzés sikertelen · karantén",
@@ -96,4 +96,21 @@ export function summarizeTransfers(tasks: readonly TransferTask[]) {
   const speedBps = tasks.reduce((sum, item) => item.phase === "UPLOADING" ? sum + Math.max(0, item.speedBps || 0) : sum, 0);
   return { count: tasks.length, totalBytes, uploadedBytes, percent: transferPercent(uploadedBytes, totalBytes),
     active, queued, failed, awaitingReview, scanning, terminal, speedBps };
+}
+
+/**
+ * Counts distinct files by their last confirmed scan state.
+ * This is a distribution of file statuses, NOT a fabricated ClamAV percentage.
+ * A failed, cancelled or merely transferred file is never counted as clean.
+ */
+export function summarizeTransferSecurity(tasks: readonly TransferTask[]) {
+  const clean = tasks.filter(item => item.phase === "AWAITING_REVIEW").length;
+  const scanning = tasks.filter(item => item.phase === "SCANNING").length;
+  const pending = tasks.filter(item => item.phase === "SCAN_PENDING").length;
+  const infected = tasks.filter(item => item.phase === "INFECTED").length;
+  const scanFailed = tasks.filter(item => item.phase === "SCAN_FAILED").length;
+  const unknown = tasks.filter(item =>
+    item.phase === "CONFIRMATION_UNKNOWN" || item.phase === "STATUS_UNAVAILABLE").length;
+  const notAssessed = tasks.length - clean - scanning - pending - infected - scanFailed - unknown;
+  return { count: tasks.length, clean, scanning, pending, infected, scanFailed, unknown, notAssessed };
 }

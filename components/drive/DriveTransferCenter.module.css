@@ -48,3 +48,20 @@
 .table tr[data-phase="CONFIRMATION_UNKNOWN"] .phase{color:#a66416}
 
 .table tr[data-phase="STATUS_UNAVAILABLE"] .phase{color:#9b571c}
+
+/* V0.9.53 – verified scan status and task-oriented filters. */
+.securityBody{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.securityBody>strong{font-size:11px;font-weight:750}
+.securityBody>small{white-space:normal;max-width:none;margin:0;color:#527080;font-size:10px}
+.securityCounts{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:10px}
+.securityCounts span{white-space:nowrap}
+.securityCounts b{font-variant-numeric:tabular-nums;color:#126377}
+.securityCounts .securityAlert,.securityCounts .securityAlert b{color:#a33b34}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.filters button{display:inline-flex;align-items:center;gap:7px;border:1px solid #cddde6;background:#f6f9fb;color:#31536a;border-radius:6px;padding:6px 9px;cursor:pointer;font-size:11px;font-weight:600;min-height:30px}
+.filters button span{font-variant-numeric:tabular-nums;background:#e7eff4;padding:2px 6px;border-radius:5px}
+.filters button[aria-pressed="true"]{background:#d8f2f4;border-color:#45a6b5;color:#11566e}
+.filters button[aria-pressed="true"] span{background:#bde6e9;color:#064b64}
+.filters button:focus-visible{outline:2px solid #16829b;outline-offset:2px}
+.empty{text-align:center;padding:16px!important;color:#5a7180}
+@media(max-width:650px){.filters{gap:5px}.filters button{font-size:10px;padding:5px 7px;min-height:32px}.securityCounts span{white-space:normal}.security{padding:8px}}

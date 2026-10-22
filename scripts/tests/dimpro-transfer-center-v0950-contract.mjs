@@ -6,7 +6,7 @@ import {
   isTransferTerminal,summarizeTransfers,
 } from "../../app/lib/transfer-core/transferModel.ts";
 
-assert.ok(["0.9.50","0.9.51","0.9.52"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.50","0.9.51","0.9.52","0.9.53"].includes(TRANSFER_CORE_VERSION));
 assert.equal(transferPercent(64,100),64);
 assert.equal(transferPercent(120,100),100);
 assert.equal(transferPercent(-1,100),0);
@@ -74,12 +74,12 @@ const flags=[
  ["bounded concurrency",workspace.includes("Math.min(2, entries.length)")],
  ["event render throttling",workspace.includes("lastProgressRenderAt<160")],
  ["project help registered",readFileSync("components/drive/driveHelpData.ts","utf8").includes('id:"transfer"')],
- ["source version",/DRIVE_DEVELOPMENT_VERSION = "0.9.5[012]"/.test(readFileSync("components/drive/driveBuildInfo.ts","utf8"))],
+ ["source version",/DRIVE_DEVELOPMENT_VERSION = "0.9.5[0123]"/.test(readFileSync("components/drive/driveBuildInfo.ts","utf8"))],
  ["server-side scanner limit before quota",server.indexOf("getDriveScannerUploadLimitBytes()") >= 0
     && server.indexOf("getDriveScannerUploadLimitBytes()") < server.indexOf("const quota = await getDriveProjectStorageQuota")],
  ["scanner same config health & gate",scanner.includes("return getDriveScannerConfig().maxScanBytes")],
  ["no localStorage task/token tracking",!panel.includes("localStorage") && !http.includes("localStorage")],
- ["scanner never represented by transfer percent",panel.includes("A feltöltés 100%-a még nem jelenti")],
+ ["scanner never represented by transfer percent",panel.includes("A feltöltés 100%-a még nem jelenti") || panel.includes("hálózati 100% nem vírusvizsgálati")],
  ["source-only PROD protected",true],
 ];
 for(const [name,valid] of flags)assert.ok(valid,name);
