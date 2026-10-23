@@ -101,3 +101,7 @@ S3/DB célok **független** szeparációs igazolása azonban HIÁNYZIK, ezért
 a valós S3 PUT/DB írás és a 100 MiB személyes upload pilot továbbra is NO-GO.
 A V0.9.64 első feladata az önállóan jóváhagyott izolált DEV bucket,
 DB és szintetikus USER, utána a hitelesített E2E kapuk.
+
+## V0.9.64 tényállapot-frissítés (2026.10.23.)
+
+A 100 MiB teljes, szintetikus staging → ClamAV → helyi S3 SDK → visszaolvasás/SHA pipeline PASS. EICAR negatív teszt, túlfolyás és csonkolás elutasítása szintén PASS. A valódi S3/DEV DB elkülönítés független igazolása, a hitelesített böngésző- és adatbázis-E2E, valamint a jóváhagyott BUILD01 továbbra is nyitott. A V0.9.65 következő fókusza ezen kiadási kapuk lezárása; a forrás előrehaladása nem jelent publikus aktiválást.

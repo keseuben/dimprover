@@ -4362,3 +4362,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Forrás `03d78ea6078e`, BUILD01 health READY és forrásbundle kész.
 - A build runner hívás külső biztonsági blokkolást kapott. A v0963 build logja és result fájlja nem keletkezett; **BUILD PENDING/NOT RUN**, nem PASS.
 - A tiltás megkerülése nélkül, külön jóváhagyott operátori/Central Core csatorna szükséges. Nincs új V0.9.63 DEV csomag, nincs PM2/nginx átállítás, PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.64 – izolált 100 MiB staging/ClamAV/S3/SHA teljes adatfolyam
+
+- Új `dimpro-drive-v0964-personal-100m-isolated-pipeline.mjs`: 100 MiB bounded byte stream → 0600 staging → teljes valódi ClamAV CLEAN + SHA-256 → localhost AWS S3 `PutObject` → Head/Get teljes SHA visszaellenőrzés: **PASS**.
+- Ártalmatlan EICAR vírusellenőrző tesztminta valós scannerrel INFECTED az S3-feltöltés előtt: **PASS**.
+- Overflow, underrun és >100 MiB deklarált stream fail-closed: **PASS**.
+- TypeScript / ESLint, 20 korábbi regresszió és 5 izolált PGlite migráció: PASS.
+- A fejlesztés forrás és helyi QA, nem hitelesített publikus webes E2E. A V0.9.63 BUILD01 biztonsági blokkolás érvényes, a V0.9.64 BUILD01 még nincs indítva; **BUILD PENDING**, nem PASS.
+- Report: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0964_PERSONAL_100M_ISOLATED_FULL_STREAM_QA_20261023.md`. PROD DENY.

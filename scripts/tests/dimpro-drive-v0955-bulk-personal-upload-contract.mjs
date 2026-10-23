@@ -17,8 +17,8 @@ const version = read("components/drive/driveBuildInfo.ts");
 const previous = read("scripts/tests/dimpro-drive-v0954-personal-upload-contract.mjs");
 
 // Source version monotonically tracks the bulk-upload UI / paging change.
-assert.ok(["0.9.55", "0.9.56", "0.9.57", "0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63"].includes(TRANSFER_CORE_VERSION));
-assert.match(version, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(55|56|57|58|59|60|61|62|63)"/);
+assert.ok(["0.9.55", "0.9.56", "0.9.57", "0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63", "0.9.64"].includes(TRANSFER_CORE_VERSION));
+assert.match(version, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(55|56|57|58|59|60|61|62|63|64)"/);
 assert.equal(PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION, 500);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES, 100 * 1024 * 1024);
 for (const count of [1, 25, 50, 100, 250, 499, 500]) {
