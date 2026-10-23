@@ -48,7 +48,7 @@ check("visible refresh controls and daily setting exist", () => {
   assert.match(html, /id="chatDailyRefreshInput"/);
 });
 check("renderer markup remains compatible with strict style CSP", () => assert.doesNotMatch(html, /\sstyle=/));
-check("Electron compatibility patch is pinned", () => assert.equal(packageJson.devDependencies.electron, "43.6.0"));
+check("Electron compatibility patch is pinned", () => assert.equal(packageJson.devDependencies.electron, "43.8.3"));
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.error ? ` — ${item.error}` : ""}`);
 if (checks.some((item) => !item.ok)) process.exit(1);

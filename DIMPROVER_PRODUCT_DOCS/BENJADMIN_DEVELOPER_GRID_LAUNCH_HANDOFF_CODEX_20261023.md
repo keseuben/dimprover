@@ -47,3 +47,9 @@ A javítás az elkülönített codex ágon készül. A működő EXE és runtime
 A Windows packaging audit Electron 43.6.0 moderate és http-cache-semantics 4.2.0 high találatot adott. Az Electron exact verzióját 43.8.3-ra emeltük; a cache-függőség 4.3.0-ra frissült a meglévő kompatibilis tartományban. electron-builder változatlanul 26.15.3. A dependency security contract megőrzi a brace-expansion patch-ellenőrzéseket és az új verziókat is számon kéri. A frissített desktop dependency audit: 0 sérülékenység. Az első c88c29b5f build nem tekinthető az új függőségi commitból készült végleges artifactnak; a kiadási provenance-hez új build kell.
 
 Ellenőrzött források: https://github.com/electron/electron/releases/tag/v43.8.3 ; https://github.com/electron/electron/security/advisories/GHSA-fw47-9c62-h3vw ; az npm registry Electron 43.8.3 és http-cache-semantics 4.3.0 csomagmetaadatai; a tényleges npm audit kimenete.
+
+## Teljes kliensellenőrzés tényleges kiadási builddel
+
+A BUILD01 cfdfc76fb forrásból készült buildje PASS: BUILD_ID yDmRPZroi8FZ6H22BVySj, tarball SHA-256 bca53272d3e6baed63133b7b15cd53bd57de31acc43956c63c1f447061bbeebe. Az izolált worktree-be csak hash- és metadata-ellenőrzés után került.
+A teljes kliens npm run check ezután egy további, a chat-refresh contractban maradt 43.6.0 Electron pinre jelzett. Ezt a 43.8.3 security patchhez igazítottuk; további régi 43.6.0 pin a desktop/scripts forrásban nincs. A teljes npm run check most PASS, így a korábbi RELEASE_DIST_NEXT_ROOT_MISSING környezeti akadály tényleges builddel feloldódott. A végső commit új csomagolási provenance-éhez külön, exact HEAD build szükséges; régebbi artifactot nem címkézünk át.
+A BUILD02 kérést DEV_STORAGE_ADMISSION_BLOCKED állította meg: a 2026-10-07-i dev-storage-freeze.json még ACTIVE. A tiltás változatlan maradt; BUILD01 a megfelelő, működő útvonal.
