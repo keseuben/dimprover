@@ -5,7 +5,7 @@ import {classifyTransferRetry,transferResumeCapability,transferRetryDelayMs,wait
   from "../../app/lib/transfer-core/retryPolicy.mjs";
 import {driveTransferScanStatusUrl,mapTransferScanStatus,pollDriveTransferScan,pollDriveUploadFinalization}
   from "../../app/lib/transfer-core/scanStatus.ts";
-assert.ok(["0.9.51","0.9.52","0.9.53", "0.9.54", "0.9.55", "0.9.56", "0.9.57", "0.9.58"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.51","0.9.52","0.9.53", "0.9.54", "0.9.55", "0.9.56", "0.9.57", "0.9.58", "0.9.59"].includes(TRANSFER_CORE_VERSION));
 assert.equal(isTransferTerminal("SCAN_PENDING"),false);
 assert.equal(isTransferTerminal("CONFIRMATION_UNKNOWN"),false);
 assert.equal(isTransferTerminal("AWAITING_REVIEW"),true);

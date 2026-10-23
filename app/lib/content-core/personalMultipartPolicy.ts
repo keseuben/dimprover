@@ -19,7 +19,7 @@ export const PERSONAL_MULTIPART_MAX_PARTS = 10_000;
 export const PERSONAL_MULTIPART_SESSION_TTL_MS = 24 * 60 * 60_000;
 
 export type PersonalMultipartStatus =
-  | "INITIATED" | "UPLOADING" | "COMPLETING" | "QUARANTINED" | "SCANNING"
+  | "INITIATED" | "UPLOADING" | "ABORTING" | "COMPLETING" | "QUARANTINED" | "SCANNING"
   | "CLEAN" | "REJECTED" | "ABORTED" | "EXPIRED";
 
 export type PersonalMultipartPart = {
@@ -106,5 +106,5 @@ export function personalMultipartMayBecomeClean(input: {
 }
 
 export function canAbortPersonalMultipart(status: PersonalMultipartStatus) {
-  return status === "INITIATED" || status === "UPLOADING";
+  return status === "INITIATED" || status === "UPLOADING" || status === "ABORTING";
 }

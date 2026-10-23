@@ -230,15 +230,25 @@ export async function personalMultipartAbort(ownerUserId: string, sessionId: str
   await requirePersonalMultipartServerReady();
   const session = await requireOwnedActiveSession(ownerUserId, sessionId);
   if (!canAbortPersonalMultipart(session.status)) throw error("PERSONAL_MULTIPART_ABORT_BLOCKED");
-  const aborted = await transitionPersonalMultipartSession({
-    ownerUserId, sessionId, expectedStatus: session.status,
-    expectedVersion: session.state_version, nextStatus: "ABORTED",
-  });
-  if (session.storage_upload_id) {
-    await abortDriveS3Multipart({
-      storageKey: session.storage_key, uploadId: session.storage_upload_id,
+  // Never release quota before the S3 multipart storage confirms Abort.
+  // A lost S3 response leaves ABORTING reserved and safely retryable.
+  const aborting = session.status === "ABORTING" ? session
+    : await transitionPersonalMultipartSession({
+      ownerUserId, sessionId, expectedStatus: session.status,
+      expectedVersion: session.state_version,
+      nextStatus: session.storage_upload_id ? "ABORTING" : "ABORTED",
     });
+  if (aborting.status === "ABORTED") {
+    return { ok: true, session: publicSession(aborting) };
   }
+  if (!aborting.storage_upload_id) throw error("PERSONAL_MULTIPART_ABORT_UPLOAD_ID_MISSING");
+  await abortDriveS3Multipart({
+    storageKey: aborting.storage_key, uploadId: aborting.storage_upload_id,
+  });
+  const aborted = await transitionPersonalMultipartSession({
+    ownerUserId, sessionId, expectedStatus: "ABORTING",
+    expectedVersion: aborting.state_version, nextStatus: "ABORTED",
+  });
   return { ok: true, session: publicSession(aborted) };
 }
 

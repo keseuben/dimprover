@@ -37,7 +37,7 @@ export async function getPersonalMultipartSchemaReadiness() {
       .select("id", { head: true, count: "exact" }).limit(0),
   ]);
   return { ready: !meta.error && !table.error
-    && meta.data?.schema_version === "0.1.0"
+    && meta.data?.schema_version === "0.1.1"
     && meta.data?.bootstrap_id === "personal-drive-multipart-v010-20261023",
     installed: !table.error, error: meta.error?.code || table.error?.code || null };
 }
@@ -96,8 +96,9 @@ export async function transitionPersonalMultipartSession(input: {
 }) {
   if (input.expectedStatus === "CLEAN" || input.nextStatus === "CLEAN"
     || !(
-      (input.expectedStatus === "INITIATED" && ["UPLOADING", "ABORTED"].includes(input.nextStatus))
-      || (input.expectedStatus === "UPLOADING" && ["COMPLETING", "ABORTED"].includes(input.nextStatus))
+      (input.expectedStatus === "INITIATED" && ["UPLOADING", "ABORTED", "ABORTING"].includes(input.nextStatus))
+      || (input.expectedStatus === "UPLOADING" && ["COMPLETING", "ABORTING"].includes(input.nextStatus))
+      || (input.expectedStatus === "ABORTING" && input.nextStatus === "ABORTED")
       || (input.expectedStatus === "COMPLETING" && input.nextStatus === "QUARANTINED")
       || (input.expectedStatus === "QUARANTINED" && input.nextStatus === "SCANNING")
       || (input.expectedStatus === "SCANNING" && input.nextStatus === "REJECTED")

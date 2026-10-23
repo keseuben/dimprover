@@ -1,5 +1,7 @@
 import { getDimproIdentitySupabaseClient } from "@/app/lib/identity-core/repository";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
+import { PERSONAL_MULTIPART_SERVER_RELEASED } from "./personalMultipartPolicy";
+import { parsePersonalQuotaSummary } from "./personalQuotaSummary";
 
 type DbError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
 
@@ -9,7 +11,7 @@ export type PersonalDriveStorageQuota = {
   projectId: "personal";
   quotaBytes: number;
   usedBytes: number;
-  reservedBytes: 0;
+  reservedBytes: number;
   occupiedBytes: number;
   remainingBytes: number;
   usagePercent: number;
@@ -223,6 +225,33 @@ function dbError(message: string, error: DbError): never {
 
 export async function getPersonalDriveStorageQuota(input: { userId: string }): Promise<PersonalDriveStorageQuota> {
   const db = getDimproIdentitySupabaseClient();
+  // Never silently display a legacy "0 reserved" quota while multipart upload
+  // sessions could actually exist. Once released, this RPC is mandatory.
+  // Until audited release the currently active personal Drive behavior is unchanged.
+  if (PERSONAL_MULTIPART_SERVER_RELEASED) {
+    const result = await db.rpc("dimpro_personal_drive_quota_summary_v011", {
+      p_owner_user_id: input.userId,
+      p_default_quota_bytes: PERSONAL_DRIVE_DEFAULT_QUOTA_BYTES,
+    });
+    if (result.error || !result.data) {
+      throw new DimproIdentityError(
+        "A Saját Drive tárhelyfoglalása nem ellenőrizhető.",
+        "PERSONAL_QUOTA_RESERVATIONS_UNAVAILABLE", 503,
+      );
+    }
+    let summary: ReturnType<typeof parsePersonalQuotaSummary>;
+    try {
+      summary = parsePersonalQuotaSummary(result.data);
+    } catch {
+      throw new DimproIdentityError(
+        "A Saját Drive tárhelyadatainak egyezősége nem igazolható.",
+        "PERSONAL_QUOTA_SUMMARY_INVALID", 503,
+      );
+    }
+    return {
+      projectId: "personal", ...summary, warningPercent: 80, criticalPercent: 95,
+    };
+  }
   const [limitResult, refsResult] = await Promise.all([
     db.from("dimpro_personal_drive_storage_limits")
       .select("quota_bytes,hard_limit,source")
