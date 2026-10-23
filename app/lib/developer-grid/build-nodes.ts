@@ -77,12 +77,18 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function containsForbiddenKey(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(containsForbiddenKey);
+function containsForbiddenKey(value: unknown, parentPath = ""): boolean {
+  if (Array.isArray(value)) return value.some((item) => containsForbiddenKey(item, parentPath));
   if (!isObject(value)) return false;
-  return Object.entries(value).some(([key, nested]) =>
-    /password|secret|token|privatekey|authorization|commandline|envvars/i.test(key) || containsForbiddenKey(nested)
-  );
+  return Object.entries(value).some(([key, nested]) => {
+    // This is a boolean DEV build-admission status, not an authentication credential.
+    // Keep all other forbidden credential-like fields fail-closed.
+    if (parentPath === "devSourceDevelopmentAdmission" &&
+        key === "executionAuthorization" && typeof nested === "boolean") return false;
+    const nestedPath = parentPath ? parentPath + "." + key : key;
+    return /password|secret|token|privatekey|authorization|commandline|envvars/i.test(key) ||
+      containsForbiddenKey(nested, nestedPath);
+  });
 }
 
 function finiteNumber(value: unknown): number | null {

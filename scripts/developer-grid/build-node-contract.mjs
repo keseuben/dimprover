@@ -126,6 +126,31 @@ await writeSnapshot({ ...validSnapshot, apiToken: "forbidden" });
 const secretBearing = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
 check(secretBearing.every((node) => node.state === "NOT_CONNECTED"), "secret-bearing snapshot fails closed");
 
+// The current gateway adds this non-secret boolean DEV admission marker.
+for (const executionAuthorization of [true, false]) {
+  await writeSnapshot({
+    ...validSnapshot,
+    devSourceDevelopmentAdmission: { executionAuthorization },
+  });
+  const admission = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
+  check(admission[0].healthState === "READY" && admission[1].healthState === "BLOCKED",
+    "boolean DEV admission executionAuthorization=" + executionAuthorization + " is accepted");
+}
+await writeSnapshot({ ...validSnapshot, devSourceDevelopmentAdmission: { executionAuthorization: "yes" } });
+const invalidAdmission = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
+check(invalidAdmission.every((node) => node.state === "NOT_CONNECTED"),
+  "non-boolean DEV admission executionAuthorization fails closed");
+
+await writeSnapshot({ ...validSnapshot, otherScope: { executionAuthorization: true } });
+const wrongScopeAdmission = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
+check(wrongScopeAdmission.every((node) => node.state === "NOT_CONNECTED"),
+  "credential-like authorization elsewhere remains forbidden");
+
+await writeSnapshot({ ...validSnapshot, devSourceDevelopmentAdmission: { executionAuthorization: true, accessToken: "forbidden" } });
+const hiddenSecret = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
+check(hiddenSecret.every((node) => node.state === "NOT_CONNECTED"),
+  "admission allowlist never admits other secrets");
+
 await writeSnapshot({ ...validSnapshot, nodes: [validSnapshot.nodes[0], validSnapshot.nodes[0]] });
 const duplicate = await nodesApi.probeBuildNodes({ snapshotFile, nowMs });
 check(duplicate.every((node) => node.state === "NOT_CONNECTED"), "duplicate node identifiers fail closed");
