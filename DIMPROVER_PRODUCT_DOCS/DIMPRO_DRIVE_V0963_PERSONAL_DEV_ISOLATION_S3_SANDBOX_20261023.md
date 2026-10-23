@@ -57,3 +57,14 @@ Fájl: `app/lib/content-core/personalPilotIsolation.ts`.
 6. Csak ha minden gate PASS és külön DEV pilot jóváhagyás van: a V0.9.64 vagy későbbi candidate nyilvános DEV pilotba helyezhető. **PROD DENY** külön döntésig.
 
 **Fontos:** nincs éles vagy DEV DB írás, nincs valódi S3 PUT, nincs PM2 vagy Nginx módosítás. A V0.9.63 „SOURCE-ONLY” kifejezés a policy/kód változására utal, nem tagadja a helyi, szintetikus S3 SDK valós HTTP tesztjét.
+
+## BUILD01 állapot és biztonsági blokk
+
+- A forráscommit `03d78ea6078ef9fd0921a5d35192e2fa28737094` Gitben és az origin munkágon rögzítve.
+- A BUILD01 előzetes `dimpro-build-node-health-v1 build01` vizsgálat: READY, buildLockHeld=false, storageGovernor=SAFE.
+- Az adott forrásból elkészített Git source bundle felkerült a BUILD01 elkülönített temp útvonalára.
+- A hivatalos build runner indítását az OpenAI eszközbiztonsági rétege még a végrehajtás előtt blokkolta. A tiltást **nem kerültük meg**.
+- READ-ONLY utóellenőrzés: a v0963 buildhez **nincs result JSON és nincs build log**.
+- Következmény: **BUILD01 státusz = PENDING / NOT RUN**, nem PASS, és nincs V0.9.63 artifact / új DEV release.
+- Következő szükséges művelet: a BUILD01 futtatás külön, az engedélyezett Central Core/operátori kiadási csatornán, a biztonsági jóváhagyástól függően. A már ellenőrzött git/bundle forrás módosítás nélkül újrahasználható; a blokkolás feloldásának megkerülése tilos.
+- A publikus DEV továbbra is V0.9.52, és semmilyen üzemelő runtime vagy PROD beállítás nem módosult.
