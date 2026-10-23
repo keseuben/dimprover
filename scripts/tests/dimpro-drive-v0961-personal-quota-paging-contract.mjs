@@ -14,7 +14,7 @@ const refs=Array.from({length:2_505},(_,i)=>({
   content_object_id:id(5_000-Math.floor(i/2)),
 }));
 const objects=new Map(refs.map(row=>[
-  row.content_object_id, {id:row.content_object_id,size_bytes:4*1024**2}
+  row.content_object_id, {id:row.content_object_id,size_bytes:4*1024**2,status:"ACTIVE"}
 ]));
 const requests={refs:0,objects:0};
 const readRefPage=async(before,limit)=>{
@@ -51,14 +51,27 @@ await assert.rejects(()=>collectPersonalQuotaUsedBytes({
   readRefPage:async()=>refs.slice().reverse().slice(0,500),readObjectBatch:async()=>[],
 }),/PERSONAL_QUOTA_REF_ORDER_INVALID/);
 await assert.rejects(()=>collectPersonalQuotaUsedBytes({
-  readRefPage:async()=>refs.slice(0,1),readObjectBatch:async()=>[{id:id(9_999),size_bytes:10}],
+  readRefPage:async()=>refs.slice(0,1),readObjectBatch:async()=>[{id:id(9_999),size_bytes:10,status:"ACTIVE"}],
 }),/PERSONAL_QUOTA_OBJECT_INVALID/);
 await assert.rejects(()=>collectPersonalQuotaUsedBytes({
   readRefPage:async()=>refs.slice(0,1),readObjectBatch:async ids=>[
-    {id:ids[0],size_bytes:Number.MAX_SAFE_INTEGER},
-    {id:ids[0],size_bytes:10},
+    {id:ids[0],size_bytes:Number.MAX_SAFE_INTEGER,status:"ACTIVE"},
+    {id:ids[0],size_bytes:10,status:"ACTIVE"},
   ],
 }),/PERSONAL_QUOTA_OBJECT_BATCH_INVALID/);
+// A missing object row must not silently be treated as zero used storage.
+await assert.rejects(()=>collectPersonalQuotaUsedBytes({
+  readRefPage:async()=>refs.slice(0,1),readObjectBatch:async()=>[],
+}),/PERSONAL_QUOTA_OBJECT_BATCH_INCOMPLETE/);
+const inactive=await collectPersonalQuotaUsedBytes({
+  readRefPage:async()=>refs.slice(0,2),
+  readObjectBatch:async ids=>ids.map((key,i)=>({
+    id:key,size_bytes:100,status:i===0?"DELETED":"ACTIVE",
+  })),
+});
+assert.equal(inactive.countedRefs,2);
+assert.equal(inactive.usedBytes,0); // these two refs share one DELETED object
+
 const read=path=>readFileSync(path,"utf8");
 const repo=read("app/lib/content-core/repository.ts");
 assert.match(repo,/collectPersonalQuotaUsedBytes/);

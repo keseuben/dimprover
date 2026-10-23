@@ -433,7 +433,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         try {
           const result = await uploadPersonalFormWithProgress({
             file, folderId:targetFolderId,
-            requestId:crypto.randomUUID(), signal:controller.signal,
+            requestId:id, signal:controller.signal,
             onProgress:bytes => {
               const now = performance.now();
               sample = transferSpeedSample(sample, bytes, now);

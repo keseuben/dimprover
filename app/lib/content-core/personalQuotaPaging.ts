@@ -13,7 +13,7 @@ export const PERSONAL_QUOTA_OBJECT_BATCH_SIZE = 100;
 export const PERSONAL_QUOTA_MAX_REFS_TO_SCAN = 100_000;
 
 export type QuotaRefPageRow = { id: string; content_object_id: string };
-export type QuotaObjectRow = { id: string; size_bytes: number | string };
+export type QuotaObjectRow = { id: string; size_bytes: number | string; status: string };
 
 export async function collectPersonalQuotaUsedBytes(input: {
   readRefPage: (beforeId: string | null, limit: number) => Promise<QuotaRefPageRow[]>;
@@ -71,13 +71,21 @@ export async function collectPersonalQuotaUsedBytes(input: {
       const id = typeof object?.id === "string" ? object.id.toLowerCase() : "";
       const size = typeof object?.size_bytes === "string"
         && /^[0-9]+$/.test(object.size_bytes) ? Number(object.size_bytes) : object?.size_bytes;
-      if (!batch.includes(id) || seen.has(id)
+      if (!batch.includes(id) || seen.has(id) || !["ACTIVE", "DELETING", "DELETED"].includes(object.status)
         || typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0) {
         throw new Error("PERSONAL_QUOTA_OBJECT_INVALID");
       }
       seen.add(id);
-      usedBytes += size;
-      if (!Number.isSafeInteger(usedBytes)) throw new Error("PERSONAL_QUOTA_SUM_OVERFLOW");
+      // Keep parity with the authoritative SQL: only ACTIVE content
+      // objects retain quota, even if an old reference still exists.
+      if (object.status === "ACTIVE") {
+        usedBytes += size;
+        if (!Number.isSafeInteger(usedBytes)) throw new Error("PERSONAL_QUOTA_SUM_OVERFLOW");
+      }
+    }
+    if (seen.size !== batch.length) {
+      // A truncated/missing DB object result must never understate usage.
+      throw new Error("PERSONAL_QUOTA_OBJECT_BATCH_INCOMPLETE");
     }
   }
   return { usedBytes, countedRefs, distinctObjects: objectIds.size };

@@ -129,6 +129,14 @@ export async function POST(request: NextRequest) {
         return reply({ ok: false, code: "PERSONAL_UPLOAD_IDEMPOTENCY_CONFLICT" }, 409);
       }
       ensureReusablePersonalContentObject(known, config.bucket);
+      // An idempotent replay must verify the physical immutable object too:
+      // a stale CLEAN database ref is not proof that S3 still holds the bytes.
+      const persisted = await calculateDriveObjectSha256({
+        storageKey: known.storage_key, bucket: known.storage_bucket,
+      });
+      if (persisted.sha256 !== scanned.sha256 || persisted.sizeBytes !== sizeBytes) {
+        return reply({ ok: false, code: "PERSONAL_UPLOAD_PRIOR_OBJECT_INVALID" }, 409);
+      }
       return reply({ ok: true, saved: true, alreadyCompleted: true, contentRefId: prior.id, scanStatus: "CLEAN" });
     }
 

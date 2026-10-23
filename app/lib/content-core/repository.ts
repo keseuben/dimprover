@@ -279,11 +279,10 @@ export async function getPersonalDriveStorageQuota(input: { userId: string }): P
       },
       readObjectBatch: async ids => {
         const result = await db.from("dimpro_content_objects")
-          .select("id,size_bytes")
-          .in("id", ids)
-          .eq("status", "ACTIVE");
+          .select("id,size_bytes,status")
+          .in("id", ids);
         if (result.error) dbError("A Saját Drive tárhelyobjektumai nem olvashatók.", result.error);
-        return (result.data || []) as Array<{ id: string; size_bytes: number }>;
+        return (result.data || []) as Array<{ id: string; size_bytes: number; status: string }>;
       },
     });
     usedBytes = complete.usedBytes;

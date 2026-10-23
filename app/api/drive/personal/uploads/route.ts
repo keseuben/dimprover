@@ -121,6 +121,13 @@ export async function POST(request: NextRequest) {
         return reply({ ok: false, error: "PERSONAL_UPLOAD_IDEMPOTENCY_CONFLICT" }, 409);
       }
       ensureReusablePersonalContentObject(priorObject, storage.bucket);
+      // Client retries must not claim completion for missing/damaged S3 data.
+      const persisted = await calculateDriveObjectSha256({
+        storageKey: priorObject.storage_key, bucket: priorObject.storage_bucket,
+      });
+      if (persisted.sha256 !== scanned.sha256 || persisted.sizeBytes !== bytes.byteLength) {
+        return reply({ ok: false, error: "PERSONAL_UPLOAD_PRIOR_OBJECT_INVALID" }, 409);
+      }
       return reply({ ok: true, saved: true, alreadyCompleted: true, contentRefId: prior.id, scanStatus: "CLEAN" });
     }
 

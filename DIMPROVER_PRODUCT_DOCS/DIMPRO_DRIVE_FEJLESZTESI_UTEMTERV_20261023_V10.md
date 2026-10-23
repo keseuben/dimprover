@@ -83,3 +83,12 @@ ClamAV scanner próba és ártalmatlan EICAR blokkolás PASS, 2505 referencia
 tárhelyösszesítési hibájának javítása és 16 szerződéses/regressziós teszt PASS.
 A DEV személyes upload runtime, S3/DB/böngészős E2E és a 500 fotós felhasználói
 pilot **nem készült el**; ezek a V0.9.61–62 kiadási kapui.
+
+## V0.9.62 tényállapot-frissítés (2026.10.23.)
+
+A 100 MiB-os személyes pilot előfeltételei tovább erősödtek: hibás/
+csonka kvótalista fail-closed, stabil per-task request UUID,
+bizonytalan 5xx upload-állapot, idempotens S3 rehash, FormData nélküli
+stream és 18 QA regresszió PASS. A teljes S3/DB/browser E2E és a
+publikus DEV aktiválási döntés továbbra is NYITOTT (NO-GO).
+Következő feladat: V0.9.63 izolált runtime és end-to-end DEV pilot gate.

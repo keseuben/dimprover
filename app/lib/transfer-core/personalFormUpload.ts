@@ -9,9 +9,13 @@ export type PersonalUploadResponse = {
   placedInFolder?: boolean; alreadyCompleted?: boolean;
 };
 export class PersonalUploadHttpError extends Error {
-  constructor(message: string, public readonly status: number, public readonly uncertain: boolean) {
+  readonly status: number;
+  readonly uncertain: boolean;
+  constructor(message: string, status: number, uncertain: boolean) {
     super(message);
     this.name = "PersonalUploadHttpError";
+    this.status = status;
+    this.uncertain = uncertain;
   }
 }
 export function uploadPersonalFormWithProgress(input: {
@@ -67,17 +71,28 @@ export function uploadPersonalFormWithProgress(input: {
         input.onProgress(input.file.size);
         finish(null, payload);
       } else finish(new PersonalUploadHttpError(
-        payload.error || payload.code || "A Saját Drive feltöltése elutasítva.", xhr.status, false));
+        payload.error || payload.code || "A Saját Drive feltöltése elutasítva.",
+        xhr.status, xhr.status >= 500));
+      // HTTP 5xx may follow a successful USER ref commit. The UI must classify
+      // the result as uncertain and must never auto-create a second request ID.
     };
     xhr.onerror = () => finish(new PersonalUploadHttpError(
       "A feltöltés szerveroldali állapota nem igazolható. Ellenőrizd a fájllistát, mielőtt újraküldenéd.", 0, true));
     xhr.onabort = () => finish(new PersonalUploadHttpError("A feltöltés megszakadt. A szerveroldali véglegesítés állapota nem ismert.", 0, networkSent));
-    const form = new FormData();
-    form.append("file", input.file, input.file.name);
-    form.append("folderId", input.folderId);
-    form.append("requestId", input.requestId);
+    // Large files use the raw File directly; never construct a second multipart
+    // FormData body for a 100 MiB stream request.
     input.signal.addEventListener("abort", abort, {once: true});
-    try { xhr.send(streaming ? input.file : form); }
-    catch { finish(new PersonalUploadHttpError("A személyes feltöltés nem indítható.", 0, false)); }
+    try {
+      if (streaming) xhr.send(input.file);
+      else {
+        const form = new FormData();
+        form.append("file", input.file, input.file.name);
+        form.append("folderId", input.folderId);
+        form.append("requestId", input.requestId);
+        xhr.send(form);
+      }
+    } catch {
+      finish(new PersonalUploadHttpError("A személyes feltöltés nem indítható.", 0, false));
+    }
   });
 }

@@ -4327,3 +4327,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Build ID `sfGmSlWysJKupXzhEbRJp`; SHA-256 `5ef777bd58304bc98797a5bfdd1639f74896f3a4633d17d548164f33f0ca531b` (BUILD01/MCP/DEV egyezik).
 - Elkülönített standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/e53d4b5841af` (373 MiB), nem indítva.
 - Publikus Drive V0.9.52 marad; nincs nginx/PM2/DB/PROD módosítás. V0.9.62 hitelesített browser+S3/DB DEV acceptance továbbra is kötelező.
+
+## 2026-10-23 – DIMPRO Drive V0.9.62 – Saját Drive idempotencia, kvóta és átviteli hibakezelés, SOURCE ONLY
+
+- Személyes quota paging: hiányzó Content Core objektumra fail-closed;
+  a régi SQL-hez igazodó ACTIVE/DELETING/DELETED objektumstátusz kezelés.
+- Egy átviteli task egy stabil request UUID-t használ; XHR 5xx → bizonytalan
+  eredmény `CONFIRMATION_UNKNOWN` auto-retry nélkül.
+- Nagy, 16 MiB feletti file átvitelnél natív File / octet-stream,
+  FormData csak kisméretű uploadhoz.
+- Mindkét személyes upload route idempotens `alreadyCompleted` előtt
+  teljes S3 SHA-256 + méret újraellenőrzést végez.
+- XHR runtime és integritás source contract, 18 regresszió, TypeScript/ESLint,
+  izolált PostgreSQL PGlite PASS. Valós S3/DB/browser E2E még hiányzik.
+- Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0962_PERSONAL_UPLOAD_FAILURE_INTEGRITY_20261023.md`.
