@@ -25,7 +25,7 @@ function durationLabel(seconds: number | null) {
 }
 
 export default function DriveTransferCenter({
-  tasks, projectName, scope = "PROJECT", open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
+  tasks, projectName, scope = "PROJECT", open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, onVerify, retryDisabled, onClearFinished,
 }: {
   tasks: readonly TransferTask[];
   projectName: string;
@@ -37,6 +37,7 @@ export default function DriveTransferCenter({
   onClose: () => void;
   onCancel: (taskId: string) => void;
   onRetry: (taskId: string) => void;
+  onVerify?: (taskId: string) => void;
   retryDisabled: boolean;
   onClearFinished: () => void;
 }) {
@@ -151,7 +152,12 @@ export default function DriveTransferCenter({
                 {task.retryCount ? <small>{"Újraküldés: "+task.retryCount+". alkalom"}</small> : null}
                 {task.error&&<small title={task.error}>{task.error}</small>}
               </td>
-              <td className={styles.action}>{task.phase==="ERROR" && task.retryable!==false &&
+              <td className={styles.action}>{personal && onVerify
+                && (task.phase==="CONFIRMATION_UNKNOWN" || task.phase==="STATUS_UNAVAILABLE") &&
+                <button type="button" onClick={()=>onVerify(task.id)}
+                  title="Csak ellenőrzés: nem tölti fel újra a fájlt"
+                  aria-label={task.fileName+" szerveroldali visszaellenőrzése"}>Ellenőrzés</button>}
+                {task.phase==="ERROR" && task.retryable!==false &&
                 <button type="button" onClick={()=>onRetry(task.id)} disabled={retryDisabled}
                   title="Új feltöltési munkamenettel a teljes fájl újraküldése"
                   aria-label={task.fileName+" teljes fájl újrapróbálása"}>Újra</button>}

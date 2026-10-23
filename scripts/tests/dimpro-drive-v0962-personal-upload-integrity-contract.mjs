@@ -11,8 +11,8 @@ const stream=read("app/api/drive/personal/uploads/stream/route.ts");
 const client=read("app/lib/transfer-core/personalFormUpload.ts");
 const workspace=read("components/drive/PersonalDriveWorkspace.tsx");
 const version=read("components/drive/driveBuildInfo.ts");
-assert.ok(["0.9.62","0.9.63","0.9.64"].includes(TRANSFER_CORE_VERSION));
-assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(62|63|64)"/);
+assert.ok(["0.9.62","0.9.63","0.9.64","0.9.65"].includes(TRANSFER_CORE_VERSION));
+assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(62|63|64|65)"/);
 assert.equal(PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION,500);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024**2);
 assert.match(quota,/seen\.size !== batch\.length/);
@@ -21,9 +21,10 @@ assert.match(quota,/object\.status === "ACTIVE"/);
 assert.match(repo,/\.select\("id,size_bytes,status"\)/);
 assert.ok(!repo.includes(".select(\"id,size_bytes\")\n          .in(\"id\", ids)"));
 assert.match(client,/xhr\.status >= 500/);
-assert.match(client,/if \(streaming\) xhr\.send\(input\.file\)/);
-assert.ok(client.indexOf("if (streaming) xhr.send(input.file)") <
+assert.match(client,/if \(streaming\) \{[\s\S]*?xhr\.send\(input\.file\)/);
+assert.ok(client.indexOf("xhr.send(input.file)") <
           client.indexOf("const form = new FormData()"));
+assert.match(client,/0, sendStarted \|\| networkSent/);
 assert.match(workspace,/requestId:id, signal:controller\.signal/);
 assert.ok(!workspace.includes("requestId:crypto.randomUUID(), signal:controller.signal"));
 assert.match(workspace,/phase:uncertain\?"CONFIRMATION_UNKNOWN"/);

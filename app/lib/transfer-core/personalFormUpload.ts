@@ -28,6 +28,7 @@ export function uploadPersonalFormWithProgress(input: {
     const xhr = new XMLHttpRequest();
     let settled = false;
     let networkSent = false;
+    let sendStarted = false;
     const abort = () => xhr.abort();
     const finish = (error: Error | null, value?: PersonalUploadResponse) => {
       if (settled) return;
@@ -78,21 +79,28 @@ export function uploadPersonalFormWithProgress(input: {
     };
     xhr.onerror = () => finish(new PersonalUploadHttpError(
       "A feltöltés szerveroldali állapota nem igazolható. Ellenőrizd a fájllistát, mielőtt újraküldenéd.", 0, true));
-    xhr.onabort = () => finish(new PersonalUploadHttpError("A feltöltés megszakadt. A szerveroldali véglegesítés állapota nem ismert.", 0, networkSent));
+    xhr.onabort = () => finish(new PersonalUploadHttpError(
+      "A feltöltés megszakadt. A szerveroldali véglegesítés állapota nem ismert.",
+      0, sendStarted || networkSent));
     // Large files use the raw File directly; never construct a second multipart
     // FormData body for a 100 MiB stream request.
     input.signal.addEventListener("abort", abort, {once: true});
     try {
-      if (streaming) xhr.send(input.file);
-      else {
+      // Once xhr.send() is called, a server may commit even when no upload
+      // progress event has reached the browser. Aborts must be uncertain.
+      if (streaming) {
+        sendStarted = true;
+        xhr.send(input.file);
+      } else {
         const form = new FormData();
         form.append("file", input.file, input.file.name);
         form.append("folderId", input.folderId);
         form.append("requestId", input.requestId);
+        sendStarted = true;
         xhr.send(form);
       }
     } catch {
-      finish(new PersonalUploadHttpError("A személyes feltöltés nem indítható.", 0, false));
+      finish(new PersonalUploadHttpError("A személyes feltöltés indítása nem igazolható.", 0, sendStarted));
     }
   });
 }

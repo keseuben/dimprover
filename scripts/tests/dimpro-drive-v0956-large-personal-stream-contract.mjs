@@ -18,8 +18,8 @@ const scanner = read("app/lib/drive-core/securityScanService.ts");
 const workspace = read("components/drive/PersonalDriveWorkspace.tsx");
 const build = read("components/drive/driveBuildInfo.ts");
 
-assert.ok(["0.9.56", "0.9.57", "0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63", "0.9.64"].includes(TRANSFER_CORE_VERSION));
-assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(56|57|58|59|60|61|62|63|64)"/);
+assert.ok(["0.9.56", "0.9.57", "0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63", "0.9.64", "0.9.65"].includes(TRANSFER_CORE_VERSION));
+assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(56|57|58|59|60|61|62|63|64|65)"/);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024*1024);
 assert.equal(PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES,16*1024*1024);
 assert.equal(personalUploadEffectiveMaxBytes(100*1024*1024,500*1024*1024),100*1024*1024);
@@ -76,8 +76,9 @@ assert.ok(!route.includes("await request.formData(") && !route.includes("await f
 assert.match(scanner,/scanPersonalDriveStreamWithClamd/);
 assert.match(formRoute,/Math\.min\(status\.maxBytes, PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES\)/);
 assert.match(client,/input.file.size > PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES/);
-assert.match(client,/if \(streaming\) xhr.send\(input.file\)/);
-assert.ok(client.indexOf("if (streaming) xhr.send(input.file)") < client.indexOf("const form = new FormData()"));
+assert.match(client,/if \(streaming\) \{[\s\S]*?xhr.send\(input.file\)/);
+assert.ok(client.indexOf("xhr.send(input.file)") < client.indexOf("const form = new FormData()"));
+assert.match(client,/sendStarted = true;[\s\S]*?xhr.send\(input.file\)/);
 assert.match(client,/encodeURIComponent\(input.file.name\)/);
 assert.match(workspace,/personalUploadMaxBytes/);
 console.log("DIMPRO Drive V0.9.56 100 MiB bounded stream/ClamAV/security contract PASS");

@@ -4371,3 +4371,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - TypeScript / ESLint, 20 korábbi regresszió és 5 izolált PGlite migráció: PASS.
 - A fejlesztés forrás és helyi QA, nem hitelesített publikus webes E2E. A V0.9.63 BUILD01 biztonsági blokkolás érvényes, a V0.9.64 BUILD01 még nincs indítva; **BUILD PENDING**, nem PASS.
 - Report: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0964_PERSONAL_100M_ISOLATED_FULL_STREAM_QA_20261023.md`. PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.65 – személyes visszaellenőrzési API és Transfer Center gomb
+
+- Új owner-scoped, auth-olt read-only GET `/api/drive/personal/uploads/status/{requestId}`: csak USER/DRIVE/ref + CLEAN objektum + valós S3 teljes SHA-256/méret egyezés esetén VERIFIED_CLEAN.
+- 202 `PENDING_OR_NOT_FOUND` nem jelent biztos sikertelenséget; 409 és 503 fail-closed, egyik esetben sincs auto-retry.
+- Saját Transfer Center `CONFIRMATION_UNKNOWN`/`STATUS_UNAVAILABLE` sorához **Ellenőrzés** gomb; nem küldi újra a fájlt; csak teljes bizonyíték után AVAILABLE.
+- XHR megszakítás `xhr.send()` után bizonytalan, még ha progress nem érkezett is.
+- TypeScript/ESLint, 21 source/regressziós teszt és izolált PGlite 5 migráció PASS.
+- Valós S3/DB/browser E2E és BUILD01 továbbra is blokkolva; **BUILD PENDING**, PROD DENY.
+- Részletes riport: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0965_PERSONAL_UPLOAD_CONFIRMATION_20261023.md`.

@@ -229,6 +229,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const personalTransferCancelledRef = useRef(new Set<string>());
   const personalTransferWorkspaceAliveRef = useRef(true);
   const [personalTransferTasks, setPersonalTransferTasks] = useState<TransferTask[]>([]);
+  const personalTransferVerifyBusyRef = useRef(new Set<string>());
   const [personalTransferOpen, setPersonalTransferOpen] = useState(false);
   const [personalTransferMinimized, setPersonalTransferMinimized] = useState(false);
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
@@ -387,6 +388,45 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   function updatePersonalTransfer(id: string, patch: Partial<TransferTask>) {
     setPersonalTransferTasks(current => current.map(item =>
       item.id === id ? {...item, ...patch, updatedAt: Date.now()} : item));
+  }
+
+  async function verifyPersonalTransfer(id: string) {
+    if (personalTransferVerifyBusyRef.current.has(id)) return;
+    const task = personalTransferTasks.find(item => item.id === id);
+    if (!task || !["CONFIRMATION_UNKNOWN", "STATUS_UNAVAILABLE"].includes(task.phase)) return;
+    personalTransferVerifyBusyRef.current.add(id);
+    updatePersonalTransfer(id, { phase: "VERIFYING", speedBps: null,
+      error: "A szerver mentési visszaigazolásának ellenőrzése. Nincs új feltöltés." });
+    try {
+      const response = await fetch(`/api/drive/personal/uploads/status/${encodeURIComponent(id)}`, {
+        credentials: "same-origin", cache: "no-store",
+      });
+      const result = await response.json() as {
+        ok?: boolean; state?: string; contentRefId?: string; sizeBytes?: number; code?: string;
+      };
+      if (response.ok && response.status === 200 && result.ok === true
+        && result.state === "VERIFIED_CLEAN" && result.sizeBytes === task.sizeBytes
+        && typeof result.contentRefId === "string") {
+        updatePersonalTransfer(id, { phase: "AVAILABLE", uploadedBytes: task.sizeBytes,
+          speedBps: null, error: null, retryable: false });
+        // Content list refresh failure cannot revoke a verified S3 receipt.
+        void load().catch(() => setError("A mentés igazolt, de a fájllista frissítése sikertelen."));
+      } else if (response.status === 202 && result.state === "PENDING_OR_NOT_FOUND") {
+        updatePersonalTransfer(id, { phase: "CONFIRMATION_UNKNOWN", speedBps: null,
+          error: "A mentés még nem igazolható. Ez nem bizonyítja a feltöltés sikertelenségét. Ne küldd újra automatikusan.",
+          retryable: false });
+      } else {
+        updatePersonalTransfer(id, { phase: "STATUS_UNAVAILABLE", speedBps: null,
+          error: "A mentett fájl épsége vagy jogosultsága nem igazolható. Újrafeltöltés helyett kérj ellenőrzést.",
+          retryable: false });
+      }
+    } catch {
+      updatePersonalTransfer(id, { phase: "STATUS_UNAVAILABLE", speedBps: null,
+        error: "A szerver nem érhető el. A feltöltés eredménye továbbra is bizonytalan.",
+        retryable: false });
+    } finally {
+      personalTransferVerifyBusyRef.current.delete(id);
+    }
   }
 
   async function uploadPersonalFiles(files: File[]) {
@@ -1186,6 +1226,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
           else updatePersonalTransfer(id,{phase:"CANCELLED",speedBps:null,retryable:false});
         }}
         onRetry={() => setError("Biztonsági okból a Saját Drive feltöltés nem indít automatikus ismétlést.")}
+        onVerify={id => { void verifyPersonalTransfer(id); }}
         retryDisabled
         onClearFinished={() => setPersonalTransferTasks(current => current.filter(task => !isTransferTerminal(task.phase)))}
       />

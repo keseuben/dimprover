@@ -608,6 +608,35 @@ export async function findUserContentRef(input: { userId: string; sourceSystem: 
   return (result.data || null) as ContentRefRow | null;
 }
 
+/**
+ * Read-only owner-scoped receipt lookup. Never fetch an object by ID alone:
+ * first prove a USER/ACTIVE reference with the caller's canonical user ID.
+ * A missing ref is NOT evidence that a concurrent upload has failed.
+ */
+export async function findOwnedPersonalUploadReceipt(input: {
+  userId: string; requestId: string;
+}) {
+  const ref = await findUserContentRef({
+    userId: input.userId, sourceSystem: "DRIVE",
+    sourceRef: `personal-web:${input.requestId}`,
+  });
+  if (!ref) return null;
+  const result = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_objects")
+    .select("id,sha256,size_bytes,storage_provider,storage_bucket,storage_key,security_status,virus_scan_status,status")
+    .eq("id", ref.content_object_id)
+    .maybeSingle();
+  if (result.error) dbError("A Saját Drive feltöltés visszaigazolása nem ellenőrizhető.", result.error);
+  return {
+    contentRefId: ref.id,
+    object: (result.data || null) as {
+      id: string; sha256: string; size_bytes: number;
+      storage_provider: string; storage_bucket: string; storage_key: string;
+      security_status: string; virus_scan_status: string; status: string;
+    } | null,
+  };
+}
+
 export async function ensureUserContentRef(input: {
   contentObjectId: string;
   userId: string;

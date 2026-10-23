@@ -102,7 +102,8 @@ nextResponse={kind:"hang"};
 const controller=new AbortController();
 const pending=uploadPersonalFormWithProgress({...input(small),signal:controller.signal});
 controller.abort();
-await assert.rejects(()=>pending,err=>err instanceof PersonalUploadHttpError&&err.status===0);
+await assert.rejects(()=>pending,err=>err instanceof PersonalUploadHttpError
+  &&err.status===0&&err.uncertain===true);
 assert.equal(requests.at(-1).aborted,true);
 
 const preCancelled=new AbortController();

@@ -105,3 +105,7 @@ DB és szintetikus USER, utána a hitelesített E2E kapuk.
 ## V0.9.64 tényállapot-frissítés (2026.10.23.)
 
 A 100 MiB teljes, szintetikus staging → ClamAV → helyi S3 SDK → visszaolvasás/SHA pipeline PASS. EICAR negatív teszt, túlfolyás és csonkolás elutasítása szintén PASS. A valódi S3/DEV DB elkülönítés független igazolása, a hitelesített böngésző- és adatbázis-E2E, valamint a jóváhagyott BUILD01 továbbra is nyitott. A V0.9.65 következő fókusza ezen kiadási kapuk lezárása; a forrás előrehaladása nem jelent publikus aktiválást.
+
+## V0.9.65 tényállapot-frissítés (2026.10.23.)
+
+A személyes bizonytalan feltöltés read-only, USER-tulajdonoshoz kötött szerveroldali visszaellenőrzése elkészült: teljes S3 SHA-256/size bizonyítás; Transfer Center Ellenőrzés gomb; XHR megszakítási versenyhelyzet pontosítása. 21 regressziós szerződéses teszt és izolált PostgreSQL migrációteszt PASS. Nincs nyilvános aktiválás és nincs BUILD01 PASS a fennálló futtatási biztonsági tiltás miatt. Következő V0.9.66: minimális titokmentes, felhasználóhoz kötött request-id helyreállítás, a BUILD01 szabályos engedélyezése és a külön DEV/PROD S3/DB bizonyíték.
