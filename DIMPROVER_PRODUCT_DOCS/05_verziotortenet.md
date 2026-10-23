@@ -4272,3 +4272,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - `PERSONAL_MULTIPART_SERVER_RELEASED=false` kódszintű hard release retesz: az API-k még DEV-en sem aktívak; CLEAN és letöltés továbbra is tiltott.
 - TypeScript, ESLint, V0958 static contract és V0950–V0957 regressziók PASS; migráció és S3/böngészős E2E nem futott, PROD DENY.
 - Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0958_PERSONAL_MULTIPART_API_SOURCE_20261023.md`.
+
+### V0.9.58 BUILD01 PASS – 2026-10-23
+
+- V0958 source `4c51f48cbbca`, BUILD01 run `benjadmin-drive-v0958-4c51f48cb-20261023-build01-b1`.
+- Build ID `yz38mWB8Ourbp5go0DPGQ`; SHA-256 `002159f2818f8294b2c74842aaa8897fca768dddbf39552803f1159ceba9832f`. BUILD01/gateway/DEV egyezés PASS.
+- Standalone csomag kicsomagolva `/srv/dimpro-dev/candidates/drive-pilot/releases/4c51f48cbbca` (373 MiB), minden új személyes multipart API route ellenőrizve.
+- Nincs PM2 vagy Nginx cutover, SQL migráció vagy 5 GiB aktív feltöltés. A központi AUTH és PROD változatlan; PROD DENY.

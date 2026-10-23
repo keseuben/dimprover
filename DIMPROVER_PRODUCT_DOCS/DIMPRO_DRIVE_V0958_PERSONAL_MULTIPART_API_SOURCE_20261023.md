@@ -45,3 +45,16 @@ A közös `personalMultipartService` és `personalMultipartApi` végzi a tulajdo
 Elsőbbség: izolált PostgreSQL migrációteszt, a személyes kvóta UI és RPC egységesítése a multipart foglalással, a lejárt/COMPLETING/orphan S3 munkamenetek biztonságos reconciliációja, 5 GiB teljes fájl scanner megtervezése és erőforrásmérése. Ezután a böngészős persistent checkpoint és megszakítás utáni resume, majd valódi DEV E2E.
 
 Az eddigi V0.9.52 publikus Drive, a korábbi 100 MiB-os V0.9.56 személyes pilot és a PROD környezet sem változott. A V0.9.56 is külön aktiválási tesztekre vár.
+
+## BUILD01 és ellenőrzött DEV csomag – 2026-10-23
+
+- Forráscommit: `4c51f48cbbca76310fa8b6050ec42f34f65258be`.
+- Run: `benjadmin-drive-v0958-4c51f48cb-20261023-build01-b1`.
+- BUILD01 eredmény: **PASS**. Build ID: `yz38mWB8Ourbp5go0DPGQ`.
+- Artifact SHA-256: `002159f2818f8294b2c74842aaa8897fca768dddbf39552803f1159ceba9832f`.
+- SHA ellenőrzés: BUILD01 = gateway = DEV, **PASS**.
+- DEV izolált release: `/srv/dimpro-dev/candidates/drive-pilot/releases/4c51f48cbbca`, 373 MiB.
+- A Next.js standalone buildben valamennyi új multipart API route megtalálható.
+- A code-level `PERSONAL_MULTIPART_SERVER_RELEASED=false` retesz a buildben változatlan.
+- Publikus `drive.dev.dimpro.hu` továbbra is V0.9.52, proxy 3413; AUTH, nginx, PM2, DB és PROD változatlan.
+- Nem történt SQL-migráció vagy S3-fájlmódosítás. A build sikere nem bizonyítja a hitelesített feltöltési E2E működést.
