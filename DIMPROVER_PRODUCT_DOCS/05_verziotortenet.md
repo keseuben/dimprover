@@ -4397,3 +4397,20 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Source QA: TypeScript PASS; célzott ESLint PASS; 22/22 regressziós/szerződéses PASS; izolált PGlite 5 migráció, RLS/owner/quota/rollback PASS; git diff --check PASS.
 - Az 500 rekordos teszt böngésző Storage-szimuláció, nem 500 fájlos teljes hálózati E2E.
 - Hivatalos BUILD01 továbbra PENDING, valós S3/DB/browser E2E NO-GO, publikus DEV nincs átállítva, PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.67 – cross-tab-safe personal receipt V2 (SOURCE ONLY)
+
+- A V0.9.66 egyetlen localStorage JSON jegyzéke külön, requestId-alapú V2
+  kulcsokra cserélve; két browser-tab nem írja felül egymás külön
+  feltöltéseinek ellenőrzési azonosítóit.
+- V1→V2 migráció csak teljes mentésig őrzi az eredeti listát; kvótahiba,
+  részleges migráció, sérült V2 és metaadat-konfliktus fail-closed.
+- 500 rekord/scope, 7 nap retention, titok- és fájltartalommentes hint,
+  kézi USER-scope GET visszaellenőrzés; nincs automatikus POST/resume.
+- A 499→500-as konkurens írási határ tesztelve, sikertelen új rekord saját
+  kulcsának visszavonásával.
+- QA: V0.9.67 kétfüles + módosított V0.9.66 tárolási contract, regressziók,
+  TypeScript/ESLint PASS, 23/23 contract/regresszió PASS és öt izolált PGlite migráció PASS.
+- BUILD01 NOT RUN a V0.9.63 biztonsági blokk miatt. Nyilvános DEV V0.9.52,
+  valódi S3/DB/browser E2E NO-GO, PROD DENY.
+- Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0967_CROSS_TAB_RECEIPT_HARDENING_20261023.md`.

@@ -121,3 +121,16 @@ küldések tiltva vannak. Ez **nem teljes fájl-resume**, nem valódi
 S3/DB/Browser E2E, nem BUILD01 PASS. A V0.9.67 külön release gate:
 engedélyezett BUILD01, DEV/PROD S3/DB szeparáció, 50/100/500 valós
 böngészős batch és rollback.
+
+## V0.9.67 tényállapot-frissítés (2026.10.23.)
+
+A helyi személyes feltöltési receipt-jegyzék V2-re váltott:
+az 500 egyedi requestId külön böngészős kulcsban van, ezért a két
+párhuzamos fül eltérő mentései nem írják felül a közös JSON listát.
+A V1→V2 migráció hibás/vitatott adatnál megőrzi az eredetit.
+A forráskódi működéshez szintetikus kétfüles, átváltási, kapacitás- és
+lejárati tesztek készültek. Ez továbbra is csak a mentés utólagos
+ellenőrzéséhez szükséges metaadatok megőrzése, **nem** tényleges
+multipart fájl-folytatás. A V0.9.68 release gate: engedélyezett BUILD01,
+független DEV/PROD S3/DB provenance, hitelesített browser+S3+DB E2E,
+50/100/500 valódi fotó, rollback. PROD DENY.

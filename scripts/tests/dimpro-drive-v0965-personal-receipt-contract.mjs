@@ -29,7 +29,7 @@ const make=(overrides={})=>({
   },
   ...overrides,
 });
-assert.ok(["0.9.65","0.9.66"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.65","0.9.66", "0.9.67"].includes(TRANSFER_CORE_VERSION));
 assert.deepEqual(await assessPersonalUploadConfirmation(make()),
   {ok:true,state:"VERIFIED_CLEAN",contentRefId:receipt.contentRefId,
    sizeBytes:file.size_bytes,retryAllowed:false});
