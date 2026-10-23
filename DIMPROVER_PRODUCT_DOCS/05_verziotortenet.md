@@ -4212,3 +4212,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Belső teszt, TypeScript, lint és további elfogadási kapuk szükségesek. Funkció flag alapból OFF, nincs DEV runtime vagy PROD deploy.
 - Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0954_PERSONAL_UPLOAD_SOURCE_20261023.md`.
 - V0.9.54 TypeScript és célzott ESLint PASS; új policy contract PASS, V0.9.50–V0.9.53 regressziók PASS; quota 29/29, folder-drop 22/22 PASS. Böngészős E2E hiányzik, aktiválás tilos.
+
+### V0.9.54 BUILD01 b1 – 2026-10-23
+
+- Forrás `fa453c1cb567`; run `benjadmin-drive-v0954-fa453c1cb-20261023-build01-b1`.
+- BUILD01 PASS, build `sc3cpPJ3RLw4TieVs-kMP`, SHA-256 `12e60535b52ab189268034e51840d63381ea8ac4300b9b521c13542d7aad21e9`.
+- SHA azonos BUILD01/MCP/DEV; isolated standalone kibontva `/srv/dimpro-dev/candidates/drive-pilot/releases/fa453c1cb567`. Futtatás és Nginx cutover nélkül.
+- Publikus Drive V0.9.52; V0.9.54 személyes feltöltés FEATURE OFF, hitelesített E2E/ClamAV/kvóta/rollback gate függőben. PROD DENY.

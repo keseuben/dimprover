@@ -66,3 +66,16 @@ Az új route valódi adatfeltöltéses E2E-jét nem tekintjük PASS-nak pusztán
 - Drive quota contract: 29/29 PASS; folder-drop contract: 22/22 PASS.
 - Git whitespace diff-check: PASS.
 - Nem helyettesít hitelesített end-to-end tesztet. A személyes feltöltés továbbra is FEATURE OFF.
+
+## BUILD01 és izolált DEV csomag – 2026-10-23
+
+- **Build státusz:** PASS, hivatalos hardened BUILD01 executor, forrás `fa453c1cb567b812cf05b68760637584b2d69224`.
+- Run ID: `benjadmin-drive-v0954-fa453c1cb-20261023-build01-b1`.
+- Build ID: `sc3cpPJ3RLw4TieVs-kMP`.
+- Artifact SHA-256: `12e60535b52ab189268034e51840d63381ea8ac4300b9b521c13542d7aad21e9`.
+- A BUILD01/MCP/DEV artifact SHA egyezik (PASS). DEV futtatásra kész, **de nem aktív runtime**:
+  `/srv/dimpro-dev/candidates/drive-pilot/releases/fa453c1cb567` (~370 MiB).
+- A meglévő `drive.dev.dimpro.hu` Nginx routing, PM2, AUTH, Supabase, felhasználói adatok és S3 tárhely változatlan maradt.
+- A V0.9.53 izolált PM2-indítását korábban külső biztonsági ellenőrzés blokkolta; nem került megkerülésre. V0.9.54-hez nem történt új runtime indítás vagy Nginx átállítás.
+- **DEV böngésző jelenleg V0.9.52** (3413), személyes direkt feltöltés továbbra is **FEATURE OFF**.
+- Ezt a BUILD PASS eredményt nem szabad a személyes feltöltési E2E PASS-ként bemutatni; lásd a fenti release-gate pontokat.
