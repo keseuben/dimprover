@@ -70,3 +70,16 @@ A felhasználó Google Drive / OneDrive jellegű Saját Drive feltöltést kért
 4. A teljes 5 GiB malware scanner worker tervezés és karanténról CLEAN-re felszabadító auditált folyamat.
 
 **Release gate:** a nyilvános DEV/PROD személyes multipart feltöltés NEM aktiválható pusztán a V0.9.57 buildjével.
+
+## BUILD01 és kiadásra izolált csomag – 2026-10-23
+
+- Forrás/build commit: `cbb090c4e95eea8743553d9029f88a7f0122f9fa`.
+- Run ID: `benjadmin-drive-v0957-cbb090c4e-20261023-build01-b1`.
+- BUILD01 státusz: **PASS**, build ID `7Aj8RHmj153S2uVCelY-5`.
+- Artifact SHA-256: `23ef078095c7c0971e53ea34a6c7a7aed5318ead5b7eda11de1e44d94c0c3098`.
+- BUILD01, MCP-gateway és DEV példányok hash-egyezése: PASS.
+- DEV elkülönített standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/cbb090c4e95e` (~371 MiB).
+- Az új /api/drive/personal/uploads/multipart/capabilities route a Next.js buildben ellenőrzötten megtalálható.
+- A forrásos SQL-migráció null-kvóta fail-closed javítása külön utólagos dokumentáció/SQL commit; a migráció **nem része a futó alkalmazásnak, nem lett telepítve**. A BUILD01 önmagában nem bizonyítja az SQL migráció kompatibilitását.
+- Publikus DEV továbbra is V0.9.52 (3413); nincs PM2 restart, nginx átállás, DB migration vagy 5 GiB feltöltés aktiválás.
+- Az 5 GiB-os tényleges feltöltéshez a V0.9.58 multipart REST, kvóta-foglalás integráció és nagyfájl-scanner hiányzik.

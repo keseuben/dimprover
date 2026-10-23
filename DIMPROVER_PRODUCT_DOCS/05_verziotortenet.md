@@ -4256,3 +4256,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A jelenlegi 100 MiB scanner config miatt 5 GiB nem aktiválható, CLEAN állapot csak teljes, auditált 5 GiB vizsgálat után lehet.
 - TypeScript/ESLint és V0957 policy, V0956–0950 regressziók PASS; adatbázis migrációs dry-run / S3 multipart E2E nem futott. DEV publikus változatlanul V0.9.52, PROD DENY.
 - Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0957_PERSONAL_MULTIPART_FOUNDATION_20261023.md`.
+
+### V0.9.57 BUILD01 PASS – 2026-10-23
+
+- Forrás `cbb090c4e95e`, build run `benjadmin-drive-v0957-cbb090c4e-20261023-build01-b1`.
+- Build `7Aj8RHmj153S2uVCelY-5`, SHA-256 `23ef078095c7c0971e53ea34a6c7a7aed5318ead5b7eda11de1e44d94c0c3098`: BUILD01/MCP/DEV egyezik.
+- Kibontva `/srv/dimpro-dev/candidates/drive-pilot/releases/cbb090c4e95e`; forrásos, még nem migrált SQL null-kvóta ellenőrzés külön javítva.
+- Feature flag OFF, 5 GiB personal multipart nem aktív, Nginx/PM2/PROD változatlan, PROD DENY.

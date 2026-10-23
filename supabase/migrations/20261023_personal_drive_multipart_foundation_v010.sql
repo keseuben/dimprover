@@ -99,7 +99,8 @@ declare
   v_folder uuid;
 begin
   if p_owner_user_id is null or p_request_id is null
-     or p_default_quota_bytes < 1 or v_size <= 104857600 or v_size > 5368709120 then
+     or p_default_quota_bytes is null or p_default_quota_bytes < 1
+     or v_size <= 104857600 or v_size > 5368709120 then
     raise exception 'PERSONAL_MULTIPART_INPUT_INVALID' using errcode = '22023';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('personal-drive-quota:' || p_owner_user_id::text, 0));
