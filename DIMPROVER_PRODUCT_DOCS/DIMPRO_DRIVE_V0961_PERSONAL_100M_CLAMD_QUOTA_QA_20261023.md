@@ -90,3 +90,28 @@ A V0.9.61 javítás:
 személyes próbafeltöltés, majd a webes DEV 500-fájlos pilotteszt. Kiadási
 döntés előtt szükséges az S3 / DEV-PROD adatforrás-szeparáció és a rollback
 ellenőrzése. A public runtime változatlan.
+
+## V0.9.61 BUILD01 PASS és elkülönített DEV artifact
+
+- Forráscommit: `e53d4b5841afaa7929e4cfa6d1753b4b63f1798d`.
+- Build run: `benjadmin-drive-v0961-e53d4b584-20261023-build01-b1`.
+- BUILD01 eredmény: **PASS**, Build ID: `sfGmSlWysJKupXzhEbRJp`.
+- Artifact SHA-256: `5ef777bd58304bc98797a5bfdd1639f74896f3a4633d17d548164f33f0ca531b`.
+- BUILD01 / MCP-gateway / DEV lenyomat-egyezés: PASS.
+- Elkülönített, nem futó DEV standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/e53d4b5841af`, 373 MiB.
+- A buildben a `/api/drive/personal/uploads/stream` végpont megtalálható.
+- A publikus `drive.dev.dimpro.hu` továbbra is `1402cd6e5` V0.9.52 a 3413-as upstreamen;
+  az AUTH és a PROD nem módosult. Nincs PM2 indítás, nginx cutover vagy DB-apply.
+
+### V0.9.62 DEV acceptance részletes checklist (még NINCS teljesítve)
+
+1. Külön hitelesített, izolált runtime; DEV/PROD adatforrások és S3-bucket bizonyítottan szeparáltak.
+2. Explicit, csak izolált DEV personal upload feature flag, nem a publikus oldalra kapcsolva.
+3. 1/16/17/99/100/101 MiB fájlok; a 101 MiB kérés kötelezően tiltott, 100 MiB-ig valódi S3/DB SHA-256 CLEAN.
+4. 50/100/500 szintetikus fotó egy kiválasztással: teljes Transfer Center státusz, quota, ellenőrzött visszaolvasás, sorrend és célmappa.
+5. Idegen USER, rossz folder, rossz origin, lejárt jogosultság, üres fájl, túlfutó/csonka body elutasítása.
+6. EICAR csak izolált DEV-en, felhasználóhoz nem kapcsolt fájllal; elutasított fájl ne váljon letölthetővé.
+7. Nginx body- és időkorlát, megszakított XHR, bizonytalanul lezárult adatbázis/S3 státusz, időtúllépés.
+8. Kvótaverseny, dedup + 2505+ ref, Lomtár megtartott tárhely, meghiúsult mappaelhelyezés.
+9. Runtime, nginx és S3 jogosultságok validálása; független rollback/újraindítási teszt csak jóváhagyott eljárással.
+10. Csak minden PASS és explicit release-jóváhagyás után publikus DEV pilot; PROD továbbra is DENY.

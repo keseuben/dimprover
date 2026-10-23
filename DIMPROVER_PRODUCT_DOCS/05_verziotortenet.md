@@ -4320,3 +4320,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - 2505 refs / 1253 egyedi objektum kvótateszt PASS; TypeScript, ESLint, 15 regresszió, V0.9.60 izolált PGlite migrációtesztek újrafuttatva PASS.
 - A 100 MiB-os feltöltés továbbra is külön DEV release gate alatt, az 5 GiB-os multipart hard flag OFF, PROD DENY.
 - Jelentés: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0961_PERSONAL_100M_CLAMD_QUOTA_QA_20261023.md`.
+
+### V0.9.61 BUILD01 PASS – 2026-10-23
+
+- Forrás `e53d4b5841af`, run `benjadmin-drive-v0961-e53d4b584-20261023-build01-b1`.
+- Build ID `sfGmSlWysJKupXzhEbRJp`; SHA-256 `5ef777bd58304bc98797a5bfdd1639f74896f3a4633d17d548164f33f0ca531b` (BUILD01/MCP/DEV egyezik).
+- Elkülönített standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/e53d4b5841af` (373 MiB), nem indítva.
+- Publikus Drive V0.9.52 marad; nincs nginx/PM2/DB/PROD módosítás. V0.9.62 hitelesített browser+S3/DB DEV acceptance továbbra is kötelező.
