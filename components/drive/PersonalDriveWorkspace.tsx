@@ -11,7 +11,8 @@ import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveTransferCenter from "./DriveTransferCenter";
 import { transferSpeedSample, isTransferTerminal, type TransferTask } from "@/app/lib/transfer-core/transferModel";
 import { PersonalUploadHttpError, uploadPersonalFormWithProgress } from "@/app/lib/transfer-core/personalFormUpload";
-import { PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION, isPersonalUploadSelectionAllowed } from "@/app/lib/content-core/personalUploadPolicy";
+import { PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION,
+  isPersonalUploadSelectionAllowed } from "@/app/lib/content-core/personalUploadPolicy";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
@@ -428,7 +429,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         personalTransferAbortRef.current.set(id,controller);
         let sample: {loaded:number;at:number;smoothedBps:number|null} | null = null;
         let lastProgressRenderAt = -Infinity;
-        updatePersonalTransfer(id,{phase:"UPLOADING"});
+        updatePersonalTransfer(id,{phase:"UPLOADING",error:null});
         try {
           const result = await uploadPersonalFormWithProgress({
             file, folderId:targetFolderId,

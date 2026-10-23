@@ -9,7 +9,7 @@ import {
   registerVerifiedPersonalContentObject,
 } from "@/app/lib/content-core/repository";
 import {
-  isPersonalUploadSafeToParse, normalizePersonalUploadFileName,
+  isPersonalUploadSafeToParse, normalizePersonalUploadFileName, PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES,
   personalUploadEffectiveMaxBytes, personalUploadFeatureEnabled, validPersonalUploadRequestId,
 } from "@/app/lib/content-core/personalUploadPolicy";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "@/app/lib/drive-core/storageConfig";
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
   try {
     const status = await availability();
     return reply({ ok: true, enabled: status.enabled, maxBytes: status.maxBytes,
-      protocol: "PERSONAL_SINGLE_SERVER_POST", multipartResumable: false });
+      protocol: "PERSONAL_STREAM_POST", bufferedFormMaxBytes: PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES, multipartResumable: false });
   } catch {
     return reply({ ok: true, enabled: false, maxBytes: 0, protocol: "PERSONAL_SINGLE_SERVER_POST" });
   }
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     if (!status.enabled) return reply({ ok: false, error: "PERSONAL_UPLOAD_SAFETY_NOT_READY" }, 503);
     const rawLength = request.headers.get("content-length");
     const bodyLength = rawLength && /^\d+$/.test(rawLength) ? Number(rawLength) : null;
-    if (!isPersonalUploadSafeToParse(bodyLength, status.maxBytes)) {
+    if (!isPersonalUploadSafeToParse(bodyLength, Math.min(status.maxBytes, PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES))) {
       return reply({ ok: false, error: "PERSONAL_UPLOAD_REQUEST_SIZE_INVALID" }, 413);
     }
     // Content-Length checked BEFORE request.formData() to cap server-side buffering.
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     let fileName: string;
     try { fileName = normalizePersonalUploadFileName(inputFile.name); }
     catch { return reply({ ok: false, error: "PERSONAL_UPLOAD_FILENAME_INVALID" }, 400); }
-    if (inputFile.size < 1 || inputFile.size > status.maxBytes) {
+    if (inputFile.size < 1 || inputFile.size > Math.min(status.maxBytes, PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES)) {
       return reply({ ok: false, error: "PERSONAL_UPLOAD_FILE_TOO_LARGE" }, 413);
     }
     if (folderId && !(await getUserContentFolder({ userId: access.contentUserId, folderId }))) {

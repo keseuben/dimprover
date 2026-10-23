@@ -1,5 +1,7 @@
 "use client";
 
+import { PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES } from "@/app/lib/content-core/personalUploadPolicy";
+
 /** Shared Transfer Center transport: bounded, single POST, deliberately NO auto-retry. */
 export type PersonalUploadResponse = {
   ok?: boolean; saved?: boolean; error?: string; code?: string;
@@ -33,8 +35,16 @@ export function uploadPersonalFormWithProgress(input: {
       finish(new PersonalUploadHttpError("A böngészős feltöltés megszakadt.", 0, false));
       return;
     }
-    xhr.open("POST", "/api/drive/personal/uploads", true);
+    const streaming = input.file.size > PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES;
+    xhr.open("POST", streaming ? "/api/drive/personal/uploads/stream" : "/api/drive/personal/uploads", true);
     xhr.withCredentials = true;
+    if (streaming) {
+      xhr.setRequestHeader("content-type", "application/octet-stream");
+      xhr.setRequestHeader("x-dimpro-request-id", input.requestId);
+      xhr.setRequestHeader("x-dimpro-file-name", encodeURIComponent(input.file.name));
+      xhr.setRequestHeader("x-dimpro-mime-type", input.file.type || "application/octet-stream");
+      if (input.folderId) xhr.setRequestHeader("x-dimpro-folder-id", input.folderId);
+    }
     xhr.upload.onprogress = (event) => {
       // Multipart framing overhead is included in loaded/total; normalize the
       // measured wire fraction onto file bytes instead of counting boundaries as file data.
@@ -67,7 +77,7 @@ export function uploadPersonalFormWithProgress(input: {
     form.append("folderId", input.folderId);
     form.append("requestId", input.requestId);
     input.signal.addEventListener("abort", abort, {once: true});
-    try { xhr.send(form); }
+    try { xhr.send(streaming ? input.file : form); }
     catch { finish(new PersonalUploadHttpError("A személyes feltöltés nem indítható.", 0, false)); }
   });
 }

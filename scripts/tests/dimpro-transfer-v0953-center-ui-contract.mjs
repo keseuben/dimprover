@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { summarizeTransferSecurity, TRANSFER_CORE_VERSION } from "../../app/lib/transfer-core/transferModel.ts";
 
-assert.ok(["0.9.53", "0.9.54", "0.9.55"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.53", "0.9.54", "0.9.55", "0.9.56"].includes(TRANSFER_CORE_VERSION));
 const phases = [
   "AWAITING_REVIEW", "SCANNING", "SCAN_PENDING", "INFECTED",
   "SCAN_FAILED", "STATUS_UNAVAILABLE", "CONFIRMATION_UNKNOWN", "QUEUED", "ERROR",
@@ -22,7 +22,7 @@ const ui = readFileSync("components/drive/DriveTransferCenter.tsx", "utf8");
 const css = readFileSync("components/drive/DriveTransferCenter.module.css", "utf8");
 const workspace = readFileSync("components/drive/DriveWorkspace.tsx", "utf8");
 const build = readFileSync("components/drive/driveBuildInfo.ts", "utf8");
-assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(53|54|55)"/);
+assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(53|54|55|56)"/);
 assert.match(ui, /summarizeTransferSecurity\(tasks\)/);
 assert.match(ui, /aria-pressed=\{viewFilter === key\}/);
 assert.match(ui, /role="group" aria-label="Átvitelek szűrése"/);
