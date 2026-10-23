@@ -81,3 +81,16 @@ hibakezelési problémáinak csökkentése a valós hitelesített pilot előtt.
 DEV S3 és DB területek pozitív környezeti bizonyítéka; scoped DB/S3
 próbaműveletek, felhasználói browser E2E, majd külön jóváhagyott pilot release.
 Nem indítottunk éles funkciót vagy adatbázis-migrációt.
+
+## BUILD01 PASS és elkülönített DEV csomag – 2026.10.23.
+
+- Source commit: `db76b827c5db525fe16bb75601b4afb5b1d8e444`.
+- Build run: `benjadmin-drive-v0962-db76b827c-20261023-build01-b1`.
+- BUILD01: **PASS**, Build ID: `1mnYT6gA4ee_SIogrnwUR`.
+- Artifact SHA-256: `9b15239f4c68bff9111ea9d5fc78f8e73a89e2fc8196bd0b4f1ae84c947ba336`.
+- BUILD01/gateway/DEV SHA-256: egyező, PASS.
+- Izolált, nem futó DEV standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/db76b827c5db` (374 MiB).
+- A két személyes upload endpoint a standalone csomagban ellenőrizve.
+- Nincs PM2 indítás, nincs nginx cutover, nincs új S3-feltöltés, nincs adatbázis-migráció.
+- A publikus DEV `1402cd6e5` (V0.9.52) maradt; PROD DENY változatlan.
+- A BUILD PASS nem helyettesíti a hitelesített, valódi S3/DB/browser E2E-t.

@@ -4341,3 +4341,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - XHR runtime és integritás source contract, 18 regresszió, TypeScript/ESLint,
   izolált PostgreSQL PGlite PASS. Valós S3/DB/browser E2E még hiányzik.
 - Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0962_PERSONAL_UPLOAD_FAILURE_INTEGRITY_20261023.md`.
+
+### V0.9.62 BUILD01 PASS – 2026.10.23.
+
+- Forrás `db76b827c5db`, run `benjadmin-drive-v0962-db76b827c-20261023-build01-b1`, build ID `1mnYT6gA4ee_SIogrnwUR`.
+- SHA-256 `9b15239f4c68bff9111ea9d5fc78f8e73a89e2fc8196bd0b4f1ae84c947ba336`: BUILD01/gateway/DEV egyező.
+- Elkülönített, nem futó standalone `/srv/dimpro-dev/candidates/drive-pilot/releases/db76b827c5db` (374 MiB); személyes buffered és streamed upload endpointok jelen vannak.
+- Publikus DEV V0.9.52, nem történt PM2/nginx/DB/S3/PROD változás. Kiadási kapu: valódi hitelesített E2E – NO-GO.
