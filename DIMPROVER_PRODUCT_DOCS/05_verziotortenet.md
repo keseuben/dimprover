@@ -4228,3 +4228,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Saját Drive 250 elemre vágott fájllistája helyett owner-ellenőrzött, stabil 200-as lapozás és kliens-aggregáció, 10 000 tételes látható korláttal.
 - Kiadás SOURCE ONLY és személyes feltöltés FEATURE OFF, hitelesített böngészős E2E és release kapuk még szükségesek; PROD DENY.
 - Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0955_TOMEGES_SZEMELYES_FELTOLTES_20261023.md`.
+
+### V0.9.55 BUILD01 PASS – 2026-10-23
+
+- Forrás `e1559e72b329`; run `benjadmin-drive-v0955-e1559e72b-20261023-build01-b1`.
+- Build ID `Xp5wTcZYU4MytZRXlYsBS`; artifact SHA-256 `a05503985715c6ab32a6549c118f2131ea355af6cdfffda788ef2508f729e483`. BUILD01/MCP/DEV ellenőrzött egyezés.
+- Önálló release kicsomagolva `/srv/dimpro-dev/candidates/drive-pilot/releases/e1559e72b329`, még nem PM2 runtime vagy publikus DEV.
+- DEV Nginx body 120m, ClamAV aktív, 16MiB személyes single POST scanner/proxy korlátjai kompatibilisek. DEV felület V0.9.52, személyes feltöltés flag OFF. PROD DENY.

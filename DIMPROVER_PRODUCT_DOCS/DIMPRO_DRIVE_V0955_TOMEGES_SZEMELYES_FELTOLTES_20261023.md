@@ -45,3 +45,16 @@ A batch-darabszám emelése **nem** enyhít az egyedi POST korlátokon, kvóta-e
 - Personal CsomagBOX: 14/14 PASS; projektmappa drag-drop: 22/22 PASS.
 - `git diff --check`: PASS.
 - Valós, 100/500 fájlos böngészős E2E: NEM FUTOTT, továbbra is release gate.
+
+## BUILD01 és kiadási csomag ellenőrzése, 2026-10-23
+
+- A V0.9.55 forráscommit `e1559e72b3296da033089ea38aadec3dd7660c5c` buildje a hivatalos hardened BUILD01 executorral **PASS**.
+- Run: `benjadmin-drive-v0955-e1559e72b-20261023-build01-b1`.
+- Build ID: `Xp5wTcZYU4MytZRXlYsBS`.
+- Artifact SHA-256: `a05503985715c6ab32a6549c118f2131ea355af6cdfffda788ef2508f729e483`.
+- A BUILD01, az MCP átadópont és a DEV szerver artifact SHA egyező; a külön standalone runtime kiadási könyvtár:
+  `/srv/dimpro-dev/candidates/drive-pilot/releases/e1559e72b329` (kb. 370 MiB).
+- Az új személyes feltöltési route a csomagban megtalálható, mégis az `DIMPRO_DRIVE_PERSONAL_UPLOAD_ENABLED` flag alapértelmezetten OFF.
+- Az aktuális Nginx `drive.dev.dimpro.hu` még **V0.9.52** -> 3413; régi rollback 3412. Nem volt PM2 indítás, Nginx cutover, migráció, S3 adatmutáció vagy PROD művelet.
+- DEV Nginx `client_max_body_size 120m` a Drive hostban; az egyedi, legfeljebb 16 MiB-os multipart POST nem akad el ezen a proxylimiten. ClamAV aktív, `MaxFileSize 110M`, `StreamMaxLength 110M`.
+- A tényleges hitelesített böngészős 100/500 elemű soros feltöltés még nincs elvégezve, és a teljes personal upload feature ezért továbbra sem engedélyezett DEV-en sem.
