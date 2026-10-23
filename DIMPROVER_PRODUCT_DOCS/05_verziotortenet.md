@@ -4219,3 +4219,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - BUILD01 PASS, build `sc3cpPJ3RLw4TieVs-kMP`, SHA-256 `12e60535b52ab189268034e51840d63381ea8ac4300b9b521c13542d7aad21e9`.
 - SHA azonos BUILD01/MCP/DEV; isolated standalone kibontva `/srv/dimpro-dev/candidates/drive-pilot/releases/fa453c1cb567`. Futtatás és Nginx cutover nélkül.
 - Publikus Drive V0.9.52; V0.9.54 személyes feltöltés FEATURE OFF, hitelesített E2E/ClamAV/kvóta/rollback gate függőben. PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.55 – Tömeges 500 fájlos Saját Drive feltöltés
+
+- Felhasználói visszajelzés alapján a V0.9.54 25-ös fájlszámkorlátot 500 fájl/egy kijelölésre módosítottuk: egyben 50–100 vagy akár 500 helyszíni fotó.
+- Az egyes fájlok egymást követő POST-tal, továbbra is legfeljebb 16 MiB/fájl mérettel és a korábbi ClamAV/SHA/quota biztonsági útvonallal kerülnek sorra.
+- A Transfer Center aktív fájl előre sorolása, 60 soros előnézet és 160 ms render-throttle több száz elemnél; 50 sikeres fájl után részleges felületi frissítés.
+- A Saját Drive 250 elemre vágott fájllistája helyett owner-ellenőrzött, stabil 200-as lapozás és kliens-aggregáció, 10 000 tételes látható korláttal.
+- Kiadás SOURCE ONLY és személyes feltöltés FEATURE OFF, hitelesített böngészős E2E és release kapuk még szükségesek; PROD DENY.
+- Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0955_TOMEGES_SZEMELYES_FELTOLTES_20261023.md`.

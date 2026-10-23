@@ -3,7 +3,7 @@
  * No credentials, signed URLs, health/identity payloads, or customer data persisted.
  * Percentages describe network bytes only, never malware scanning or approval.
  */
-export const TRANSFER_CORE_VERSION = "0.9.54" as const;
+export const TRANSFER_CORE_VERSION = "0.9.55" as const;
 export type TransferPhase =
   | "QUEUED" | "INITIALIZING" | "UPLOADING" | "VERIFYING" | "SCANNING"
   | "AWAITING_REVIEW" | "AVAILABLE" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"
@@ -51,6 +51,24 @@ export const TRANSFER_LABELS: Record<TransferPhase, string> = {
 
 export function isTransferTerminal(phase: TransferPhase): boolean {
   return (TRANSFER_TERMINAL_PHASES as readonly string[]).includes(phase);
+}
+
+/**
+ * For hundreds of queued files, keep the currently transferring file visible.
+ * Reserve up to 15 rows for the newest completed/failed files, so users can see
+ * both live progress and recent results without rendering hundreds of rows.
+ */
+export function visibleTransferRows<T extends { phase: TransferPhase }>(
+  tasks: readonly T[], showAll = false, maxRows = 60,
+): T[] {
+  if (showAll) return [...tasks];
+  const rowLimit = Math.max(1, Math.trunc(maxRows));
+  const active = tasks.filter(task => !isTransferTerminal(task.phase) && task.phase !== "QUEUED");
+  const queued = tasks.filter(task => task.phase === "QUEUED");
+  const finished = tasks.filter(task => isTransferTerminal(task.phase));
+  const waiting = [...active, ...queued];
+  const finishSlots = waiting.length > 0 ? Math.min(15, finished.length) : rowLimit;
+  return [...waiting.slice(0, rowLimit - finishSlots), ...(finishSlots > 0 ? finished.slice(-finishSlots) : [])];
 }
 
 export function clampTransferredBytes(loaded: number, total: number): number {

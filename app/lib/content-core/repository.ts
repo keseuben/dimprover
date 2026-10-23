@@ -487,8 +487,14 @@ export function ensureReusablePersonalContentObject<T extends { security_status:
   return object;
 }
 
-export async function listUserContentItems(input: { userId: string; limit?: number }) {
-  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit || 200)));
+/**
+ * Offset-paged personal Drive references. Page boundaries are based on
+ * reference rows, not joined object rows (which can legitimately be missing).
+ * Stable tie-breaker avoids reordering items with identical updated_at values.
+ */
+export async function listUserContentItems(input: { userId: string; limit?: number; offset?: number }) {
+  const limit = Math.max(1, Math.min(250, Math.trunc(input.limit || 200)));
+  const offset = Math.max(0, Math.min(100_000, Math.trunc(input.offset || 0)));
   const refsResult = await getDimproIdentitySupabaseClient()
     .from("dimpro_content_refs")
     .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
@@ -496,10 +502,13 @@ export async function listUserContentItems(input: { userId: string; limit?: numb
     .eq("owner_user_id", input.userId)
     .eq("status", "ACTIVE")
     .order("updated_at", { ascending: false })
-    .limit(limit);
+    .order("id", { ascending: false })
+    .range(offset, offset + limit);
   if (refsResult.error) dbError("A Saját Drive tartalomjegyzéke nem olvasható.", refsResult.error);
-  const refs = (refsResult.data || []) as ContentRefRow[];
-  if (refs.length === 0) return [];
+  const fetchedRefs = (refsResult.data || []) as ContentRefRow[];
+  const hasMore = fetchedRefs.length > limit;
+  const refs = fetchedRefs.slice(0, limit);
+  if (refs.length === 0) return { items: [] as Array<{ref: ContentRefRow; object: ContentObjectRow}>, nextOffset: null };
 
   const objectIds = [...new Set(refs.map((ref) => ref.content_object_id))];
   const objectsResult = await getDimproIdentitySupabaseClient()
@@ -509,10 +518,11 @@ export async function listUserContentItems(input: { userId: string; limit?: numb
     .eq("status", "ACTIVE");
   if (objectsResult.error) dbError("A Saját Drive tartalomobjektumai nem olvashatók.", objectsResult.error);
   const objects = new Map(((objectsResult.data || []) as ContentObjectRow[]).map((object) => [object.id, object]));
-  return refs.flatMap((ref) => {
+  const items = refs.flatMap((ref) => {
     const object = objects.get(ref.content_object_id);
     return object ? [{ ref, object }] : [];
   });
+  return { items, nextOffset: hasMore ? offset + refs.length : null };
 }
 
 export async function getUserContentItemByRefId(input: { userId: string; refId: string }) {

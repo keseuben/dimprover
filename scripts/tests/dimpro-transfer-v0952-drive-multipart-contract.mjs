@@ -16,8 +16,8 @@ const checkpointRoute = read("app/api/projects/[projectId]/drive/uploads/[upload
 const abortRoute = read("app/api/projects/[projectId]/drive/uploads/[uploadId]/abort/route.ts");
 const completeRoute = read("app/api/projects/[projectId]/drive/uploads/[uploadId]/complete/route.ts");
 
-assert.ok(["0.9.52", "0.9.53", "0.9.54"].includes(TRANSFER_CORE_VERSION));
-assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(52|53|54)"/);
+assert.ok(["0.9.52", "0.9.53", "0.9.54", "0.9.55"].includes(TRANSFER_CORE_VERSION));
+assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(52|53|54|55)"/);
 
 for (const symbol of [
   "CreateMultipartUploadCommand",

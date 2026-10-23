@@ -10,7 +10,16 @@ export async function GET(request: NextRequest) {
   const access = await resolvePersonalDriveContentActor(request);
   if (!access.ok) return access.response;
   try {
-    const rows = await listUserContentItems({ userId: access.contentUserId, limit: 250 });
+    const params = request.nextUrl.searchParams;
+    const offsetInput = params.get("offset") || "0";
+    if (!/^\d{1,6}$/.test(offsetInput) || Number(offsetInput) > 100_000) {
+      return NextResponse.json({ ok: false, error: "PERSONAL_CONTENT_OFFSET_INVALID" },
+        { status: 400, headers: { "cache-control": "no-store" } });
+    }
+    const offset = Number(offsetInput);
+    const { items: rows, nextOffset } = await listUserContentItems({
+      userId: access.contentUserId, limit: 200, offset,
+    });
     const items = rows.map(({ ref, object }) => ({
       id: ref.id,
       objectId: object.id,
@@ -31,6 +40,7 @@ export async function GET(request: NextRequest) {
       ok: true,
       workspace: { type: "PERSONAL", storageScope: "USER_ROOT", folderTree: true },
       items,
+      nextOffset,
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const status = error instanceof DimproIdentityError ? error.status : 500;

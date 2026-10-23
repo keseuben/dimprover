@@ -2,6 +2,11 @@
  * Personal Drive browser uploads are a separate explicitly gated capability.
  * Source-only until scanner, DB atomics, CSRF, S3 and browser E2E pass on DEV.
  */
+/** One browser selection, NOT one server-side multipart request. Files are sent individually. */
+export const PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION = 500;
+export function isPersonalUploadSelectionAllowed(count: number): boolean {
+  return Number.isSafeInteger(count) && count >= 1 && count <= PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION;
+}
 export const PERSONAL_UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
 export const PERSONAL_UPLOAD_REQUEST_OVERHEAD_BYTES = 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

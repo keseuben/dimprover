@@ -11,6 +11,7 @@ import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveTransferCenter from "./DriveTransferCenter";
 import { transferSpeedSample, isTransferTerminal, type TransferTask } from "@/app/lib/transfer-core/transferModel";
 import { PersonalUploadHttpError, uploadPersonalFormWithProgress } from "@/app/lib/transfer-core/personalFormUpload";
+import { PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION, isPersonalUploadSelectionAllowed } from "@/app/lib/content-core/personalUploadPolicy";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
@@ -40,7 +41,36 @@ type PersonalDriveFolder = {
   updatedAt: string;
 };
 
-type ContentPayload = { ok?: boolean; error?: string; items?: PersonalDriveItem[] };
+type ContentPayload = { ok?: boolean; error?: string; items?: PersonalDriveItem[]; nextOffset?: number | null };
+/**
+ * Read each page rather than silently truncating the user Drive at 250 items.
+ * The 10k UI safety cap raises a visible error instead of hiding older files.
+ */
+async function fetchPersonalContentPages(): Promise<ContentPayload> {
+  const items: PersonalDriveItem[] = [];
+  const visitedOffsets = new Set<number>();
+  let offset = 0;
+  for (let page = 0; page < 51; page++) {
+    if (visitedOffsets.has(offset)) throw new Error("A Saját Drive fájllapozása megakadt.");
+    visitedOffsets.add(offset);
+    const response = await fetch(`/api/drive/personal/content?offset=${offset}`, {
+      credentials: "same-origin", cache: "no-store",
+    });
+    const payload = await response.json() as ContentPayload;
+    if (!response.ok || payload.ok !== true) {
+      throw new Error(payload.error || "A Saját Drive fájllistája nem tölthető be.");
+    }
+    items.push(...(payload.items || []));
+    if (payload.nextOffset === null || payload.nextOffset === undefined) {
+      return { ok: true, items, nextOffset: null };
+    }
+    if (items.length >= 10_000 || !Number.isSafeInteger(payload.nextOffset) || payload.nextOffset <= offset) {
+      throw new Error("A Saját Drive fájllistája túl nagy vagy nem lapozható biztonságosan.");
+    }
+    offset = payload.nextOffset;
+  }
+  throw new Error("Túl sok fájllap érkezett; a régebbi fájlok elrejtése helyett a betöltés megszakadt.");
+}
 type FolderPayload = { ok?: boolean; ready?: boolean; error?: string; folders?: PersonalDriveFolder[] };
 type ProjectLinksPayload = { ok?: boolean; error?: string; linkedProjects?: DriveLinkedProjectItem[]; availableProjects?: DriveLinkedProjectItem[] };
 type BoxesPayload = { ok?: boolean; error?: string; boxes?: DriveBox[]; folderFeatureReady?: boolean; lifecycleFeatureReady?: boolean };
@@ -254,21 +284,20 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const load = useCallback(async () => {
     setError("");
     try {
-      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse, storageResponse, favoritesResponse] = await Promise.all([
-        fetch("/api/drive/personal/content", { credentials: "same-origin", cache: "no-store" }),
+      const [contentPayload, folderResponse, projectLinksResponse, boxesResponse, storageResponse, favoritesResponse] = await Promise.all([
+        fetchPersonalContentPages(),
         fetch("/api/drive/personal/folders", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/boxes", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/storage", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/favorites", { credentials: "same-origin", cache: "no-store" }),
       ]);
-      const contentPayload = await contentResponse.json() as ContentPayload;
       const folderPayload = await folderResponse.json() as FolderPayload;
       const projectLinksPayload = await projectLinksResponse.json() as ProjectLinksPayload;
       const boxesPayload = await boxesResponse.json() as BoxesPayload;
       const storagePayload = await storageResponse.json() as StoragePayload;
       const favoritesPayload = await favoritesResponse.json().catch(() => ({})) as { ok?: boolean; documentIds?: string[] };
-      if (!contentResponse.ok || !contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
+      if (!contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
       if (!folderResponse.ok || !folderPayload.ok) throw new Error(folderPayload.error || "A Saját Drive mappái nem tölthetők be.");
       if (!projectLinksResponse.ok || !projectLinksPayload.ok) throw new Error(projectLinksPayload.error || "A kapcsolt projektek nem tölthetők be.");
       if (!boxesResponse.ok || !boxesPayload.ok) throw new Error(boxesPayload.error || "A Saját Drive CsomagBOX nem tölthető be.");
@@ -361,8 +390,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
 
   async function uploadPersonalFiles(files: File[]) {
     if (!personalUploadEnabled || personalTransferActiveRef.current || files.length < 1) return;
-    if (files.length > 25) {
-      setError("Egyszerre legfeljebb 25 fájlt választhatsz ki.");
+    if (!isPersonalUploadSelectionAllowed(files.length)) {
+      setError(`Egy feltöltési sorba legfeljebb ${PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION} fájl jelölhető ki. A fájlok egyenként, biztonsági ellenőrzéssel kerülnek feltöltésre.`);
       if (personalUploadFileInputRef.current) personalUploadFileInputRef.current.value="";
       return;
     }
@@ -373,6 +402,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     setError("");
     setNotice("");
     const folderLabel = selectedFolder?.name || "Saját Drive gyökér";
+    const targetFolderId = selectedFolderId === "all" ? "" : selectedFolderId;
     const tasks = files.map(file => ({ id: crypto.randomUUID(), file }));
     const pendingTasks: TransferTask[] = tasks.map(({id,file}) => ({
       id, fileName:file.name, folderName:folderLabel, sizeBytes:file.size,
@@ -397,16 +427,22 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         const controller = new AbortController();
         personalTransferAbortRef.current.set(id,controller);
         let sample: {loaded:number;at:number;smoothedBps:number|null} | null = null;
+        let lastProgressRenderAt = -Infinity;
         updatePersonalTransfer(id,{phase:"UPLOADING"});
         try {
           const result = await uploadPersonalFormWithProgress({
-            file, folderId:selectedFolderId === "all" ? "" : selectedFolderId,
+            file, folderId:targetFolderId,
             requestId:crypto.randomUUID(), signal:controller.signal,
             onProgress:bytes => {
-              sample=transferSpeedSample(sample,bytes,performance.now());
-              updatePersonalTransfer(id,{
-                uploadedBytes:bytes, speedBps:sample.smoothedBps, phase:"UPLOADING",
-              });
+              const now = performance.now();
+              sample = transferSpeedSample(sample, bytes, now);
+              // Hundreds of files: limit React list updates to ~6/sec.
+              if (now - lastProgressRenderAt >= 160 || bytes >= file.size) {
+                lastProgressRenderAt = now;
+                updatePersonalTransfer(id,{
+                  uploadedBytes:bytes, speedBps:sample.smoothedBps, phase:"UPLOADING",
+                });
+              }
             },
             onNetworkSent:()=>updatePersonalTransfer(id,{
               uploadedBytes:file.size, speedBps:null, phase:"SCANNING",
@@ -418,6 +454,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
               ? "A fájl a Saját Drive gyökerébe került; a célmappába helyezés nem sikerült." : null,
             retryable:false,
           });
+          if (succeeded % 50 === 0 && personalTransferWorkspaceAliveRef.current) await load();
         } catch (reason) {
           const error=reason instanceof PersonalUploadHttpError ? reason : null;
           const cancelled=controller.signal.aborted;

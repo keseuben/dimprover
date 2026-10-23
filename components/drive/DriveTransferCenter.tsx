@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Activity, ChevronDown, ChevronUp, CloudUpload, X, XCircle } from "lucide-react";
 import {
-  summarizeTransfers, summarizeTransferSecurity, isTransferTerminal, transferEtaSeconds, transferPercent,
+  summarizeTransfers, summarizeTransferSecurity, isTransferTerminal, visibleTransferRows, transferEtaSeconds, transferPercent,
   TRANSFER_LABELS, type TransferTask,
 } from "@/app/lib/transfer-core/transferModel";
 import styles from "./DriveTransferCenter.module.css";
@@ -52,7 +52,8 @@ export default function DriveTransferCenter({
     if (viewFilter === "ISSUES") return TRANSFER_ISSUE_PHASES.includes(task.phase);
     return true;
   }), [tasks, viewFilter, personal]);
-  const visibleTasks = showAll ? filteredTasks : filteredTasks.slice(-60);
+  const visibleTasks = useMemo(() => visibleTransferRows(filteredTasks, showAll, 60),
+    [filteredTasks, showAll]);
   if (!tasks.length) return null;
   if (!open) return (
     <button type="button" className={styles.launcher} onClick={onOpen}
