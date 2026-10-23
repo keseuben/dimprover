@@ -223,9 +223,8 @@ const TRANSCRIPT_SCRIPT = String.raw`(() => {
     if (!conversationId) return { ok:false, generating, error:"Nincs rögzíthető /c/... ChatGPT csevegés.", domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
     const turns = collectConversationTurns();
     const messages = [];
-    for (const turn of turns) {
+    for (const turn of turns.slice(-500)) {
       messages.push({ messageId:turn.messageId, role:turn.role, text:turn.text.slice(0,80000) });
-      if (messages.length >= 500) break;
     }
     return {
       ok: messages.length > 0,
@@ -274,6 +273,8 @@ const LATEST_ASSISTANT_SCRIPT = String.raw`(() => {
 
 const HANDOFF_ASSISTANT_SCRIPT = String.raw`(() => {
   ${sharedPrelude()}
+  const generating = Boolean(firstVisible(selectors.stopButton));
+  if (generating) return { ok:false, generating:true, error:"Az átadó válasz még készül.", domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
   const nodes = collectConversationTurns().filter((turn) => turn.role === "ASSISTANT");
   if (!nodes.length) return { ok:false, error:"Nem található assistant-válasz.", domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
   let legacy = null;
@@ -283,15 +284,15 @@ const HANDOFF_ASSISTANT_SCRIPT = String.raw`(() => {
     if (text.includes("BENJADMIN_HANDOFF_META_V2")) {
       return { ok:true, text:text.slice(0,190000), format:"v2", messageIndexFromEnd:nodes.length - 1 - i, conversationId, domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
     }
-    const markerlessV2 = /"schemaVersion"\\s*:\\s*2/.test(text)
-      && /"workerCode"\\s*:/.test(text)
-      && /"workedMainProject"\\s*:/.test(text)
-      && /"workedTaskTitle"\\s*:/.test(text)
-      && /"prodDeny"\\s*:/.test(text);
+    const markerlessV2 = /"schemaVersion"\s*:\s*2/.test(text)
+      && /"workerCode"\s*:/.test(text)
+      && /"workedMainProject"\s*:/.test(text)
+      && /"workedTaskTitle"\s*:/.test(text)
+      && /"prodDeny"\s*:/.test(text);
     if (markerlessV2) {
       return { ok:true, text:text.slice(0,190000), format:"v2-markerless", messageIndexFromEnd:nodes.length - 1 - i, conversationId, domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
     }
-    if (!legacy && /MUNKA\\s+VISSZAADVA/i.test(text) && /ÁTADÓ/i.test(text) && text.length >= 120) {
+    if (!legacy && /MUNKA\s+VISSZAADVA/i.test(text) && /ÁTADÓ/i.test(text) && text.length >= 120) {
       legacy = { ok:true, text:text.slice(0,190000), format:"legacy", messageIndexFromEnd:nodes.length - 1 - i, conversationId, domAdapterVersion:${JSON.stringify(CHATGPT_DOM_ADAPTER_VERSION)} };
     }
   }

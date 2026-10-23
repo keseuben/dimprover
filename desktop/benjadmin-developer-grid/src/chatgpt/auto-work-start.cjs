@@ -76,6 +76,10 @@ function buildAutoWorkSourcePrompt(messages, conversationTitle) {
 }
 
 function detectChatDevelopmentIntent({ messages, conversationTitle = "" } = {}) {
+  // A protocol turn is the current user turn, not permission to replay an older command.
+  const latestRawUser = (Array.isArray(messages) ? messages : [])
+    .filter((item) => String(item?.role || "").toUpperCase() === "USER").at(-1);
+  if (MACHINE_MARKER.test(String(latestRawUser?.text || ""))) return { triggered:false, reason:"MACHINE_PROTOCOL_TURN" };
   const turns=userTurns(messages);
   const latest=turns.at(-1) || null;
   if (!latest) return { triggered:false, reason:"NO_USER_TURN" };

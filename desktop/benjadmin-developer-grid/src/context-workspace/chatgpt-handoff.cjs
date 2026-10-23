@@ -108,12 +108,13 @@ function parseHandoffV2(body) {
   catch { throw new Error("A HANDOFF V2 JSON nem érvényes."); }
   if (Number(raw?.schemaVersion) !== 2) throw new Error("A HANDOFF V2 schemaVersion értéke nem 2.");
 
+  const rawWorkerCode = text(raw.workerCode, 40).toUpperCase();
   const legacyDocs = list(raw.requiredDocuments, 20, 500);
   const meta = {
     schemaVersion: 2,
     chatSessionId: text(raw.chatSessionId, 120),
     chatTitle: text(raw.chatTitle, 300),
-    workerCode: text(raw.workerCode, 40).toUpperCase(),
+    workerCode: rawWorkerCode === "BENJAMINAI" ? "BENAI" : rawWorkerCode,
     workedMainProject: text(raw.workedMainProject, 160),
     workedProject: text(raw.workedProject, 160),
     workedModule: text(raw.workedModule, 160),

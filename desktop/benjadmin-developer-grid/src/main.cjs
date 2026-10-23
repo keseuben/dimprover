@@ -5767,7 +5767,7 @@ function contextWorkspaceDocked() {
 
 async function prepareWorkerHandoff(workerCode) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
-  const code = String(workerCode || "").toUpperCase();
+  const code = normalizeDesktopWorkerCode(workerCode);
   const cell = workerCellForCode(code);
   if (!cell) return { ok: false, error: "A worker nincs aktív ChatGrid cellához rendelve." };
   let view = chatViews.get(cell.id);
@@ -5776,6 +5776,7 @@ async function prepareWorkerHandoff(workerCode) {
   const conversation = await getConversationInfo(view, cell, config.cells || []);
   const previousRecord = handoffRecordForConversation(code, conversation.chatSessionId);
   const baselineCapture = await captureLatestAssistantMarkdown(view);
+  if (baselineCapture?.generating) return { ok:false, code:"HANDOFF_RESPONSE_NOT_READY", error:"A worker válasza még készül; várd meg a végét." };
   const baselineIsV2 = baselineCapture?.ok && String(baselineCapture.format || "").startsWith("v2");
   const baselineResponseSha256 = baselineIsV2 ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   const { presence, task } = liveContextForWorker(code);
@@ -5838,7 +5839,7 @@ async function promptHandoffDownload(handoffId, preferredFileName = "") {
 
 async function captureAndSaveWorkerHandoff(workerCode) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
-  const code = String(workerCode || "").toUpperCase();
+  const code = normalizeDesktopWorkerCode(workerCode);
   const cell = workerCellForCode(code);
   const view = cell ? chatViews.get(cell.id) : null;
   if (!cell || !view) return { ok: false, error: "A worker ChatGPT felülete nem érhető el." };
@@ -5852,6 +5853,7 @@ async function captureAndSaveWorkerHandoff(workerCode) {
   }
 
   const capture = await captureLatestAssistantMarkdown(view);
+  if (capture?.generating) return { ok:false, code:"HANDOFF_RESPONSE_NOT_READY", error:"Az átadó válasz még készül; várd meg a végét.", record:existing };
   if (!capture.ok) {
     if (recoveryCapture) return prepareWorkerHandoff(code);
     return { ...capture, code: "HANDOFF_RESPONSE_NOT_READY", record: existing };
@@ -5928,7 +5930,7 @@ async function captureAndSaveWorkerHandoff(workerCode) {
 }
 
 async function inspectWorkerHandoffState(workerCode) {
-  const code = String(workerCode || "").toUpperCase();
+  const code = normalizeDesktopWorkerCode(workerCode);
   const cell = workerCellForCode(code);
   const view = cell ? chatViews.get(cell.id) : null;
   if (!cell || !view || view.webContents.isDestroyed()) return null;

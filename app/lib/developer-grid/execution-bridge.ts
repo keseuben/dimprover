@@ -7,7 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { analyzeTechnicalScope } from "@/app/lib/dev-center/ai-worker/scope-analyzer";
 import { classifyScopePath } from "@/app/lib/dev-center/ai-worker/scope-policy";
-import { assertDevEngineOperation } from "@/app/lib/dev-center/engine-repository";
+import { assertDevEngineOperation, getDevCenterEngineState } from "@/app/lib/dev-center/engine-repository";
 import { getDeveloperGridTaskById } from "./work-start";
 import { readGridState } from "./state-store";
 
@@ -231,6 +231,9 @@ async function validateContext(input: Input) {
   const task = await getDeveloperGridTaskById(taskId);
   const gridSession = state.sessions.find((session) => session.id === sessionId && session.taskId === taskId && session.endedAt === null) || null;
   if (!task || !gridSession) throw new DeveloperGridExecutionError("Az execution request task/session identity nem authoritative.", "EXECUTION_ACTIVE_WORK_MISMATCH", 409);
+  if (task.environment !== "DEV" || task.productionAccess !== "DENY" || ["COMPLETED", "CANCELLED", "BLOCKED"].includes(task.status)) {
+    throw new DeveloperGridExecutionError("A task nem végrehajtható DEV munka.", "EXECUTION_TASK_DENIED", 409);
+  }
   if (workerCode(gridSession.workerCode) !== worker) throw new DeveloperGridExecutionError("A worker identity eltér az authoritative Grid sessiontől.", "EXECUTION_WORKER_MISMATCH", 409);
 
   const context = gridSession.developmentContext || {};
@@ -240,10 +243,28 @@ async function validateContext(input: Input) {
     throw new DeveloperGridExecutionError("A Central Core source proof eltér vagy hiányzik.", "EXECUTION_SOURCE_PROOF_MISMATCH", 409);
   }
 
+  const { sha256: storedProofSha, ...proofBase } = proof;
+  if (sha(JSON.stringify(proofBase)) !== text(storedProofSha, 80).toLowerCase()
+    || proof.schemaVersion !== 1 || proof.handshakeStage !== "READY" || proof.productionAccess !== "DENY") {
+    throw new DeveloperGridExecutionError("A source proof tartalma nem hiteles.", "EXECUTION_SOURCE_PROOF_MISMATCH", 409);
+  }
+
   const engineSessionId = text(context.engineSessionId, 240);
   if (!engineSessionId) throw new DeveloperGridExecutionError("Hiányzó Dev Center engine session.", "EXECUTION_ENGINE_SESSION_REQUIRED", 409);
   const operation = action === "RUN_DEV_COMMAND" ? "test" : "write";
   const authorization = await assertDevEngineOperation(engineSessionId, operation);
+  const expectedWorkerId = `worker_${worker.toLowerCase()}`;
+  if (authorization.session.taskId !== taskId || authorization.session.workerId !== expectedWorkerId
+    || authorization.session.projectId !== task.projectId || authorization.environment.kind !== "DEV") {
+    throw new DeveloperGridExecutionError("A Dev Engine task/worker/project/környezet binding eltér.", "EXECUTION_ENGINE_BINDING_MISMATCH", 409);
+  }
+  const engineState = await getDevCenterEngineState();
+  const engineTask = engineState.tasks.find((item) => item.id === taskId);
+  if (!engineTask || engineTask.claimedBySessionId !== engineSessionId
+    || engineTask.assignedWorkerId !== authorization.session.workerId
+    || engineTask.projectId !== task.projectId || ["completed", "cancelled", "blocked"].includes(engineTask.status)) {
+    throw new DeveloperGridExecutionError("A task Dev Engine ownership kötése eltér.", "EXECUTION_ENGINE_OWNERSHIP_MISMATCH", 409);
+  }
   const root = text(gridSession.sourceProvenance?.worktree, 1200);
   if (!root || root !== text(authorization.session.worktreePath, 1200) || engineSessionId !== text(proof.engineSessionId, 240)) {
     throw new DeveloperGridExecutionError("A worktree/session binding eltér a proof állapotától.", "EXECUTION_WORKTREE_BINDING_MISMATCH", 409);
@@ -251,6 +272,11 @@ async function validateContext(input: Input) {
 
   const head = text(gridSession.sourceProvenance?.head, 80).toLowerCase();
   const branch = text(gridSession.sourceProvenance?.branch, 600);
+  if (gridSession.sourceProvenance?.sourceState !== "VERIFIED"
+    || text(proof.worktree, 1200) !== root || text(proof.branch, 600) !== branch
+    || text(proof.head, 80).toLowerCase() !== head || authorization.session.branchName !== branch) {
+    throw new DeveloperGridExecutionError("A source proof és Git provenance kötése eltér.", "EXECUTION_SOURCE_PROOF_MISMATCH", 409);
+  }
   const rootReal = await canonicalRoot(root);
   const [actualHead, actualBranch] = await Promise.all([git(rootReal, ["rev-parse", "HEAD"]), git(rootReal, ["branch", "--show-current"])]);
   if (actualHead.code !== 0 || actualBranch.code !== 0 || actualHead.stdout.trim().toLowerCase() !== head || actualBranch.stdout.trim() !== branch) {
