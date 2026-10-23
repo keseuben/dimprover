@@ -97,7 +97,8 @@ export async function transitionPersonalMultipartSession(input: {
   if (input.expectedStatus === "CLEAN" || input.nextStatus === "CLEAN"
     || !(
       (input.expectedStatus === "INITIATED" && ["UPLOADING", "ABORTED"].includes(input.nextStatus))
-      || (input.expectedStatus === "UPLOADING" && ["QUARANTINED", "ABORTED"].includes(input.nextStatus))
+      || (input.expectedStatus === "UPLOADING" && ["COMPLETING", "ABORTED"].includes(input.nextStatus))
+      || (input.expectedStatus === "COMPLETING" && input.nextStatus === "QUARANTINED")
       || (input.expectedStatus === "QUARANTINED" && input.nextStatus === "SCANNING")
       || (input.expectedStatus === "SCANNING" && input.nextStatus === "REJECTED")
       || (input.expectedStatus === "UPLOADING" && input.nextStatus === "UPLOADING")

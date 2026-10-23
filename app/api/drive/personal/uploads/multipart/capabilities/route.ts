@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { resolvePersonalDriveContentActor } from "@/app/lib/content-core/personalAuth";
-import { personalMultipartFeatureEnabled, PERSONAL_MULTIPART_MAX_BYTES } from "@/app/lib/content-core/personalMultipartPolicy";
+import { personalMultipartFeatureEnabled, PERSONAL_MULTIPART_MAX_BYTES, PERSONAL_MULTIPART_SERVER_RELEASED } from "@/app/lib/content-core/personalMultipartPolicy";
 import { getPersonalMultipartSchemaReadiness } from "@/app/lib/content-core/personalMultipartRepository";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "@/app/lib/drive-core/storageConfig";
 import { getDriveSecurityScannerHealth, getDriveScannerUploadLimitBytes } from "@/app/lib/drive-core/securityScanService";
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (!actor.ok) return actor.response;
 
   // A future feature must not trigger DB/AV queries or advertise readiness by default.
-  if (!personalMultipartFeatureEnabled(process.env)) {
+  if (!PERSONAL_MULTIPART_SERVER_RELEASED || !personalMultipartFeatureEnabled(process.env)) {
     return NextResponse.json({ ok: true, enabled: false,
       plannedMaxFileBytes: PERSONAL_MULTIPART_MAX_BYTES, usableMaxFileBytes: 0,
       reason: "PERSONAL_MULTIPART_FEATURE_OFF" }, { headers: noCache });

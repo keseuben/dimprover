@@ -4263,3 +4263,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Build `7Aj8RHmj153S2uVCelY-5`, SHA-256 `23ef078095c7c0971e53ea34a6c7a7aed5318ead5b7eda11de1e44d94c0c3098`: BUILD01/MCP/DEV egyezik.
 - Kibontva `/srv/dimpro-dev/candidates/drive-pilot/releases/cbb090c4e95e`; forrásos, még nem migrált SQL null-kvóta ellenőrzés külön javítva.
 - Feature flag OFF, 5 GiB personal multipart nem aktív, Nginx/PM2/PROD változatlan, PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.58 – Személyes 5 GiB multipart API, SOURCE ONLY
+
+- Elkészült a Saját Drive USER-owned S3 multipart indítás, checkpoint, part sign/confirm, abort és csak karanténba véglegesítő complete API, a közös S3 motort felhasználva.
+- Külön `COMPLETING` állapot védi az elveszett S3 befejezési válaszok újrafeldolgozását, DB CAS ellenőrzi a session tulajdonát és revízióját.
+- HTTPS Origin és auth gate, bounded JSON, S3 részméret/ETag ellenőrzés, SHA audit, dedikált fájlméretek 101 MiB–5 GiB.
+- `PERSONAL_MULTIPART_SERVER_RELEASED=false` kódszintű hard release retesz: az API-k még DEV-en sem aktívak; CLEAN és letöltés továbbra is tiltott.
+- TypeScript, ESLint, V0958 static contract és V0950–V0957 regressziók PASS; migráció és S3/böngészős E2E nem futott, PROD DENY.
+- Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0958_PERSONAL_MULTIPART_API_SOURCE_20261023.md`.

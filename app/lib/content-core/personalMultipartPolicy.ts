@@ -7,6 +7,10 @@
 // Avoid importing server-side configuration into this pure protocol module.
 const PERSONAL_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 
+// Source-only V0.9.58. Explicit code-release after audited 5 GiB scanner,
+ // quota reconciliation, S3/DB E2E, and operations review. A .env flag alone
+ // must never activate the unfinished workflow.
+export const PERSONAL_MULTIPART_SERVER_RELEASED: boolean = false;
 export const PERSONAL_MULTIPART_MAX_BYTES = 5 * 1024 ** 3;
 export const PERSONAL_MULTIPART_DEFAULT_CHUNK_BYTES = 64 * 1024 ** 2;
 export const PERSONAL_MULTIPART_MIN_CHUNK_BYTES = 5 * 1024 ** 2;
@@ -15,7 +19,7 @@ export const PERSONAL_MULTIPART_MAX_PARTS = 10_000;
 export const PERSONAL_MULTIPART_SESSION_TTL_MS = 24 * 60 * 60_000;
 
 export type PersonalMultipartStatus =
-  | "INITIATED" | "UPLOADING" | "QUARANTINED" | "SCANNING"
+  | "INITIATED" | "UPLOADING" | "COMPLETING" | "QUARANTINED" | "SCANNING"
   | "CLEAN" | "REJECTED" | "ABORTED" | "EXPIRED";
 
 export type PersonalMultipartPart = {

@@ -17,8 +17,8 @@ const capabilities = read("app/api/drive/personal/uploads/multipart/capabilities
 const s3 = read("app/lib/drive-core/s3ObjectStorage.ts");
 const version = read("components/drive/driveBuildInfo.ts");
 
-assert.equal(TRANSFER_CORE_VERSION, "0.9.57");
-assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.57"/);
+assert.ok(["0.9.57","0.9.58"].includes(TRANSFER_CORE_VERSION));
+assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(57|58)"/);
 assert.equal(PERSONAL_MULTIPART_MAX_BYTES,5*1024**3);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024**2);
 assert.equal(PERSONAL_MULTIPART_DEFAULT_CHUNK_BYTES,64*1024**2);
@@ -68,7 +68,7 @@ for(const token of [
  "dimpro_personal_drive_multipart_sessions","dimpro_personal_drive_multipart_schema_meta",
  "foreign key (owner_user_id,folder_id)","dimpro_personal_multipart_owner_request_uniq",
  "dimpro_personal_multipart_storage_uniq","hashtextextended('personal-drive-quota:'",
- "status in ('INITIATED','UPLOADING','QUARANTINED','SCANNING')",
+ "status in ('INITIATED','UPLOADING','COMPLETING','QUARANTINED','SCANNING')",
  "r.content_object_id=o.id and r.owner_type='USER'",
  "if v_hard_limit and v_used + v_reserved + v_size > v_quota",
  "PERSONAL_MULTIPART_FOLDER_NOT_OWNED","PERSONAL_MULTIPART_IDEMPOTENCY_CONFLICT",

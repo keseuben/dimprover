@@ -46,7 +46,7 @@ create table if not exists public.dimpro_personal_drive_multipart_sessions (
   storage_upload_id text null,
   part_manifest jsonb not null default '[]'::jsonb check (jsonb_typeof(part_manifest) = 'array'),
   status text not null default 'INITIATED'
-    check (status in ('INITIATED','UPLOADING','QUARANTINED','SCANNING','CLEAN','REJECTED','ABORTED','EXPIRED')),
+    check (status in ('INITIATED','UPLOADING','COMPLETING','QUARANTINED','SCANNING','CLEAN','REJECTED','ABORTED','EXPIRED')),
   result_content_ref_id uuid null references public.dimpro_content_refs(id) on delete restrict,
   state_version bigint not null default 1 check (state_version > 0),
   created_at timestamptz not null default now(),
@@ -66,10 +66,10 @@ create table if not exists public.dimpro_personal_drive_multipart_sessions (
 
 create index if not exists dimpro_personal_multipart_owner_active_idx
   on public.dimpro_personal_drive_multipart_sessions(owner_user_id, status, expires_at)
-  where status in ('INITIATED','UPLOADING','QUARANTINED','SCANNING');
+  where status in ('INITIATED','UPLOADING','COMPLETING','QUARANTINED','SCANNING');
 create index if not exists dimpro_personal_multipart_cleanup_idx
   on public.dimpro_personal_drive_multipart_sessions(expires_at)
-  where status in ('INITIATED','UPLOADING');
+  where status in ('INITIATED','UPLOADING','COMPLETING');
 
 alter table public.dimpro_personal_drive_multipart_sessions enable row level security;
 revoke all on public.dimpro_personal_drive_multipart_sessions from public, anon, authenticated;
@@ -163,7 +163,7 @@ begin
   select coalesce(sum(size_bytes),0) into v_reserved
     from public.dimpro_personal_drive_multipart_sessions
     where owner_user_id=p_owner_user_id
-      and status in ('INITIATED','UPLOADING','QUARANTINED','SCANNING');
+      and status in ('INITIATED','UPLOADING','COMPLETING','QUARANTINED','SCANNING');
 
   if v_hard_limit and v_used + v_reserved + v_size > v_quota then
     raise exception 'PERSONAL_DRIVE_QUOTA_EXCEEDED' using errcode='P0001';

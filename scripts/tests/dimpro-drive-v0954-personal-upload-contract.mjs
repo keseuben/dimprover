@@ -20,8 +20,8 @@ const panel = read("components/drive/DriveTransferCenter.tsx");
 const transport = read("app/lib/transfer-core/personalFormUpload.ts");
 const version = read("components/drive/driveBuildInfo.ts");
 
-assert.ok(["0.9.54", "0.9.55", "0.9.56", "0.9.57"].includes(TRANSFER_CORE_VERSION));
-assert.match(version, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(54|55|56|57)"/);
+assert.ok(["0.9.54", "0.9.55", "0.9.56", "0.9.57", "0.9.58"].includes(TRANSFER_CORE_VERSION));
+assert.match(version, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(54|55|56|57|58)"/);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024*1024);
 assert.equal(personalUploadEffectiveMaxBytes(110*1024*1024,100*1024*1024),PERSONAL_UPLOAD_MAX_BYTES);
 assert.equal(personalUploadEffectiveMaxBytes(8*1024*1024,100*1024*1024),8*1024*1024);
