@@ -51,3 +51,16 @@ A 100 MiB **nem végleges termékhatár**. A nagyobb, például 1–5 GiB-os ter
 - AUTH personal folders, CsomagBOX és project folder-drop regresszió: PASS.
 - Git diff whitespace: PASS.
 - **Nem történt teljes hitelesített end-to-end feltöltés vagy vírusteszt; a feature flag OFF.**
+
+## BUILD01 PASS és elkülönített DEV csomag, 2026-10-23
+
+- BUILD01 forráscommit: `c013c11b34637b8f288aebfc8d6ef45dcae83c3b` (V0.9.56 forrás `b2a2d558` + dokumentációs whitespace javítás).
+- Run: `benjadmin-drive-v0956-c013c11b3-20261023-build01-b1`.
+- Build státusz: **PASS**; build ID: `SBp59iiRcZVWjUUz0FhVl`.
+- SHA-256: `4260c2e87caa3e07bee2e4c6c9b30a082ed964b8fedcb3011125f6f450fe2b56`, azonos BUILD01/MCP/DEV példányokon.
+- DEV izolált, NEM aktív standalone:
+  `/srv/dimpro-dev/candidates/drive-pilot/releases/c013c11b3463` (~370 MiB).
+- A Next.js build tartalmazza `/api/drive/personal/uploads/stream` új bináris route-ot; build során 274 statikus chunk, 104 statikus oldal ellenőrizve.
+- DEV tárhely a csomag másolásakor: 236 GiB root, ~128 GiB szabad (46% foglalt).
+- Publikus Drive: változatlanul V0.9.52 (`1402cd6e5`, 3413), PROD DENY, Central Developer Grid változatlan.
+- **V0.9.56 streaming upload még nincs böngészős E2E-vel igazolva vagy bekapcsolva.** A build PASS csak a forrásról és a csomagról szól.

@@ -4242,3 +4242,9 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - 16 MiB-ig legacy buffered form, 16–100 MiB között új, temp-disk backed raw stream POST, kötelező Content-Length és byte guard; teljes ClamAV, S3 SHA-256, USER ref és kvóta.
 - Jelenlegi DEV scanner/S3 default mindkettő 100 MiB, Nginx 120m, ClamAV 110M streamlimit, /tmp disk-backed. A multi-GB valódi S3 multipart + validált nagyfájl ClamAV külön fázis.
 - Browser source-only, feature OFF, publikus DEV V0.9.52, PROD DENY. Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0956_NAGYFAJLOS_FELTOLTES_SOURCE_20261023.md`.
+
+### V0.9.56 BUILD01 PASS – 2026-10-23
+
+- `c013c11b3463` BUILD01 run `benjadmin-drive-v0956-c013c11b3-20261023-build01-b1`, build `SBp59iiRcZVWjUUz0FhVl`.
+- Artifact SHA-256 `4260c2e87caa3e07bee2e4c6c9b30a082ed964b8fedcb3011125f6f450fe2b56`: BUILD01/MCP/DEV egyező. Izolált kibontás `/srv/dimpro-dev/candidates/drive-pilot/releases/c013c11b3463`.
+- A 100 MiB-os streamed personal route a buildben megtalálható; nincs PM2 indítás, Nginx átállás, feature-flag aktiválás vagy PROD beavatkozás. Hitelesített valódi upload E2E és vírusbiztonsági próba még kötelező.
