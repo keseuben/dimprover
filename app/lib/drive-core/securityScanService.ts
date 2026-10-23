@@ -59,6 +59,20 @@ function scannerError(error: unknown) {
   };
 }
 
+/**
+ * Pre-registration personal upload scan; does not mark DB objects CLEAN.
+ * A caller may register content only after a CLEAN result and S3 hash verification.
+ */
+export async function scanPersonalDriveBufferWithClamd(bytes: Uint8Array) {
+  const config = getDriveScannerConfig();
+  if (!config.enabled || bytes.byteLength <= 0 || bytes.byteLength > config.maxScanBytes) {
+    throw new DriveCoreRepositoryError("A Saját Drive fájlját nem lehet biztonságosan ellenőrizni.",
+      "PERSONAL_DRIVE_SCANNER_UNAVAILABLE_OR_LIMIT", 503);
+  }
+  const result = await scanAsyncIterableWithClamd((async function* () { yield bytes; })(), bytes.byteLength, config);
+  return { status: result.status, sha256: result.sha256, bytesScanned: result.bytesScanned };
+}
+
 export function getDriveScannerUploadLimitBytes(): number {
   return getDriveScannerConfig().maxScanBytes;
 }

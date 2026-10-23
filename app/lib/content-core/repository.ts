@@ -447,6 +447,46 @@ export async function upsertContentObject(input: {
   return result.data as ContentObjectRow;
 }
 
+/**
+ * Personal uploads never UPSERT an existing content hash: doing so could
+ * overwrite another owner's storage pointer and falsely reset scan status.
+ * A uniqueness race reuses only a previously CLEAN object in the same bucket.
+ */
+export async function registerVerifiedPersonalContentObject(input: {
+  sha256: string; sizeBytes: number; mimeType: string; fileName: string;
+  storageBucket: string; storageKey: string; uploadId: string;
+}) {
+  const db = getDimproIdentitySupabaseClient();
+  const existing = await findContentObjectByHash({ sha256: input.sha256, sizeBytes: input.sizeBytes });
+  if (existing) return { object: ensureReusablePersonalContentObject(existing, input.storageBucket), inserted: false };
+  const now = new Date().toISOString();
+  const result = await db.from("dimpro_content_objects").insert({
+    sha256: input.sha256, size_bytes: input.sizeBytes,
+    mime_type: input.mimeType, original_name: input.fileName, display_name: input.fileName,
+    storage_provider: "S3", storage_bucket: input.storageBucket,
+    storage_key: input.storageKey, security_status: "clean", virus_scan_status: "clean",
+    source_system: "DRIVE", source_object_id: input.uploadId, status: "ACTIVE", updated_at: now,
+  }).select("id,sha256,size_bytes,mime_type,original_name,display_name,storage_provider,storage_bucket,storage_key,security_status,virus_scan_status,source_system,source_object_id,status,created_at,updated_at").single();
+  if (!result.error && result.data) return { object: result.data as ContentObjectRow, inserted: true };
+  if (result.error?.code === "23505") {
+    const winner = await findContentObjectByHash({ sha256: input.sha256, sizeBytes: input.sizeBytes });
+    if (winner) return { object: ensureReusablePersonalContentObject(winner, input.storageBucket), inserted: false };
+  }
+  dbError("A Saját Drive ellenőrzött fájlja nem regisztrálható.", result.error);
+}
+
+export function ensureReusablePersonalContentObject<T extends { security_status: string; virus_scan_status: string; storage_bucket: string; storage_provider: string; storage_key: string; status: string }>(
+  object: T, expectedBucket: string,
+): T {
+  if (object.security_status !== "clean" || object.virus_scan_status !== "clean"
+    || object.storage_provider !== "S3" || object.storage_bucket !== expectedBucket
+    || object.status !== "ACTIVE" || !object.storage_key) {
+    throw new DimproIdentityError("A meglévő fájl nem használható biztonságosan.",
+      "PERSONAL_DRIVE_DEDUP_UNSAFE", 409);
+  }
+  return object;
+}
+
 export async function listUserContentItems(input: { userId: string; limit?: number }) {
   const limit = Math.max(1, Math.min(500, Math.trunc(input.limit || 200)));
   const refsResult = await getDimproIdentitySupabaseClient()

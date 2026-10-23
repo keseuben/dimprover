@@ -4202,3 +4202,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Fájlsebesség és becsült idő a sorokban; befejezett hálózati átvitelnél megfelelő üzenet; új UI szerződéses teszt.
 - V0.9.53 még nem publikus DEV runtime; előbb QA + külön build/kiadás szükséges. PROD DENY.
 - Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0953_TRANSFER_CENTER_UI_20261023.md`.
+
+## 2026-10-23 – DIMPRO Drive V0.9.54 – Saját Drive direkt feltöltés, SOURCE ONLY
+
+- A Saját Drive feltöltőgombja csak hitelesített `GET /api/drive/personal/uploads` readiness és DEV-only feature flag esetén aktiválható.
+- Elkészült a maximum 16 MiB/fájl és 25 fájl/választás, egymás utáni POST, CSRF origin/Content-Length előkapu, teljes ClamAV INSTREAM, S3 SHA-256 roundtrip, deduplikációs fail-closed és atomikus USER-kvóta út.
+- Meglévő hash ütközésnél nem írja felül más objektum tárhely- vagy vírusbiztonsági mezőit.
+- A közös Transfer Center a Saját Drive-hoz is használható, a `AVAILABLE` állapot elkülönül a projektjóváhagyástól. Abort, hálózati bizonytalanság és munkatérváltás kezelve.
+- Belső teszt, TypeScript, lint és további elfogadási kapuk szükségesek. Funkció flag alapból OFF, nincs DEV runtime vagy PROD deploy.
+- Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0954_PERSONAL_UPLOAD_SOURCE_20261023.md`.
+- V0.9.54 TypeScript és célzott ESLint PASS; új policy contract PASS, V0.9.50–V0.9.53 regressziók PASS; quota 29/29, folder-drop 22/22 PASS. Böngészős E2E hiányzik, aktiválás tilos.

@@ -8,6 +8,9 @@ import BoxShelf from "./BoxShelf";
 import CommanderPanel from "./CommanderPanel";
 import CompareWorkspace from "./CompareWorkspace";
 import DrivePremiumLoader from "./DrivePremiumLoader";
+import DriveTransferCenter from "./DriveTransferCenter";
+import { transferSpeedSample, isTransferTerminal, type TransferTask } from "@/app/lib/transfer-core/transferModel";
+import { PersonalUploadHttpError, uploadPersonalFormWithProgress } from "@/app/lib/transfer-core/personalFormUpload";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
@@ -186,6 +189,17 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const [busy, setBusy] = useState(false);
+  const [personalUploadEnabled, setPersonalUploadEnabled] = useState(false);
+  const [personalTransferBusy, setPersonalTransferBusy] = useState(false);
+  const [personalUploadMaxBytes, setPersonalUploadMaxBytes] = useState(0);
+  const personalUploadFileInputRef = useRef<HTMLInputElement>(null);
+  const personalTransferActiveRef = useRef(false);
+  const personalTransferAbortRef = useRef(new Map<string, AbortController>());
+  const personalTransferCancelledRef = useRef(new Set<string>());
+  const personalTransferWorkspaceAliveRef = useRef(true);
+  const [personalTransferTasks, setPersonalTransferTasks] = useState<TransferTask[]>([]);
+  const [personalTransferOpen, setPersonalTransferOpen] = useState(false);
+  const [personalTransferMinimized, setPersonalTransferMinimized] = useState(false);
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
   const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
   const bootLoaderVisibleRef = useRef(true);
@@ -309,6 +323,127 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout-v3", layoutMode); } catch {} }, [layoutMode]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-open", boxShelfOpen ? "1" : "0"); } catch {} }, [boxShelfOpen]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-height", String(Math.round(boxShelfHeight))); } catch {} }, [boxShelfHeight]);
+
+  useEffect(() => {
+    personalTransferWorkspaceAliveRef.current = true;
+    const controller = new AbortController();
+    void fetch("/api/drive/personal/uploads", {
+      credentials: "same-origin", cache: "no-store", signal: controller.signal,
+    }).then(async (response): Promise<{enabled?:boolean;maxBytes?:number}> =>
+      response.ok ? response.json() : {enabled:false,maxBytes:0})
+      .then(response => {
+        if (controller.signal.aborted) return;
+        setPersonalUploadEnabled(response.enabled === true);
+        setPersonalUploadMaxBytes(response.enabled === true ? Math.max(0, Number(response.maxBytes || 0)) : 0);
+      }).catch(() => { if (!controller.signal.aborted) setPersonalUploadEnabled(false); });
+    const controllers = personalTransferAbortRef.current;
+    return () => {
+      personalTransferWorkspaceAliveRef.current = false;
+      controller.abort();
+      controllers.forEach(item => item.abort());
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!personalTransferActiveRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  function updatePersonalTransfer(id: string, patch: Partial<TransferTask>) {
+    setPersonalTransferTasks(current => current.map(item =>
+      item.id === id ? {...item, ...patch, updatedAt: Date.now()} : item));
+  }
+
+  async function uploadPersonalFiles(files: File[]) {
+    if (!personalUploadEnabled || personalTransferActiveRef.current || files.length < 1) return;
+    if (files.length > 25) {
+      setError("Egyszerre legfeljebb 25 fájlt választhatsz ki.");
+      if (personalUploadFileInputRef.current) personalUploadFileInputRef.current.value="";
+      return;
+    }
+    personalTransferActiveRef.current = true;
+    setPersonalTransferBusy(true);
+    setPersonalTransferOpen(true);
+    setPersonalTransferMinimized(false);
+    setError("");
+    setNotice("");
+    const folderLabel = selectedFolder?.name || "Saját Drive gyökér";
+    const tasks = files.map(file => ({ id: crypto.randomUUID(), file }));
+    const pendingTasks: TransferTask[] = tasks.map(({id,file}) => ({
+      id, fileName:file.name, folderName:folderLabel, sizeBytes:file.size,
+      uploadedBytes:0, phase:"QUEUED", speedBps:null, error:null, updatedAt:Date.now(), retryable:false,
+    }));
+    setPersonalTransferTasks(current => [...current,...pendingTasks]);
+    let succeeded = 0;
+    const failures: string[] = [];
+    try {
+      // One POST at a time: small bounded memory, no concurrent per-user quota races.
+      for (const {id,file} of tasks) {
+        if (!personalTransferWorkspaceAliveRef.current) break;
+        if (personalTransferCancelledRef.current.has(id)) {
+          updatePersonalTransfer(id, {phase:"CANCELLED",speedBps:null,retryable:false});
+          continue;
+        }
+        if (file.size < 1 || file.size > personalUploadMaxBytes) {
+          updatePersonalTransfer(id,{phase:"ERROR", retryable:false,
+            error:"A fájl nem felel meg a "+formatBytes(personalUploadMaxBytes)+" biztonságos méretkorlátnak."});
+          failures.push(file.name); continue;
+        }
+        const controller = new AbortController();
+        personalTransferAbortRef.current.set(id,controller);
+        let sample: {loaded:number;at:number;smoothedBps:number|null} | null = null;
+        updatePersonalTransfer(id,{phase:"UPLOADING"});
+        try {
+          const result = await uploadPersonalFormWithProgress({
+            file, folderId:selectedFolderId === "all" ? "" : selectedFolderId,
+            requestId:crypto.randomUUID(), signal:controller.signal,
+            onProgress:bytes => {
+              sample=transferSpeedSample(sample,bytes,performance.now());
+              updatePersonalTransfer(id,{
+                uploadedBytes:bytes, speedBps:sample.smoothedBps, phase:"UPLOADING",
+              });
+            },
+            onNetworkSent:()=>updatePersonalTransfer(id,{
+              uploadedBytes:file.size, speedBps:null, phase:"SCANNING",
+            }),
+          });
+          succeeded++;
+          updatePersonalTransfer(id,{
+            phase:"AVAILABLE", uploadedBytes:file.size, speedBps:null, error:result.placedInFolder===false
+              ? "A fájl a Saját Drive gyökerébe került; a célmappába helyezés nem sikerült." : null,
+            retryable:false,
+          });
+        } catch (reason) {
+          const error=reason instanceof PersonalUploadHttpError ? reason : null;
+          const cancelled=controller.signal.aborted;
+          const uncertain=error?.uncertain === true;
+          updatePersonalTransfer(id,{
+            phase:uncertain?"CONFIRMATION_UNKNOWN":cancelled?"CANCELLED":
+              error?.status===422?"INFECTED":"ERROR",
+            error:reason instanceof Error ? reason.message : "A fájlfeltöltés sikertelen.",
+            speedBps:null, retryable:false,
+          });
+          failures.push(file.name);
+        } finally { personalTransferAbortRef.current.delete(id); }
+      }
+      if (personalTransferWorkspaceAliveRef.current) {
+        await load();
+        setNotice(succeeded ? succeeded+" fájl ellenőrzötten a Saját Drive-ba került." : "");
+        if (failures.length) setError(failures.length+" fájl nem fejeződött be igazoltan. Az Átvitelek panelen ellenőrizhetők.");
+      }
+    } finally {
+      personalTransferActiveRef.current = false;
+      if (personalTransferWorkspaceAliveRef.current) {
+        setPersonalTransferBusy(false);
+        if (personalUploadFileInputRef.current) personalUploadFileInputRef.current.value="";
+      }
+    }
+  }
 
   useEffect(() => {
     bootLoaderVisibleRef.current = true;
@@ -852,6 +987,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         </div>
       ) : null}
 
+      <input ref={personalUploadFileInputRef} type="file" multiple hidden
+        aria-label="Saját Drive – egy vagy több fájl feltöltése"
+        onChange={event => { const files=Array.from(event.target.files || []);
+          if (files.length) void uploadPersonalFiles(files); }} />
       <DriveToolbar
         query={query}
         onQueryChange={setQuery}
@@ -862,11 +1001,11 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         tableZoom={tableZoom}
         onTableZoomChange={setTableZoom}
         canWrite={folderCoreReady}
-        canUpload={false}
+        canUpload={personalUploadEnabled && !personalTransferBusy}
         boxEnabled={boxCoreReady}
         compareEnabled={documents.length >= 2}
         onCreateFolder={() => { setNewFolderName(""); setNewFolderEditorOpen(true); }}
-        onUpload={() => undefined}
+        onUpload={() => personalUploadFileInputRef.current?.click()}
         canUploadSelectedVersion={false}
         onUploadSelectedVersion={() => undefined}
         canUploadSelectedRevision={false}
@@ -992,6 +1131,25 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         shelfHeight={boxShelfHeight}
         onShelfHeightChange={setBoxShelfHeight}
         onResetShelfHeight={() => setBoxShelfHeight(Math.max(118, Math.round(window.innerHeight * 0.5)))}
+      />
+      <DriveTransferCenter
+        tasks={personalTransferTasks}
+        projectName={workspaceName}
+        scope="PERSONAL"
+        open={personalTransferOpen}
+        minimized={personalTransferMinimized}
+        onOpen={() => setPersonalTransferOpen(true)}
+        onMinimize={() => setPersonalTransferMinimized(value => !value)}
+        onClose={() => setPersonalTransferOpen(false)}
+        onCancel={id => {
+          personalTransferCancelledRef.current.add(id);
+          const controller=personalTransferAbortRef.current.get(id);
+          if (controller) controller.abort();
+          else updatePersonalTransfer(id,{phase:"CANCELLED",speedBps:null,retryable:false});
+        }}
+        onRetry={() => setError("Biztonsági okból a Saját Drive feltöltés nem indít automatikus ismétlést.")}
+        retryDisabled
+        onClearFinished={() => setPersonalTransferTasks(current => current.filter(task => !isTransferTerminal(task.phase)))}
       />
     </div>
   );

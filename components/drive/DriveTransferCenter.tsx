@@ -25,10 +25,11 @@ function durationLabel(seconds: number | null) {
 }
 
 export default function DriveTransferCenter({
-  tasks, projectName, open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
+  tasks, projectName, scope = "PROJECT", open, minimized, onOpen, onMinimize, onClose, onCancel, onRetry, retryDisabled, onClearFinished,
 }: {
   tasks: readonly TransferTask[];
   projectName: string;
+  scope?: "PROJECT" | "PERSONAL";
   open: boolean;
   minimized: boolean;
   onOpen: () => void;
@@ -39,6 +40,7 @@ export default function DriveTransferCenter({
   retryDisabled: boolean;
   onClearFinished: () => void;
 }) {
+  const personal = scope === "PERSONAL";
   const summary = useMemo(() => summarizeTransfers(tasks), [tasks]);
   const security = useMemo(() => summarizeTransferSecurity(tasks), [tasks]);
   const [showAll, setShowAll] = useState(false);
@@ -46,10 +48,10 @@ export default function DriveTransferCenter({
   const issueCount = tasks.filter(task => TRANSFER_ISSUE_PHASES.includes(task.phase)).length;
   const filteredTasks = useMemo(() => tasks.filter(task => {
     if (viewFilter === "ACTIVE") return !isTransferTerminal(task.phase);
-    if (viewFilter === "REVIEW") return task.phase === "AWAITING_REVIEW";
+    if (viewFilter === "REVIEW") return task.phase === (personal ? "AVAILABLE" : "AWAITING_REVIEW");
     if (viewFilter === "ISSUES") return TRANSFER_ISSUE_PHASES.includes(task.phase);
     return true;
-  }), [tasks, viewFilter]);
+  }), [tasks, viewFilter, personal]);
   const visibleTasks = showAll ? filteredTasks : filteredTasks.slice(-60);
   if (!tasks.length) return null;
   if (!open) return (
@@ -80,7 +82,7 @@ export default function DriveTransferCenter({
         <div className={styles.stats}>
           <span><strong>{summary.active}</strong> feldolgozás</span>
           <span><strong>{summary.queued}</strong> várakozik</span>
-          <span><strong>{summary.awaitingReview}</strong> ellenőrzött, jóváhagyásra vár</span>
+          <span><strong>{personal ? summary.available : summary.awaitingReview}</strong> {personal ? "vírusmentes, elérhető" : "ellenőrzött, jóváhagyásra vár"}</span>
           {summary.failed>0 && <span className={styles.bad}><strong>{summary.failed}</strong> hiba</span>}
         </div>
         <div className={styles.progressLabel}>
@@ -102,7 +104,8 @@ export default function DriveTransferCenter({
           <div className={styles.securityBody}>
             <strong>Biztonsági ellenőrzés · legutóbb ismert fájlállapot</strong>
             <div className={styles.securityCounts} aria-live="polite">
-              <span><b>{security.clean}</b> vírusmentes, jóváhagyásra vár</span>
+              {!personal && <span><b>{security.clean}</b> vírusmentes, jóváhagyásra vár</span>}
+              {(personal || security.available > 0) && <span><b>{security.available}</b> vírusmentes, elérhető</span>}
               <span><b>{security.scanning}</b> szerveroldali feldolgozásban</span>
               <span><b>{security.pending}</b> ellenőrzésre vár</span>
               {security.infected > 0 && <span className={styles.securityAlert}><b>{security.infected}</b> blokkolt</span>}
@@ -117,7 +120,7 @@ export default function DriveTransferCenter({
           {([
             ["ALL", "Minden", summary.count],
             ["ACTIVE", "Folyamatban", tasks.filter(task => !isTransferTerminal(task.phase)).length],
-            ["REVIEW", "Jóváhagyásra vár", security.clean],
+            ["REVIEW", personal ? "Elérhető" : "Jóváhagyásra vár", personal ? security.available : security.clean],
             ["ISSUES", "Figyelmet igényel", issueCount],
           ] as const).map(([key, label, count]) => (
             <button type="button" key={key} aria-pressed={viewFilter === key}

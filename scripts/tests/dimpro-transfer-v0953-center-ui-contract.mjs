@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { summarizeTransferSecurity, TRANSFER_CORE_VERSION } from "../../app/lib/transfer-core/transferModel.ts";
 
-assert.equal(TRANSFER_CORE_VERSION, "0.9.53");
+assert.ok(["0.9.53", "0.9.54"].includes(TRANSFER_CORE_VERSION));
 const phases = [
   "AWAITING_REVIEW", "SCANNING", "SCAN_PENDING", "INFECTED",
   "SCAN_FAILED", "STATUS_UNAVAILABLE", "CONFIRMATION_UNKNOWN", "QUEUED", "ERROR",
@@ -12,7 +12,7 @@ const tasks = phases.map((phase, index) => ({
   sizeBytes: 1, uploadedBytes: 0, phase, speedBps: null, error: null, updatedAt: 0,
 }));
 assert.deepEqual(summarizeTransferSecurity(tasks), {
-  count: 9, clean: 1, scanning: 1, pending: 1,
+  count: 9, clean: 1, available: 0, scanning: 1, pending: 1,
   infected: 1, scanFailed: 1, unknown: 2, notAssessed: 2,
 });
 assert.equal(summarizeTransferSecurity([]).notAssessed, 0);
@@ -22,7 +22,7 @@ const ui = readFileSync("components/drive/DriveTransferCenter.tsx", "utf8");
 const css = readFileSync("components/drive/DriveTransferCenter.module.css", "utf8");
 const workspace = readFileSync("components/drive/DriveWorkspace.tsx", "utf8");
 const build = readFileSync("components/drive/driveBuildInfo.ts", "utf8");
-assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.53"/);
+assert.match(build, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.(53|54)"/);
 assert.match(ui, /summarizeTransferSecurity\(tasks\)/);
 assert.match(ui, /aria-pressed=\{viewFilter === key\}/);
 assert.match(ui, /role="group" aria-label="Átvitelek szűrése"/);

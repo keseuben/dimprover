@@ -6,7 +6,7 @@ import {
   isTransferTerminal,summarizeTransfers,
 } from "../../app/lib/transfer-core/transferModel.ts";
 
-assert.ok(["0.9.50","0.9.51","0.9.52","0.9.53"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.50","0.9.51","0.9.52","0.9.53", "0.9.54"].includes(TRANSFER_CORE_VERSION));
 assert.equal(transferPercent(64,100),64);
 assert.equal(transferPercent(120,100),100);
 assert.equal(transferPercent(-1,100),0);
@@ -74,7 +74,7 @@ const flags=[
  ["bounded concurrency",workspace.includes("Math.min(2, entries.length)")],
  ["event render throttling",workspace.includes("lastProgressRenderAt<160")],
  ["project help registered",readFileSync("components/drive/driveHelpData.ts","utf8").includes('id:"transfer"')],
- ["source version",/DRIVE_DEVELOPMENT_VERSION = "0.9.5[0123]"/.test(readFileSync("components/drive/driveBuildInfo.ts","utf8"))],
+ ["source version",/DRIVE_DEVELOPMENT_VERSION = "0.9.5[01234]"/.test(readFileSync("components/drive/driveBuildInfo.ts","utf8"))],
  ["server-side scanner limit before quota",server.indexOf("getDriveScannerUploadLimitBytes()") >= 0
     && server.indexOf("getDriveScannerUploadLimitBytes()") < server.indexOf("const quota = await getDriveProjectStorageQuota")],
  ["scanner same config health & gate",scanner.includes("return getDriveScannerConfig().maxScanBytes")],

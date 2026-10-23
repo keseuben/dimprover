@@ -3,10 +3,10 @@
  * No credentials, signed URLs, health/identity payloads, or customer data persisted.
  * Percentages describe network bytes only, never malware scanning or approval.
  */
-export const TRANSFER_CORE_VERSION = "0.9.53" as const;
+export const TRANSFER_CORE_VERSION = "0.9.54" as const;
 export type TransferPhase =
   | "QUEUED" | "INITIALIZING" | "UPLOADING" | "VERIFYING" | "SCANNING"
-  | "AWAITING_REVIEW" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"
+  | "AWAITING_REVIEW" | "AVAILABLE" | "SCAN_PENDING" | "SCAN_FAILED" | "INFECTED"
   | "CONFIRMATION_UNKNOWN" | "STATUS_UNAVAILABLE" | "ERROR" | "CANCELLED";
 
 export type TransferTask = {
@@ -28,7 +28,7 @@ export type TransferTask = {
 };
 
 export const TRANSFER_TERMINAL_PHASES = [
-  "AWAITING_REVIEW", "SCAN_FAILED", "INFECTED",
+  "AWAITING_REVIEW", "AVAILABLE", "SCAN_FAILED", "INFECTED",
   "ERROR", "CANCELLED", "STATUS_UNAVAILABLE",
 ] as const satisfies readonly TransferPhase[];
 
@@ -39,6 +39,7 @@ export const TRANSFER_LABELS: Record<TransferPhase, string> = {
   VERIFYING: "Szerveroldali SHA-256 ellenőrzés",
   SCANNING: "Szerveroldali ellenőrzés folyamatban",
   AWAITING_REVIEW: "Vírusmentes · jóváhagyásra vár",
+  AVAILABLE: "Vírusmentes · Saját Drive-ban elérhető",
   SCAN_PENDING: "Feltöltve · vírusellenőrzésre vár",
   SCAN_FAILED: "Vírusellenőrzés sikertelen · karantén",
   INFECTED: "Vírusveszély · fájl blokkolva",
@@ -91,11 +92,12 @@ export function summarizeTransfers(tasks: readonly TransferTask[]) {
   const queued = tasks.filter(item => item.phase === "QUEUED").length;
   const failed = tasks.filter(item => item.phase === "ERROR" || item.phase === "SCAN_FAILED" || item.phase === "INFECTED").length;
   const awaitingReview = tasks.filter(item => item.phase === "AWAITING_REVIEW").length;
+  const available = tasks.filter(item => item.phase === "AVAILABLE").length;
   const scanning = tasks.filter(item => item.phase === "SCANNING" || item.phase === "SCAN_PENDING").length;
   const terminal = tasks.filter(item => isTransferTerminal(item.phase)).length;
   const speedBps = tasks.reduce((sum, item) => item.phase === "UPLOADING" ? sum + Math.max(0, item.speedBps || 0) : sum, 0);
   return { count: tasks.length, totalBytes, uploadedBytes, percent: transferPercent(uploadedBytes, totalBytes),
-    active, queued, failed, awaitingReview, scanning, terminal, speedBps };
+    active, queued, failed, awaitingReview, available, scanning, terminal, speedBps };
 }
 
 /**
@@ -105,12 +107,13 @@ export function summarizeTransfers(tasks: readonly TransferTask[]) {
  */
 export function summarizeTransferSecurity(tasks: readonly TransferTask[]) {
   const clean = tasks.filter(item => item.phase === "AWAITING_REVIEW").length;
+  const available = tasks.filter(item => item.phase === "AVAILABLE").length;
   const scanning = tasks.filter(item => item.phase === "SCANNING").length;
   const pending = tasks.filter(item => item.phase === "SCAN_PENDING").length;
   const infected = tasks.filter(item => item.phase === "INFECTED").length;
   const scanFailed = tasks.filter(item => item.phase === "SCAN_FAILED").length;
   const unknown = tasks.filter(item =>
     item.phase === "CONFIRMATION_UNKNOWN" || item.phase === "STATUS_UNAVAILABLE").length;
-  const notAssessed = tasks.length - clean - scanning - pending - infected - scanFailed - unknown;
-  return { count: tasks.length, clean, scanning, pending, infected, scanFailed, unknown, notAssessed };
+  const notAssessed = tasks.length - clean - available - scanning - pending - infected - scanFailed - unknown;
+  return { count: tasks.length, clean, available, scanning, pending, infected, scanFailed, unknown, notAssessed };
 }
