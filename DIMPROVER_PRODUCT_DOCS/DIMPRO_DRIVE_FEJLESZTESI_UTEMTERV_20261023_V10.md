@@ -92,3 +92,12 @@ bizonytalan 5xx upload-állapot, idempotens S3 rehash, FormData nélküli
 stream és 18 QA regresszió PASS. A teljes S3/DB/browser E2E és a
 publikus DEV aktiválási döntés továbbra is NYITOTT (NO-GO).
 Következő feladat: V0.9.63 izolált runtime és end-to-end DEV pilot gate.
+
+## V0.9.63 tényállapot-frissítés (2026.10.23.)
+
+Külön izolációs policy (28 teszt PASS), titokmentes read-only preflight CLI,
+17 MiB helyi S3 SDK/HTTP streaming és visszaellenőrzés PASS. A DEV/PROD
+S3/DB célok **független** szeparációs igazolása azonban HIÁNYZIK, ezért
+a valós S3 PUT/DB írás és a 100 MiB személyes upload pilot továbbra is NO-GO.
+A V0.9.64 első feladata az önállóan jóváhagyott izolált DEV bucket,
+DB és szintetikus USER, utána a hitelesített E2E kapuk.

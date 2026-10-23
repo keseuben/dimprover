@@ -4348,3 +4348,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - SHA-256 `9b15239f4c68bff9111ea9d5fc78f8e73a89e2fc8196bd0b4f1ae84c947ba336`: BUILD01/gateway/DEV egyező.
 - Elkülönített, nem futó standalone `/srv/dimpro-dev/candidates/drive-pilot/releases/db76b827c5db` (374 MiB); személyes buffered és streamed upload endpointok jelen vannak.
 - Publikus DEV V0.9.52, nem történt PM2/nginx/DB/S3/PROD változás. Kiadási kapu: valódi hitelesített E2E – NO-GO.
+
+## 2026-10-23 – DIMPRO Drive V0.9.63 – izolációs kapu és helyi S3 SDK/HTTP, SOURCE ONLY
+
+- Read-only runtime-konfiguráció leltár és független DEV/PROD bucket/DB konfiguráció-felülvizsgálati kapu. A jelenlegi S3/DB szeparáció nem igazolható, ezért **valódi DEV PUT/DB teszt NO-GO**.
+- Új `personalPilotIsolation.ts`, önállóan jóváhagyott inventory ellenőrzése és titokmentes CLI; 28 izolációs policy teszt PASS.
+- 17 MiB szintetikus fájl az AWS SDK-val kizárólag localhost, memóriabeli S3-szerű HTTP szerverhez: PUT/HEAD/GET/SHA-256/DELETE PASS.
+- TypeScript, ESLint, 20 szerződéses/regressziós teszt PASS. A valódi hitelesített S3/DEV-DB/böngésző E2E és a release jóváhagyás továbbra is nyitott.
+- V0.9.63 riport: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0963_PERSONAL_DEV_ISOLATION_S3_SANDBOX_20261023.md`.

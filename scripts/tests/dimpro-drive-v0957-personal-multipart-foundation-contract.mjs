@@ -17,8 +17,8 @@ const capabilities = read("app/api/drive/personal/uploads/multipart/capabilities
 const s3 = read("app/lib/drive-core/s3ObjectStorage.ts");
 const version = read("components/drive/driveBuildInfo.ts");
 
-assert.ok(["0.9.57","0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62"].includes(TRANSFER_CORE_VERSION));
-assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(57|58|59|60|61|62)"/);
+assert.ok(["0.9.57","0.9.58", "0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63"].includes(TRANSFER_CORE_VERSION));
+assert.match(version,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(57|58|59|60|61|62|63)"/);
 assert.equal(PERSONAL_MULTIPART_MAX_BYTES,5*1024**3);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024**2);
 assert.equal(PERSONAL_MULTIPART_DEFAULT_CHUNK_BYTES,64*1024**2);
