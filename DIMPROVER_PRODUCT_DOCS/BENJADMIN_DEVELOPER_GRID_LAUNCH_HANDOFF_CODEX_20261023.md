@@ -41,3 +41,9 @@ Nincs merge, PROD módosítás, adatbázismigráció, aktív runtime-csere vagy 
 ## Visszaállítás
 
 A javítás az elkülönített codex ágon készül. A működő EXE és runtime jelenleg egyben rollback pont. Forrásszinten a bázis bc6e82fc8; a javító commit szükség esetén külön revert commitban visszavonható. Más worker állapotát ehhez nem kell módosítani.
+
+## Csomagolási függőségek utóellenőrzése
+
+A Windows packaging audit Electron 43.6.0 moderate és http-cache-semantics 4.2.0 high találatot adott. Az Electron exact verzióját 43.8.3-ra emeltük; a cache-függőség 4.3.0-ra frissült a meglévő kompatibilis tartományban. electron-builder változatlanul 26.15.3. A dependency security contract megőrzi a brace-expansion patch-ellenőrzéseket és az új verziókat is számon kéri. A frissített desktop dependency audit: 0 sérülékenység. Az első c88c29b5f build nem tekinthető az új függőségi commitból készült végleges artifactnak; a kiadási provenance-hez új build kell.
+
+Ellenőrzött források: https://github.com/electron/electron/releases/tag/v43.8.3 ; https://github.com/electron/electron/security/advisories/GHSA-fw47-9c62-h3vw ; az npm registry Electron 43.8.3 és http-cache-semantics 4.3.0 csomagmetaadatai; a tényleges npm audit kimenete.

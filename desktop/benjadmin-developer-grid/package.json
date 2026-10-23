@@ -12,7 +12,7 @@
     "check:runtime": "cd ../.. && node scripts/developer-grid/launch-handoff-runtime-v01100-contract.mjs && node scripts/developer-grid/execution-bridge-security-v01100-contract.mjs"
   },
   "devDependencies": {
-    "electron": "43.6.0",
+    "electron": "43.8.3",
     "electron-builder": "26.15.3"
   },
   "build": {
