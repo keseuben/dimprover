@@ -4311,3 +4311,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Build ID `YiUoHgKpF4a_9t7C-y_Da`; artifact SHA-256 `c9f78da82c874a22d5f83d35a30a8d0fd9a35c1dc053d546141e0f42b8e16db8`: BUILD01/gateway/DEV egyezés PASS.
 - Standalone release `/srv/dimpro-dev/candidates/drive-pilot/releases/9032dec28558` (373 MiB), NEM fut. Nyilvános DEV V0.9.52, PROD DENY.
 - Az öt kapcsolódó SQL-migráció izolált PGlite PASS, nincs valódi DB-apply vagy többkapcsolatos versenyteszt. Drive fejlesztési roadmap V1.0 a dokumentációban.
+
+## 2026-10-23 – DIMPRO Drive V0.9.61 – 100 MiB ClamAV és személyes kvóta lapozás, SOURCE ONLY
+
+- A meglévő ClamAV INSTREAM motoron valós DEV teszt 1/17/100 MiB, teljes byte- és SHA-256 egyezés PASS; memóriás EICAR standard antivírus teszt INFECTED/REJECT PASS.
+- Nginx Drive vhost `client_max_body_size=120m`, clamd `StreamMaxLength=110M`; ettől még a hitelesített 100 MiB-os böngészős/S3/DB E2E hátravan.
+- Javítva a személyes quota UI/preflight lapozatlan PostgREST lekérdezése: új 500-as kulcsos lapozás + 100-as egyedi object batch, ACTIVE+REMOVED, overflow/order fail-closed.
+- 2505 refs / 1253 egyedi objektum kvótateszt PASS; TypeScript, ESLint, 15 regresszió, V0.9.60 izolált PGlite migrációtesztek újrafuttatva PASS.
+- A 100 MiB-os feltöltés továbbra is külön DEV release gate alatt, az 5 GiB-os multipart hard flag OFF, PROD DENY.
+- Jelentés: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0961_PERSONAL_100M_CLAMD_QUOTA_QA_20261023.md`.

@@ -2,6 +2,7 @@ import { getDimproIdentitySupabaseClient } from "@/app/lib/identity-core/reposit
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 import { PERSONAL_MULTIPART_SERVER_RELEASED } from "./personalMultipartPolicy";
 import { parsePersonalQuotaSummary } from "./personalQuotaSummary";
+import { collectPersonalQuotaUsedBytes } from "./personalQuotaPaging";
 
 type DbError = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
 
@@ -252,29 +253,46 @@ export async function getPersonalDriveStorageQuota(input: { userId: string }): P
       projectId: "personal", ...summary, warningPercent: 80, criticalPercent: 95,
     };
   }
-  const [limitResult, refsResult] = await Promise.all([
-    db.from("dimpro_personal_drive_storage_limits")
-      .select("quota_bytes,hard_limit,source")
-      .eq("owner_user_id", input.userId)
-      .maybeSingle(),
-    db.from("dimpro_content_refs")
-      .select("content_object_id")
-      .eq("owner_type", "USER")
-      .eq("owner_user_id", input.userId)
-      .in("status", ["ACTIVE", "REMOVED"]),
-  ]);
-  if (limitResult.error && limitResult.error.code !== "42P01") dbError("A Saját Drive tárhelykerete nem olvasható.", limitResult.error);
-  if (refsResult.error) dbError("A Saját Drive tárhelyhasználata nem számítható ki.", refsResult.error);
+  const limitResult = await db.from("dimpro_personal_drive_storage_limits")
+    .select("quota_bytes,hard_limit,source")
+    .eq("owner_user_id", input.userId)
+    .maybeSingle();
+  if (limitResult.error && limitResult.error.code !== "42P01") {
+    dbError("A Saját Drive tárhelykerete nem olvasható.", limitResult.error);
+  }
 
-  const objectIds = [...new Set(((refsResult.data || []) as Array<{ content_object_id: string }>).map((row) => row.content_object_id).filter(Boolean))];
-  let usedBytes = 0;
-  if (objectIds.length) {
-    const objectsResult = await db.from("dimpro_content_objects")
-      .select("id,size_bytes")
-      .in("id", objectIds)
-      .eq("status", "ACTIVE");
-    if (objectsResult.error) dbError("A Saját Drive tárhelyobjektumai nem olvashatók.", objectsResult.error);
-    usedBytes = ((objectsResult.data || []) as Array<{ id: string; size_bytes: number }>).reduce((sum, row) => sum + Math.max(0, Number(row.size_bytes || 0)), 0);
+  let usedBytes: number;
+  try {
+    const complete = await collectPersonalQuotaUsedBytes({
+      readRefPage: async (beforeId, limit) => {
+        let query = db.from("dimpro_content_refs")
+          .select("id,content_object_id")
+          .eq("owner_type", "USER")
+          .eq("owner_user_id", input.userId)
+          .in("status", ["ACTIVE", "REMOVED"])
+          .order("id", { ascending: false })
+          .limit(limit);
+        if (beforeId) query = query.lt("id", beforeId);
+        const result = await query;
+        if (result.error) dbError("A Saját Drive tárhelyhivatkozásai nem olvashatók.", result.error);
+        return (result.data || []) as Array<{ id: string; content_object_id: string }>;
+      },
+      readObjectBatch: async ids => {
+        const result = await db.from("dimpro_content_objects")
+          .select("id,size_bytes")
+          .in("id", ids)
+          .eq("status", "ACTIVE");
+        if (result.error) dbError("A Saját Drive tárhelyobjektumai nem olvashatók.", result.error);
+        return (result.data || []) as Array<{ id: string; size_bytes: number }>;
+      },
+    });
+    usedBytes = complete.usedBytes;
+  } catch (error) {
+    if (error instanceof DimproIdentityError) throw error;
+    throw new DimproIdentityError(
+      "A Saját Drive teljes tárhelyhasználata nem ellenőrizhető.",
+      "PERSONAL_QUOTA_PAGED_SUMMARY_INVALID", 503,
+    );
   }
   const row = limitResult.data as { quota_bytes?: number; hard_limit?: boolean; source?: string } | null;
   const quotaBytes = Math.max(1, Number(row?.quota_bytes || PERSONAL_DRIVE_DEFAULT_QUOTA_BYTES));

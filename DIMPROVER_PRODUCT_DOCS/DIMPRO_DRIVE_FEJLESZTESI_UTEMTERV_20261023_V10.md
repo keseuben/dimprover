@@ -75,3 +75,11 @@
 **Prioritási döntés:** előbb legyen egy valóban használható, 500 fájlos és 100 MiB/fájl-os személyes Drive DEV pilot, ne várjon a több GB-os scanner elkészültére. Az 5 GiB-ot a megfelelő infrastruktúra és karantén/kvóta atomikus transzfer tesztjei után szabad aktiválni.
 
 **Tervezési pontosság:** a fenti dátumok céltartományok, nem vállalt határidők. Ha egy kapu NO-GO, a következő publikus rollout tolódik; a forrásfejlesztés párhuzamosan továbbhaladhat. Az ütemterv a jelenlegi DIMPRO Drive fejlesztési tervre vonatkozik, nem a teljes DIMPRO platform valamennyi moduljára.
+
+## V0.9.61 tényállapot-frissítés (2026.10.23.)
+
+Az előirányzott v0.9.61 időablak **részben előrehaladt**: valós 1/17/100 MiB
+ClamAV scanner próba és ártalmatlan EICAR blokkolás PASS, 2505 referencia
+tárhelyösszesítési hibájának javítása és 16 szerződéses/regressziós teszt PASS.
+A DEV személyes upload runtime, S3/DB/böngészős E2E és a 500 fotós felhasználói
+pilot **nem készült el**; ezek a V0.9.61–62 kiadási kapui.
