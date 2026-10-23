@@ -18,11 +18,11 @@ const routes=[
   ["[sessionId]/abort/route.ts","POST"],
   ["[sessionId]/complete/route.ts","POST"],
 ];
-assert.ok(["0.9.58","0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63", "0.9.64", "0.9.65"].includes(TRANSFER_CORE_VERSION));
+assert.ok(["0.9.58","0.9.59", "0.9.60", "0.9.61", "0.9.62", "0.9.63", "0.9.64", "0.9.65", "0.9.66"].includes(TRANSFER_CORE_VERSION));
 assert.equal(PERSONAL_MULTIPART_SERVER_RELEASED,false);
 assert.match(service,/if \(!PERSONAL_MULTIPART_SERVER_RELEASED\) throw error\("PERSONAL_MULTIPART_SOURCE_ONLY", 503\)/);
 assert.match(read(base+"/capabilities/route.ts"),/!PERSONAL_MULTIPART_SERVER_RELEASED/);
-assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(58|59|60|61|62|63|64|65)"/);
+assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(58|59|60|61|62|63|64|65|66)"/);
 for(const [file,...methods] of routes) {
   const content=read(base+"/"+file);
   assert.match(content,/personalMultipartActor\(request/,"auth gate missing "+file);

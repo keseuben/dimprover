@@ -4381,3 +4381,19 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - TypeScript/ESLint, 21 source/regressziós teszt és izolált PGlite 5 migráció PASS.
 - Valós S3/DB/browser E2E és BUILD01 továbbra is blokkolva; **BUILD PENDING**, PROD DENY.
 - Részletes riport: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0965_PERSONAL_UPLOAD_CONFIRMATION_20261023.md`.
+
+## 2026-10-23 – DIMPRO Drive V0.9.66 – Account-scoped, 500 receipt recovery (SOURCE ONLY)
+
+- Új hitelesített DEV-only `GET /api/drive/personal/uploads/recovery-scope`, SHA-256 central-user scope (nem auth token).
+- `personalReceiptStorage.ts`: verziózott, per-user localStorage requestId/sizeBytes/startedAt jegyzék, max 500 sor, hét nap, fail-closed és lejárt sorok helyi takarítása; sem fájlnév, sem hozzáférési kulcs/URL, sem fájltartalom.
+- A böngészős küldés előtt biztosított per-task receipt hint. Siker vagy biztos elutasítás után helyi elhagyás; bizonytalan státusz után megőrzés.
+- Újraindítás után csak generikus `CONFIRMATION_UNKNOWN` sorok és manuális visszaellenőrzés; nincs automatikus újraküldés.
+- Fiókváltási scope-őr és megszakítási védelem; tárolási tiltás esetén nincs új POST.
+- Release továbbra is **SOURCE ONLY / BUILD PENDING / valós E2E NO-GO / PROD DENY**.
+- Részletek: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0966_PERSONAL_RECEIPT_RECOVERY_SOURCE_20261023.md`.
+
+### V0.9.66 QA-felülvizsgálat – 2026-10-23
+
+- Source QA: TypeScript PASS; célzott ESLint PASS; 22/22 regressziós/szerződéses PASS; izolált PGlite 5 migráció, RLS/owner/quota/rollback PASS; git diff --check PASS.
+- Az 500 rekordos teszt böngésző Storage-szimuláció, nem 500 fájlos teljes hálózati E2E.
+- Hivatalos BUILD01 továbbra PENDING, valós S3/DB/browser E2E NO-GO, publikus DEV nincs átállítva, PROD DENY.

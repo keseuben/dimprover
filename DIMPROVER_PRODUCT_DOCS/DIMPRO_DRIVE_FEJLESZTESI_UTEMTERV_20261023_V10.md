@@ -109,3 +109,15 @@ A 100 MiB teljes, szintetikus staging → ClamAV → helyi S3 SDK → visszaolva
 ## V0.9.65 tényállapot-frissítés (2026.10.23.)
 
 A személyes bizonytalan feltöltés read-only, USER-tulajdonoshoz kötött szerveroldali visszaellenőrzése elkészült: teljes S3 SHA-256/size bizonyítás; Transfer Center Ellenőrzés gomb; XHR megszakítási versenyhelyzet pontosítása. 21 regressziós szerződéses teszt és izolált PostgreSQL migrációteszt PASS. Nincs nyilvános aktiválás és nincs BUILD01 PASS a fennálló futtatási biztonsági tiltás miatt. Következő V0.9.66: minimális titokmentes, felhasználóhoz kötött request-id helyreállítás, a BUILD01 szabályos engedélyezése és a külön DEV/PROD S3/DB bizonyíték.
+
+## V0.9.66 tényállapot-frissítés (2026.10.23.)
+
+A V0.9.65 kézi GET visszaellenőrzéséhez elkészült a V0.9.66
+fiókhoz kötött, 500 rekordos, hét napos, csak minimális metaadatot tároló,
+böngésző-újraindításon át megmaradó receipt jegyzék. A tárolás a XHR
+előtt kötelező, a bizonytalan válasz megőrzi, a biztos siker elhagyja
+a helyi bejegyzést. Fiókváltásnál a korábbi transfer sorok és további
+küldések tiltva vannak. Ez **nem teljes fájl-resume**, nem valódi
+S3/DB/Browser E2E, nem BUILD01 PASS. A V0.9.67 külön release gate:
+engedélyezett BUILD01, DEV/PROD S3/DB szeparáció, 50/100/500 valós
+böngészős batch és rollback.

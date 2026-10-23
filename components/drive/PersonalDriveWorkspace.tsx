@@ -11,6 +11,8 @@ import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveTransferCenter from "./DriveTransferCenter";
 import { transferSpeedSample, isTransferTerminal, type TransferTask } from "@/app/lib/transfer-core/transferModel";
 import { PersonalUploadHttpError, uploadPersonalFormWithProgress } from "@/app/lib/transfer-core/personalFormUpload";
+import { addPersonalReceipt, dropPersonalReceipt, prunePersonalReceipts }
+  from "@/app/lib/transfer-core/personalReceiptStorage";
 import { PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION,
   isPersonalUploadSelectionAllowed } from "@/app/lib/content-core/personalUploadPolicy";
 import DriveToolbar from "./DriveToolbar";
@@ -98,6 +100,10 @@ type Props = {
   onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
   onOpenHelp?: () => void;
 };
+
+function personalReceiptBrowserStorage(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
 
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0 B";
@@ -230,6 +236,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   const personalTransferWorkspaceAliveRef = useRef(true);
   const [personalTransferTasks, setPersonalTransferTasks] = useState<TransferTask[]>([]);
   const personalTransferVerifyBusyRef = useRef(new Set<string>());
+  const personalReceiptScopeRef = useRef<string | null>(null);
+  const [personalReceiptScopeReady, setPersonalReceiptScopeReady] = useState(false);
   const [personalTransferOpen, setPersonalTransferOpen] = useState(false);
   const [personalTransferMinimized, setPersonalTransferMinimized] = useState(false);
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
@@ -376,6 +384,52 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    personalReceiptScopeRef.current = null;
+    setPersonalReceiptScopeReady(false);
+    // Never show another signed-in user's local receipt rows.
+    personalTransferAbortRef.current.forEach(item => item.abort());
+    setPersonalTransferTasks([]);
+    void fetch("/api/drive/personal/uploads/recovery-scope", {
+      credentials: "same-origin", cache: "no-store", signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) throw new Error("PERSONAL_RECEIPT_SCOPE_UNAVAILABLE");
+      return response.json() as Promise<{ok?:boolean;recoveryScope?:string}>;
+    }).then(result => {
+      if (controller.signal.aborted || result.ok !== true ||
+        !result.recoveryScope || !/^[a-f0-9]{64}$/.test(result.recoveryScope)) return;
+      const scope = result.recoveryScope;
+      const storage = personalReceiptBrowserStorage();
+      if (!storage) return;
+      const persisted = prunePersonalReceipts(storage, scope, Date.now());
+      personalReceiptScopeRef.current = scope;
+      setPersonalReceiptScopeReady(true);
+      if (!persisted.length) return;
+      setPersonalTransferTasks(current => {
+        const ids = new Set(current.map(item => item.id));
+        const recovered: TransferTask[] = persisted.filter(item => !ids.has(item.requestId))
+          .map(item => ({
+            id:item.requestId,
+            fileName:"Korábbi feltöltés · "+item.requestId.slice(0,8),
+            folderName:"Saját Drive · visszaellenőrzés",
+            sizeBytes:item.sizeBytes,uploadedBytes:0,
+            phase:"CONFIRMATION_UNKNOWN",speedBps:null,
+            error:"Korábbi munkamenet. A fájl nincs a böngészőben; csak kézi ellenőrzés lehetséges.",
+            updatedAt:item.startedAt,retryable:false,
+          }));
+        return [...recovered, ...current];
+      });
+      setPersonalTransferOpen(true);
+    }).catch(() => {
+      if (!controller.signal.aborted) setPersonalReceiptScopeReady(false);
+    });
+    return () => {
+      controller.abort();
+      personalReceiptScopeRef.current = null;
+    };
+  }, [userEmail]);
+
+  useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
       if (!personalTransferActiveRef.current) return;
       event.preventDefault();
@@ -409,6 +463,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         && typeof result.contentRefId === "string") {
         updatePersonalTransfer(id, { phase: "AVAILABLE", uploadedBytes: task.sizeBytes,
           speedBps: null, error: null, retryable: false });
+        const scope = personalReceiptScopeRef.current;
+        const storage = personalReceiptBrowserStorage();
+        if (scope && storage) dropPersonalReceipt(storage, scope, id, Date.now());
         // Content list refresh failure cannot revoke a verified S3 receipt.
         void load().catch(() => setError("A mentés igazolt, de a fájllista frissítése sikertelen."));
       } else if (response.status === 202 && result.state === "PENDING_OR_NOT_FOUND") {
@@ -430,7 +487,9 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
   }
 
   async function uploadPersonalFiles(files: File[]) {
-    if (!personalUploadEnabled || personalTransferActiveRef.current || files.length < 1) return;
+    if (!personalUploadEnabled || !personalReceiptScopeReady
+      || !personalReceiptScopeRef.current || personalTransferActiveRef.current
+      || files.length < 1) return;
     if (!isPersonalUploadSelectionAllowed(files.length)) {
       setError(`Egy feltöltési sorba legfeljebb ${PERSONAL_UPLOAD_MAX_FILES_PER_SELECTION} fájl jelölhető ki. A fájlok egyenként, biztonsági ellenőrzéssel kerülnek feltöltésre.`);
       if (personalUploadFileInputRef.current) personalUploadFileInputRef.current.value="";
@@ -444,6 +503,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     setNotice("");
     const folderLabel = selectedFolder?.name || "Saját Drive gyökér";
     const targetFolderId = selectedFolderId === "all" ? "" : selectedFolderId;
+    const uploadScope = personalReceiptScopeRef.current;
     const tasks = files.map(file => ({ id: crypto.randomUUID(), file }));
     const pendingTasks: TransferTask[] = tasks.map(({id,file}) => ({
       id, fileName:file.name, folderName:folderLabel, sizeBytes:file.size,
@@ -455,7 +515,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
     try {
       // One POST at a time: small bounded memory, no concurrent per-user quota races.
       for (const {id,file} of tasks) {
-        if (!personalTransferWorkspaceAliveRef.current) break;
+        if (!personalTransferWorkspaceAliveRef.current ||
+          personalReceiptScopeRef.current !== uploadScope) break;
         if (personalTransferCancelledRef.current.has(id)) {
           updatePersonalTransfer(id, {phase:"CANCELLED",speedBps:null,retryable:false});
           continue;
@@ -463,6 +524,17 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         if (file.size < 1 || file.size > personalUploadMaxBytes) {
           updatePersonalTransfer(id,{phase:"ERROR", retryable:false,
             error:"A fájl nem felel meg a "+formatBytes(personalUploadMaxBytes)+" biztonságos méretkorlátnak."});
+          failures.push(file.name); continue;
+        }
+        // Durably store the receipt hint BEFORE calling xhr.send().
+        // If browser storage is unavailable, don't promise crash recovery.
+        const scope = personalReceiptScopeRef.current;
+        const startedAt = Date.now();
+        const storage = personalReceiptBrowserStorage();
+        if (!scope || !storage || !addPersonalReceipt(storage, scope,
+          { requestId:id, sizeBytes:file.size, startedAt }, startedAt)) {
+          updatePersonalTransfer(id, {phase:"ERROR",retryable:false,
+            error:"A böngésző nem tudja biztonságosan megőrizni az ellenőrzési azonosítót."});
           failures.push(file.name); continue;
         }
         const controller = new AbortController();
@@ -490,6 +562,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
             }),
           });
           succeeded++;
+          if (scope && storage) dropPersonalReceipt(storage, scope, id, Date.now());
           updatePersonalTransfer(id,{
             phase:"AVAILABLE", uploadedBytes:file.size, speedBps:null, error:result.placedInFolder===false
               ? "A fájl a Saját Drive gyökerébe került; a célmappába helyezés nem sikerült." : null,
@@ -500,6 +573,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
           const error=reason instanceof PersonalUploadHttpError ? reason : null;
           const cancelled=controller.signal.aborted;
           const uncertain=error?.uncertain === true;
+          if (!uncertain && scope && storage) dropPersonalReceipt(storage, scope, id, Date.now());
           updatePersonalTransfer(id,{
             phase:uncertain?"CONFIRMATION_UNKNOWN":cancelled?"CANCELLED":
               error?.status===422?"INFECTED":"ERROR",
@@ -509,7 +583,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
           failures.push(file.name);
         } finally { personalTransferAbortRef.current.delete(id); }
       }
-      if (personalTransferWorkspaceAliveRef.current) {
+      if (personalTransferWorkspaceAliveRef.current
+        && personalReceiptScopeRef.current === uploadScope) {
         await load();
         setNotice(succeeded ? succeeded+" fájl ellenőrzötten a Saját Drive-ba került." : "");
         if (failures.length) setError(failures.length+" fájl nem fejeződött be igazoltan. Az Átvitelek panelen ellenőrizhetők.");
@@ -1079,7 +1154,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, userD
         tableZoom={tableZoom}
         onTableZoomChange={setTableZoom}
         canWrite={folderCoreReady}
-        canUpload={personalUploadEnabled && !personalTransferBusy}
+        canUpload={personalUploadEnabled && personalReceiptScopeReady && !personalTransferBusy}
         boxEnabled={boxCoreReady}
         compareEnabled={documents.length >= 2}
         onCreateFolder={() => { setNewFolderName(""); setNewFolderEditorOpen(true); }}
