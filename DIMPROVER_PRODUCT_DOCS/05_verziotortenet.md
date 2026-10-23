@@ -4295,3 +4295,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Artifact SHA-256 `e2eee494ffe4e6cf0c1667edee21cd494ab8830cb669f87efa47c44289c88b36`: BUILD01/MCP/DEV egyezés PASS.
 - Standalone csomag izolálva: `/srv/dimpro-dev/candidates/drive-pilot/releases/610845fa50f9` (373 MiB). Nem indítottuk PM2-ben, nem állítottuk át a Nginxet.
 - Az SQL-migrációkat nem alkalmaztuk, a 5 GiB-os feltöltési funkció OFF. Publikus DEV továbbra is V0.9.52, PROD DENY.
+
+## 2026-10-23 – DIMPRO Drive V0.9.60 – PostgreSQL izolált migrációs és quota-E2E, SOURCE ONLY
+
+- Lokálisan, memóriában futó `@electric-sql/pglite@0.5.8` DB-vel mind az öt releváns Content Core / személyes mappa / quota / multipart v010–v011 migráció ténylegesen PASS.
+- Kvóta: aktív ref dedup, `REMOVED` retention, 1 GiB quota vs. 2 × 400 MiB reservation, harmadik kérés blokkolás, legacy USER-ref kvóta tiltása, request-id idempotencia és ütközés PASS.
+- Többfelhasználós ownership, idegen mappa FK, RLS/GRANT, ABORTING/COMPLETING/QUARANTINED reservation, marker és hibás migráció utáni ROLLBACK PASS.
+- Javítva a v011 összesített kvóta lekérdezés: a különálló SELECT-ek helyett közös SQL CTE/statement snapshot.
+- Nem történt éles/DEV DB apply, többkapcsolatos versenyteszt, S3/AV vagy böngészős E2E. Kódszintű 5 GiB release tiltás aktív.
+- A teljes tervezett Drive-feladatlista dátumozott roadmap: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_FEJLESZTESI_UTEMTERV_20261023_V10.md`.

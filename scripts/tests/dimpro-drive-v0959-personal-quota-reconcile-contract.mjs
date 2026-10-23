@@ -16,8 +16,8 @@ const sessionRepo=read("app/lib/content-core/personalMultipartRepository.ts");
 const service=read("app/lib/content-core/personalMultipartService.ts");
 const workspace=read("components/drive/PersonalDriveWorkspace.tsx");
 const build=read("components/drive/driveBuildInfo.ts");
-assert.equal(TRANSFER_CORE_VERSION,"0.9.59");
-assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.59"/);
+assert.ok(["0.9.59","0.9.60"].includes(TRANSFER_CORE_VERSION));
+assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(59|60)"/);
 assert.equal(PERSONAL_MULTIPART_SERVER_RELEASED,false);
 const GB=1024**3;
 const quota={quotaBytes:50*GB,usedBytes:20*GB,reservedBytes:4*GB,occupiedBytes:24*GB,

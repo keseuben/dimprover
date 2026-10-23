@@ -18,8 +18,8 @@ const scanner = read("app/lib/drive-core/securityScanService.ts");
 const workspace = read("components/drive/PersonalDriveWorkspace.tsx");
 const build = read("components/drive/driveBuildInfo.ts");
 
-assert.ok(["0.9.56", "0.9.57", "0.9.58", "0.9.59"].includes(TRANSFER_CORE_VERSION));
-assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(56|57|58|59)"/);
+assert.ok(["0.9.56", "0.9.57", "0.9.58", "0.9.59", "0.9.60"].includes(TRANSFER_CORE_VERSION));
+assert.match(build,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.(56|57|58|59|60)"/);
 assert.equal(PERSONAL_UPLOAD_MAX_BYTES,100*1024*1024);
 assert.equal(PERSONAL_UPLOAD_BUFFERED_FORM_MAX_BYTES,16*1024*1024);
 assert.equal(personalUploadEffectiveMaxBytes(100*1024*1024,500*1024*1024),100*1024*1024);

@@ -171,27 +171,33 @@ begin
      or p_default_quota_bytes <= 0 then
     raise exception 'PERSONAL_DRIVE_QUOTA_SUMMARY_INVALID' using errcode='22023';
   end if;
+  -- All read aggregates share ONE SQL statement snapshot. Multiple PL/pgSQL
+  -- SELECTs under READ COMMITTED could otherwise show mismatched counts.
+  with owned_bytes as (
+    select coalesce(sum(obj.size_bytes),0)::bigint as used
+    from public.dimpro_content_objects obj
+    where obj.status='ACTIVE' and exists (
+      select 1 from public.dimpro_content_refs ref
+      where ref.owner_type='USER'
+        and ref.owner_user_id=p_owner_user_id
+        and ref.status in ('ACTIVE','REMOVED')
+        and ref.content_object_id=obj.id
+    )
+  ), pending_bytes as (
+    select coalesce(sum(session.size_bytes),0)::bigint as reserved
+    from public.dimpro_personal_drive_multipart_sessions session
+    where session.owner_user_id=p_owner_user_id
+      and session.status in ('INITIATED','UPLOADING','ABORTING','COMPLETING','QUARANTINED','SCANNING')
+  )
   select coalesce(l.quota_bytes,p_default_quota_bytes),
-         coalesce(l.hard_limit,true),coalesce(l.source,'DEFAULT')
-  into v_quota_bytes,v_hard_limit,v_source
+         coalesce(l.hard_limit,true),coalesce(l.source,'DEFAULT'),
+         owned_bytes.used,pending_bytes.reserved
+  into v_quota_bytes,v_hard_limit,v_source,v_used,v_reserved
   from (select 1) seed
+  cross join owned_bytes
+  cross join pending_bytes
   left join public.dimpro_personal_drive_storage_limits l
     on l.owner_user_id=p_owner_user_id;
-
-  select coalesce(sum(obj.size_bytes),0)::bigint into v_used
-  from public.dimpro_content_objects obj
-  where obj.status='ACTIVE' and exists (
-    select 1 from public.dimpro_content_refs ref
-    where ref.owner_type='USER'
-      and ref.owner_user_id=p_owner_user_id
-      and ref.status in ('ACTIVE','REMOVED')
-      and ref.content_object_id=obj.id
-  );
-
-  select coalesce(sum(session.size_bytes),0)::bigint into v_reserved
-  from public.dimpro_personal_drive_multipart_sessions session
-  where session.owner_user_id=p_owner_user_id
-    and session.status in ('INITIATED','UPLOADING','ABORTING','COMPLETING','QUARANTINED','SCANNING');
 
   return jsonb_build_object(
     'quotaBytes',v_quota_bytes,
