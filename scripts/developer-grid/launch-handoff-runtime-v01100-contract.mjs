@@ -104,4 +104,109 @@ await check("handoff save blocks streaming before recovery or persistence", asyn
   const result=await sandbox.run("BENJAMINAI");
   assert.equal(result.ok,false); assert.equal(result.code,"HANDOFF_RESPONSE_NOT_READY"); assert.equal(saves,0);
 });
+
+function runSearchDom(script, rows, generating = false) {
+  // Observed 2026-10-23: no conversation-turn or data-message-author-role nodes.
+  // USER and ASSISTANT live in separate search units inside one combined turn.
+  const nodes = rows.map((row, index) => {
+    const attrs = row.legacy ? {"data-message-author-role":row.role,"data-testid":"conversation-turn-"+index} : {
+      "data-chatgpt-search-unit-key":row.key || "fallback-turn-0:"+index+":"+row.role,
+      "data-chatgpt-search-message-ids":row.ids || "observed-message-"+index,
+      ...(row.directRole ? {"data-message-author-role":row.directRole} : {}),
+    };
+    const node = {
+      innerText:row.text,textContent:row.text,index,
+      getAttribute:key=>attrs[key] || "",
+      matches:selector=>row.legacy ? selector===adapter.CHATGPT_SELECTORS.conversationTurn : selector===adapter.CHATGPT_SELECTORS.searchMessage,
+      closest:selector=>node.matches(selector)?node:null,
+      querySelectorAll:()=>[],
+      querySelector:selector=>selector==="h4[data-conversation-role]" && row.declaredRole ? {getAttribute:()=>row.declaredRole} : null,
+      compareDocumentPosition:other=>index<other.index?4:index>other.index?2:0,
+    };
+    return node;
+  });
+  const root = {querySelectorAll:selector=>nodes.filter((node,index)=>
+    selector===adapter.CHATGPT_SELECTORS.conversationTurn ? rows[index].legacy :
+    selector===adapter.CHATGPT_SELECTORS.messageRole ? Boolean(rows[index].legacy||rows[index].directRole) :
+    selector===adapter.CHATGPT_SELECTORS.searchMessage ? !rows[index].legacy : false)};
+  return vm.runInNewContext(script,{
+    URL,location:{href:"https://chatgpt.com/c/modern-test"},
+    getComputedStyle:()=>({visibility:"visible"}),
+    document:{
+      title:"Állapotellenőrzés indítása",
+      querySelectorAll:root.querySelectorAll,
+      querySelector:selector=>selector==="main"?root:generating&&adapter.CHATGPT_SELECTORS.stopButton.includes(selector)?{getClientRects:()=>[1]}:null,
+    },
+  });
+}
+await check("observed ChatGPT search units retain separate USER and ASSISTANT roles",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[
+    {role:"user",text:"Kezdjük el a BENJADMIN Developer Grid ellenőrzését."},
+    {role:"assistant",declaredRole:"assistant",text:"LAUNCH_PACKET: NOT_RECEIVED"},
+  ]);
+  assert.equal(result.ok,true);
+  assert.deepEqual(Array.from(result.messages,row=>row.role),["USER","ASSISTANT"]);
+  assert.equal(auto.detectChatDevelopmentIntent({messages:result.messages}).triggered,true);
+  assert.equal(auto.detectChatDevelopmentIntent({messages:result.messages}).moduleName,"Developer Grid V1");
+});
+await check("current search message ID list becomes stable per-message identity",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[{role:"assistant",ids:"message-uuid message-uuid",text:"válasz"}]);
+  assert.equal(result.messages[0].messageId,"message-uuid");
+});
+await check("duplicate search representations cannot duplicate transcript evidence",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[
+    {role:"user",ids:"same-id",text:"Első megjelenés"},
+    {role:"user",ids:"same-id",text:"Duplikált megjelenés"},
+  ]);
+  assert.equal(result.messages.length,1);
+});
+await check("mixed legacy and search units stay in actual document order",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[
+    {role:"user",text:"modern first"},
+    {legacy:true,role:"assistant",text:"legacy middle"},
+    {role:"user",text:"modern last"},
+  ]);
+  assert.deepEqual(Array.from(result.messages,row=>row.text),["modern first","legacy middle","modern last"]);
+});
+await check("unrecognized metadata role never becomes user from quoted content",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[{role:"unknown",text:"Ezt mondtad: Fejleszd a Developer Grid modult."}]);
+  assert.equal(result.ok,false);
+});
+await check("conflicting assistant heading and unit role fail closed",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[{role:"user",declaredRole:"assistant",text:"Fejleszd a Developer Grid modult."}]);
+  assert.equal(result.ok,false);
+});
+await check("conflicting legacy and search metadata fail closed",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[{role:"assistant",directRole:"user",text:"Fejleszd a Developer Grid modult."}]);
+  assert.equal(result.ok,false);
+});
+await check("assistant development instruction in search unit is never human intent",()=>{
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,[{role:"assistant",text:"Fejleszd a Developer Grid modult."}]);
+  assert.equal(auto.detectChatDevelopmentIntent({messages:result.messages}).triggered,false);
+});
+await check("modern assistant handoff is recognized and user quotation is not evidence",()=>{
+  assert.equal(runSearchDom(adapter.HANDOFF_ASSISTANT_SCRIPT,[{role:"assistant",text:JSON.stringify(meta)}]).format,"v2-markerless");
+  assert.equal(runSearchDom(adapter.HANDOFF_ASSISTANT_SCRIPT,[{role:"user",text:JSON.stringify(meta)}]).ok,false);
+});
+await check("modern generating handoff stays blocked",()=>{
+  assert.equal(runSearchDom(adapter.HANDOFF_ASSISTANT_SCRIPT,[{role:"assistant",text:JSON.stringify(meta)}],true).generating,true);
+  assert.equal(runSearchDom(adapter.HANDOFF_ASSISTANT_SCRIPT,[{role:"assistant",text:JSON.stringify(meta)}],true).ok,false);
+});
+await check("modern long transcript keeps the newest instruction within 500-message bound",()=>{
+  const many=Array.from({length:505},(_,index)=>({role:index%2?"assistant":"user",text:"modern "+index}));
+  many.push({role:"user",text:"Fejleszd a Developer Grid modult."});
+  const result=runSearchDom(adapter.TRANSCRIPT_SCRIPT,many);
+  assert.equal(result.messages.length,500);
+  assert.equal(result.messages[0].text,"modern 6");
+  assert.equal(result.messages.at(-1).text,many.at(-1).text);
+});
+await check("modern latest assistant reader uses the same shared metadata adapter",()=>{
+  const result=runSearchDom(adapter.LATEST_ASSISTANT_SCRIPT,[{role:"user",text:"kérés"},{role:"assistant",text:"legújabb válasz"}]);
+  assert.equal(result.text,"legújabb válasz");
+});
+await check("DOM health counts current search units",()=>{
+  const result=runSearchDom(adapter.DOM_HEALTH_SCRIPT,[{role:"user",text:"kérés"},{role:"assistant",text:"válasz"}]);
+  assert.equal(result.messageCount,2);assert.equal(result.version,"1.1.1");
+});
+
 console.log("Grid launch/handoff runtime regression PASS · "+count+"/"+count);

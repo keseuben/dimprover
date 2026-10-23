@@ -1,6 +1,6 @@
 "use strict";
 
-const CHATGPT_DOM_ADAPTER_VERSION = "1.1.0";
+const CHATGPT_DOM_ADAPTER_VERSION = "1.1.1";
 
 const CHATGPT_SELECTORS = Object.freeze({
   composer: Object.freeze([
@@ -29,6 +29,7 @@ const CHATGPT_SELECTORS = Object.freeze({
   messageRole: '[data-message-author-role]',
   assistantMessage: '[data-message-author-role="assistant"]',
   conversationTurn: '[data-testid^="conversation-turn-"]',
+  searchMessage: '[data-chatgpt-search-unit-key][data-chatgpt-search-message-ids]',
   modernTurnRoleAttrs: Object.freeze(["data-turn", "data-message-author-role", "data-author", "data-role"]),
   conversationLink: 'a[href*="/c/"]',
   main: "main",
@@ -62,6 +63,9 @@ function sharedPrelude() {
       return "";
     };
     const inferTurnRole = (node, container) => {
+      const searchRole = normalizeTurnRole(String(container?.getAttribute?.("data-chatgpt-search-unit-key") || "").match(/:(user|assistant|system|tool|function)$/i)?.[1]);
+      const declaredRole = normalizeTurnRole(container?.getAttribute?.("data-conversation-role") || container?.querySelector?.("h4[data-conversation-role]")?.getAttribute?.("data-conversation-role"));
+      if (searchRole && declaredRole && searchRole !== declaredRole) return "";
       const directCandidates = [
         node?.getAttribute?.("data-message-author-role"),
         container?.getAttribute?.("data-message-author-role"),
@@ -71,8 +75,12 @@ function sharedPrelude() {
       ];
       for (const candidate of directCandidates) {
         const role = normalizeTurnRole(candidate);
-        if (role) return role;
+        if (role) {
+          if ((searchRole && searchRole !== role) || (declaredRole && declaredRole !== role)) return "";
+          return role;
+        }
       }
+      if (searchRole || declaredRole) return searchRole || declaredRole;
       const nested = container?.querySelector?.("[data-message-author-role]");
       const nestedRole = normalizeTurnRole(nested?.getAttribute?.("data-message-author-role"));
       if (nestedRole) return nestedRole;
@@ -87,27 +95,41 @@ function sharedPrelude() {
     const collectConversationTurns = () => {
       const records = [];
       const seen = new Set();
+      const seenMessageIds = new Set();
+      const root = document.querySelector(selectors.main) || document;
       const addNode = (node, indexHint = 0) => {
         if (!node) return;
         const container = node.matches?.(selectors.conversationTurn)
           ? node
-          : (node.closest?.(selectors.conversationTurn) || node.closest?.("[data-message-id]") || node.closest?.("article") || node);
+          : (node.closest?.(selectors.conversationTurn) || node.closest?.(selectors.searchMessage) || node.closest?.("[data-message-id]") || node.closest?.("article") || node);
         if (!container || seen.has(container)) return;
         const role = inferTurnRole(node, container);
         if (!role) return;
         seen.add(container);
         const text = String(container.innerText || container.textContent || "").trim();
         if (!text) return;
-        const messageId = String(
+        const stableId = String(
           container.getAttribute?.("data-message-id")
+          || String(container.getAttribute?.("data-chatgpt-search-message-ids") || "").trim().split(/\\s+/)[0]
           || container.getAttribute?.("data-testid")
           || node.getAttribute?.("data-message-id")
-          || (role.toLowerCase() + "-" + (indexHint + 1))
+          || ""
         ).slice(0,220);
+        const messageId = stableId || (role.toLowerCase() + "-" + (indexHint + 1));
+        const identity = role + ":" + stableId;
+        if (stableId && seenMessageIds.has(identity)) return;
+        if (stableId) seenMessageIds.add(identity);
         records.push({ node, container, role, text, messageId });
       };
-      Array.from(document.querySelectorAll(selectors.conversationTurn)).forEach((node, index) => addNode(node, index));
-      Array.from(document.querySelectorAll(selectors.messageRole)).forEach((node, index) => addNode(node, index));
+      Array.from(root.querySelectorAll(selectors.conversationTurn)).forEach((node, index) => addNode(node, index));
+      Array.from(root.querySelectorAll(selectors.messageRole)).forEach((node, index) => addNode(node, index));
+      // The current ChatGPT UI exposes message units instead of legacy turn/role attributes.
+      // Read the role from structural metadata, never from words quoted in message content.
+      Array.from(root.querySelectorAll(selectors.searchMessage)).forEach((node, index) => addNode(node, index));
+      records.sort((left, right) => {
+        const position = left.container.compareDocumentPosition?.(right.container) || 0;
+        return position & 4 ? -1 : position & 2 ? 1 : 0;
+      });
       return records;
     };
   `;

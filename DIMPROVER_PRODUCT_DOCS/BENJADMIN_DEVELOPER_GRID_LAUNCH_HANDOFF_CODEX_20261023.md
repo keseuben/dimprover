@@ -53,3 +53,14 @@ Ellenőrzött források: https://github.com/electron/electron/releases/tag/v43.8
 A BUILD01 cfdfc76fb forrásból készült buildje PASS: BUILD_ID yDmRPZroi8FZ6H22BVySj, tarball SHA-256 bca53272d3e6baed63133b7b15cd53bd57de31acc43956c63c1f447061bbeebe. Az izolált worktree-be csak hash- és metadata-ellenőrzés után került.
 A teljes kliens npm run check ezután egy további, a chat-refresh contractban maradt 43.6.0 Electron pinre jelzett. Ezt a 43.8.3 security patchhez igazítottuk; további régi 43.6.0 pin a desktop/scripts forrásban nincs. A teljes npm run check most PASS, így a korábbi RELEASE_DIST_NEXT_ROOT_MISSING környezeti akadály tényleges builddel feloldódott. A végső commit új csomagolási provenance-éhez külön, exact HEAD build szükséges; régebbi artifactot nem címkézünk át.
 A BUILD02 kérést DEV_STORAGE_ADMISSION_BLOCKED állította meg: a 2026-10-07-i dev-storage-freeze.json még ACTIVE. A tiltás változatlan maradt; BUILD01 a megfelelő, működő útvonal.
+
+
+## Fizikai próba: új ChatGPT üzenetszerkezet – 2026-10-23
+
+A tulajdonos elindította a 0de6740a Windows jelöltet, majd kifejezetten ÁrminAI vagy BenjáminAI használatát kérte négycellás nézetben. BenjáminAI új, elkülönített projektcsevegésében a GRID-E2E-20261023-BENAI, kizárólag állapotellenőrző próbaüzenet megérkezett. A válasz WAITING_FOR_LAUNCH_PACKET állapotot jelzett; nem érkezett új Grid Launch Packet. Ez nem sikeres BOOT ACK/E2E.
+
+A próbacsevegés Chrome-ból végzett csak olvasási DOM-vizsgálata igazolta: nincs [data-testid^="conversation-turn-"] és nincs [data-message-author-role]. Az új felület USER/ASSISTANT egységeit a data-chatgpt-search-unit-key és data-chatgpt-search-message-ids attribútumok jelölik; az assistant külön h4[data-conversation-role] címkét is ad. A korábbi közös DOM-adapter így nulla üzenetet látott, és az automatikus indítás még az intent-felismerés előtt visszatért.
+
+A DOM-adapter 1.1.1 támogatja a megfigyelt új szerkezetet, stabil üzenetazonosítással, duplikációszűréssel és valódi DOM-sorrenddel a vegyes régi/új szerkezetben. A szerepet strukturális attribútumokból olvassa; ismeretlen vagy ellentmondó szerep nem válhat felhasználói utasítássá. A régi formátum, az 500 legfrissebb üzenet korlátja és a generálás alatti átadás tiltása megmarad. Tizenhárom új futásidejű regressziós eset fedi a megfigyelt szerkezetet. A frissített fizikai Windows-próba az új csomag indítása után szükséges.
+
+A célzott új futásidejű ellenőrzés 31/31 PASS, a DOM-adapter kontraktus 23/23 PASS. A teljes kliens check 1075 PASS sorral és 0 kilépési kóddal futott a korábbi valódi 0de6740a kiadási dist használatával; ez a tesztek végrehajtását igazolja, nem az új commit csomagolási provenance-ét. A következő Windows csomaghoz új exact-HEAD BUILD01 artifact szükséges.
