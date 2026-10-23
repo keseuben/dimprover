@@ -21,20 +21,46 @@ function recentContext(messages, conversationTitle) {
   return `${clean(conversationTitle, 300)}\n${rows.join("\n")}`;
 }
 
+function recognizeAutoWorkModules(value) {
+  const source = clean(value, 5000);
+  const patterns = [
+    [/dimpro\s*one|eg[eé]szs[eé]g|\bhealth\b/iu, "DIMPRO ONE Egészség"],
+    [/dimpro\s*auth|auth\s*(?:bel[eé]ptet[eé]s|login)|login\.dimpro/iu, "DIMPRO AUTH Beléptetés"],
+    [/dimpro\s*drive|\bdrive\b/iu, "DIMPRO Drive"],
+    [/projektkapu|project\s*gate/iu, "DIMPRO Projektkapu"],
+    [/developer\s*grid|benjadmin|central\s*core/iu, "Developer Grid V1"],
+  ];
+  return patterns.filter(([pattern]) => pattern.test(source)).map(([, module]) => module);
+}
+
 function inferAutoWorkModuleName(conversationTitle, messages) {
-  const title=clean(conversationTitle, 180);
-  const haystack=recentContext(messages, title);
-  if (/dimpro\s*auth|auth\s*(?:bel[eé]ptet[eé]s|login)|login\.dimpro/i.test(haystack)) return "DIMPRO AUTH Beléptetés";
-  if (/dimpro\s*drive|\bdrive\b/i.test(haystack)) return "DIMPRO Drive";
-  if (/projektkapu|project\s*gate/i.test(haystack)) return "DIMPRO Projektkapu";
-  if (/developer\s*grid|benjadmin/i.test(haystack)) return "Developer Grid V1";
-  if (/dimpro\s*one|eg[eé]szs[eé]g|health/i.test(haystack)) return "DIMPRO ONE Egészség";
+  const title = clean(conversationTitle, 180);
+  const users = userTurns(messages);
+  const latest = users.at(-1)?.text || "";
+  // Kifejezett, egyértelmű felhasználói fejlesztési utasítás válthat modult.
+  const action = latest.match(/^\s*(?:(?:oké|rendben)[,.]?\s*)?(?:folytasd|javítsd|fejleszd|indítsd|implementáld|készítsd(?:\s+el)?|kezdd(?:\s+el)?)\s+(.+)/iu);
+  if (action) {
+    const directed = recognizeAutoWorkModules(action[1]);
+    if (directed.length === 1) return directed[0];
+  }
+  // Külön megnevezett témaváltás ("most a...", "inkább...", "váltsunk...").
+  const switchRequest = latest.match(/(?:most(?:antól)?|inkább|térjünk\s+át|váltsunk|helyette).{0,180}/iu);
+  if (switchRequest) {
+    const switched = recognizeAutoWorkModules(switchRequest[0]);
+    if (switched.length === 1) return switched[0];
+  }
+  const titleMatches = recognizeAutoWorkModules(title);
+  if (titleMatches.length === 1) return titleMatches[0];
+  // ASSISTANT üzenet nem módosítja a fejlesztési scope-ot.
+  for (let index = users.length - 1; index >= 0; index--) {
+    const matches = recognizeAutoWorkModules(users[index].text);
+    if (matches.length === 1) return matches[0];
+  }
   if (title && !/^(chatgpt|new chat|új csevegés)$/iu.test(title)) {
     return title
       .replace(/\s*[–—:-]\s*(?:fejleszt[eé]s|folytat[aá]sa|jav[ií]t[aá]sa).*$/iu, "")
       .replace(/\s+(?:fejleszt[eé]s(?:e|ének)?|folytat[aá]sa|elkezd[eé]se|jav[ií]t[aá]sa).*$/iu, "")
-      .trim()
-      .slice(0, 180) || "DIMPRO / DIMPROVER";
+      .trim().slice(0, 180) || "DIMPRO / DIMPROVER";
   }
   return "DIMPRO / DIMPROVER";
 }

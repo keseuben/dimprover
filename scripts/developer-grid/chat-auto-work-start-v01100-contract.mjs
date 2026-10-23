@@ -71,4 +71,30 @@ check("manual Central Core composer remains fallback while AUTO is default",()=>
   assert.match(ui,/Automatikus Chat-to-Grid vezérlés/);
 });
 check("production access remains denied",()=>{assert.match(work,/productionAccess:"DENY"/);assert.match(main,/productionAccess/);});
+
+check("Health title resists assistant Grid contamination",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO ONE Egészség fejlesztés",turns(["USER","Folytasd az EESZT importot."],["ASSISTANT","Developer Grid és Central Core állapot."],["USER","folytasd"])),"DIMPRO ONE Egészség");
+});
+check("Drive title resists assistant Grid contamination",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO Drive fejlesztés",turns(["USER","Drive mappanézet."],["ASSISTANT","Developer Grid."],["USER","folytasd"])),"DIMPRO Drive");
+});
+check("Generic chat uses latest user module",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("Új csevegés",turns(["USER","Developer Grid fejlesztés"],["ASSISTANT","Rendben."],["USER","DIMPRO ONE Egészség fejlesztés"])),"DIMPRO ONE Egészség");
+});
+check("Direct Central Core user request can change module",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO ONE Egészség",turns(["USER","Javítsd a Central Core automatikus indítását."])),"Developer Grid V1");
+});
+check("Mixed request does not silently change scope",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO ONE Egészség",turns(["USER","Folytasd az Egészség integrációját a Developer Griddel."])),"DIMPRO ONE Egészség");
+});
+check("Explicit new Grid topic switches away from Health",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO ONE Egészség",turns(["USER","Most a Central Core javításával foglalkozzunk."])),"Developer Grid V1");
+});
+check("Grid title recognized",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("Developer Grid javítás",turns(["USER","Javítsd a Central Core-t."])),"Developer Grid V1");
+});
+check("AUTH context remains AUTH",()=>{
+  assert.equal(auto.inferAutoWorkModuleName("DIMPRO AUTH Beléptetés",turns(["USER","PostgreSQL OTP."],["ASSISTANT","Developer Grid."],["USER","folytasd"])),"DIMPRO AUTH Beléptetés");
+});
+
 console.log(`Developer Grid Chat-to-Grid auto work-start v0.1.100 contract PASS · ${n}/${n}`);
