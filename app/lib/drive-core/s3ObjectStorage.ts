@@ -69,6 +69,19 @@ export function buildPersonalDriveStorageKey(input: { userId: string; uploadId: 
   return `users/${user}/objects/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${objectName}`;
 }
 
+/**
+ * Personal multipart keys are namespace-isolated from project Drive objects.
+ * All parts stay quarantined until a later audited whole-file scan completes.
+ */
+export function buildPersonalMultipartStorageKey(input: {
+  userId: string; sessionId: string; fileName: string;
+}) {
+  const userId = safeSegment(input.userId, "user");
+  const sessionId = safeSegment(input.sessionId, "session");
+  const ext = extensionFromFileName(input.fileName);
+  return `users/${userId}/multipart/${sessionId}${ext ? "." + ext : ""}`;
+}
+
 export async function createDriveSignedPutUrl(input: {
   storageKey: string;
   mimeType: string;

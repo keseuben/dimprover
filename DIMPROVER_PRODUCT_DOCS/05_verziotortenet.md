@@ -4248,3 +4248,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - `c013c11b3463` BUILD01 run `benjadmin-drive-v0956-c013c11b3-20261023-build01-b1`, build `SBp59iiRcZVWjUUz0FhVl`.
 - Artifact SHA-256 `4260c2e87caa3e07bee2e4c6c9b30a082ed964b8fedcb3011125f6f450fe2b56`: BUILD01/MCP/DEV egyező. Izolált kibontás `/srv/dimpro-dev/candidates/drive-pilot/releases/c013c11b3463`.
 - A 100 MiB-os streamed personal route a buildben megtalálható; nincs PM2 indítás, Nginx átállás, feature-flag aktiválás vagy PROD beavatkozás. Hitelesített valódi upload E2E és vírusbiztonsági próba még kötelező.
+
+## 2026-10-23 – DIMPRO Drive V0.9.57 – USER multipart 5 GiB alapok, SOURCE ONLY
+
+- 5 GiB személyes multipart műszaki céllimit, 64 MiB chunk, 80 part, S3 partlista/sorrend/SHA/ETag validálás; külön opt-in és karantén fail-closed.
+- Forrásban készült, NEM alkalmazott owner-scoped, service_role-only RLS SQL séma és személyes quota-lock reservation RPC; atomikus munkamenet CAS adapter és auth-védett read-only capability route.
+- A jelenlegi 100 MiB scanner config miatt 5 GiB nem aktiválható, CLEAN állapot csak teljes, auditált 5 GiB vizsgálat után lehet.
+- TypeScript/ESLint és V0957 policy, V0956–0950 regressziók PASS; adatbázis migrációs dry-run / S3 multipart E2E nem futott. DEV publikus változatlanul V0.9.52, PROD DENY.
+- Dokumentáció: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_V0957_PERSONAL_MULTIPART_FOUNDATION_20261023.md`.
