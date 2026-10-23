@@ -4304,3 +4304,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Javítva a v011 összesített kvóta lekérdezés: a különálló SELECT-ek helyett közös SQL CTE/statement snapshot.
 - Nem történt éles/DEV DB apply, többkapcsolatos versenyteszt, S3/AV vagy böngészős E2E. Kódszintű 5 GiB release tiltás aktív.
 - A teljes tervezett Drive-feladatlista dátumozott roadmap: `DIMPROVER_PRODUCT_DOCS/DIMPRO_DRIVE_FEJLESZTESI_UTEMTERV_20261023_V10.md`.
+
+### V0.9.60 BUILD01 PASS – 2026-10-23
+
+- `9032dec28558` source, BUILD01 run `benjadmin-drive-v0960-9032dec28-20261023-build01-b1`.
+- Build ID `YiUoHgKpF4a_9t7C-y_Da`; artifact SHA-256 `c9f78da82c874a22d5f83d35a30a8d0fd9a35c1dc053d546141e0f42b8e16db8`: BUILD01/gateway/DEV egyezés PASS.
+- Standalone release `/srv/dimpro-dev/candidates/drive-pilot/releases/9032dec28558` (373 MiB), NEM fut. Nyilvános DEV V0.9.52, PROD DENY.
+- Az öt kapcsolódó SQL-migráció izolált PGlite PASS, nincs valódi DB-apply vagy többkapcsolatos versenyteszt. Drive fejlesztési roadmap V1.0 a dokumentációban.

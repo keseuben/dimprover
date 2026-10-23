@@ -63,3 +63,15 @@ multipart reservedBytes most egy közös CTE/SELECT snapshotból számítódik.
 - V0.9.63–67: a 5 GiB scanner, kvóta settlement, reconciler, persistent multipart
   kliens, hibatűrés és külön 5 GiB-os DEV acceptance.
 - Részletes, dátumozott ütemterv: `DIMPRO_DRIVE_FEJLESZTESI_UTEMTERV_20261023_V10.md`.
+
+## BUILD01 PASS és ellenőrzött elkülönített DEV kiadás
+
+- Forrás: `9032dec285587c14d7fcdc36841e30a56bfc12bb`.
+- Run: `benjadmin-drive-v0960-9032dec28-20261023-build01-b1`.
+- BUILD01: **PASS**, build ID `YiUoHgKpF4a_9t7C-y_Da`.
+- Artifact SHA-256: `c9f78da82c874a22d5f83d35a30a8d0fd9a35c1dc053d546141e0f42b8e16db8`.
+- SHA egyezés: BUILD01 / MCP-gateway / DEV **PASS**.
+- Elkülönített DEV standalone: `/srv/dimpro-dev/candidates/drive-pilot/releases/9032dec28558` (373 MiB).
+- Publikus Drive továbbra is V0.9.52 (3413), nem indítottunk PM2 candidatét, nem állítottuk át a Nginxet.
+- Nem alkalmaztuk a migrációkat DEV/PROD DB-n, nem engedélyeztük az 5 GiB multipart / 100 MiB personal feltöltést.
+- A részletes `DIMPRO_DRIVE_FEJLESZTESI_UTEMTERV_20261023_V10.md` ütemterv ugyanennek a V0.9.60 forráscommitnak a része.
