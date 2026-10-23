@@ -56,3 +56,15 @@ A második hiba: `UPLOADING → ABORTED` státusz túl korán felszabadíthatta 
 4. Ezután a tartós browser checkpoint, több-GiB resume, valós CORS és authenticated E2E; csak release gate után aktív DEV.
 
 A PROD környezetben és a futó DEV runtime-ban nem történt változtatás.
+
+## BUILD01 PASS és izolált DEV kiadás, 2026-10-23
+
+- Forráscommit: `610845fa50f90b9d6e29dda250002387e02609a5`.
+- Run ID: `benjadmin-drive-v0959-610845fa5-20261023-build01-b1`.
+- BUILD01: **PASS**, build ID `76aPLdOalunzhuir5TsVx`.
+- Artifact SHA-256: `e2eee494ffe4e6cf0c1667edee21cd494ab8830cb669f87efa47c44289c88b36`.
+- BUILD01 / MCP-gateway / DEV lenyomat egyezik: PASS.
+- DEV standalone release: `/srv/dimpro-dev/candidates/drive-pilot/releases/610845fa50f9`, 373 MiB.
+- A személyes multipart capability route a buildben ellenőrzötten jelen van.
+- Nginx és PM2 változatlan, publikus Drive továbbra is V0.9.52, a központi DEV AUTH változatlan.
+- A `PERSONAL_MULTIPART_SERVER_RELEASED=false` és a teljes malware-scan release-gate továbbra is aktív tiltás. A build PASS **nem** jelenti a v010/v011 PostgreSQL-migráció vagy az 5 GiB-os S3-E2E teszt teljesítését.
