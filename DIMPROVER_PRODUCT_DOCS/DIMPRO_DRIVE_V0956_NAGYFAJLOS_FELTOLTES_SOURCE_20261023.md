@@ -1,8 +1,8 @@
 # DIMPRO Drive V0.9.56 – Nagyobb Saját Drive fájlok
 
-**Dátum:** 2026-10-23  
-**Release:** SOURCE ONLY / DEV ONLY / PROD DENY.  
-**Előző publikus böngészős DEV:** V0.9.52, port 3413. V0.9.55 build standalone, de nem aktivált.  
+**Dátum:** 2026-10-23
+**Release:** SOURCE ONLY / DEV ONLY / PROD DENY.
+**Előző publikus böngészős DEV:** V0.9.52, port 3413. V0.9.55 build standalone, de nem aktivált.
 **Új igény:** 16 MiB/fájl nem használható Drive-szerű mérnöki állománytárhoz; az 500-fájlos batch limit külön dimenzió.
 
 ## 1. A V0.9.56-ban elkészült
