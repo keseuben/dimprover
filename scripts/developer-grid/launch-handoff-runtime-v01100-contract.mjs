@@ -206,7 +206,7 @@ await check("modern latest assistant reader uses the same shared metadata adapte
 });
 await check("DOM health counts current search units",()=>{
   const result=runSearchDom(adapter.DOM_HEALTH_SCRIPT,[{role:"user",text:"kérés"},{role:"assistant",text:"válasz"}]);
-  assert.equal(result.messageCount,2);assert.equal(result.version,"1.1.1");
+  assert.equal(result.messageCount,2);assert.equal(result.version,"1.1.2");
 });
 
 console.log("Grid launch/handoff runtime regression PASS · "+count+"/"+count);

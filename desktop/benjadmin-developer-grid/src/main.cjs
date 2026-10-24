@@ -2120,7 +2120,7 @@ function handleLargePasteShortcut(event, input, view, cell) {
   if (value.length < LARGE_PASTE_THRESHOLD) return false;
   event.preventDefault();
   void insertLargeClipboardText(view, value).then((result) => {
-    if (result?.reason === "composer-not-focused") {
+    if (["composer-not-focused", "composer-not-found"].includes(result?.reason)) {
       if (contentsId) largePasteNativeFallbackIds.add(contentsId);
       view.webContents.paste();
       return;

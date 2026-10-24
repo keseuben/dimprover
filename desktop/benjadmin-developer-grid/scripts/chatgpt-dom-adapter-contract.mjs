@@ -16,7 +16,7 @@ const handoff=read("src/context-workspace/chatgpt-handoff.cjs");
 let n=0;
 function check(label,fn){fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
 
-check("DOM adapter has explicit version",()=>assert.equal(adapter.CHATGPT_DOM_ADAPTER_VERSION,"1.1.1"));
+check("DOM adapter has explicit version",()=>assert.equal(adapter.CHATGPT_DOM_ADAPTER_VERSION,"1.1.2"));
 check("composer selectors are centralized",()=>assert.ok(Array.isArray(adapter.CHATGPT_SELECTORS.composer)&&adapter.CHATGPT_SELECTORS.composer.length>=4));
 check("send stop microphone selectors are centralized",()=>{
   assert.ok(adapter.CHATGPT_SELECTORS.sendButton.length>=3);

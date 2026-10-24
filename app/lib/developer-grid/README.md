@@ -583,7 +583,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A meglévő fail-closed szabály megmarad: reload csak láthatóan kijelentkezett és éppen nem töltődő ChatGPT felületen engedélyezett.
 - Célzott regresszió: `chat-auth-reload-loop-v0199-contract.mjs`.
 
-## v0.1.102 · Chat-to-Grid automatic work start / auto rebind
+## v0.1.103 · Chat-to-Grid automatic work start / auto rebind
 
 - A ChatGPT kódoló cellák transcript-monitorja a felhasználó fejlesztési utasításait (`kezdd el`, `folytasd`, `javítsd`, `fejleszd`, `vidd végig` és ezek angol megfelelői) automatikus Central Core work-start jelként tudja értelmezni.
 - A rövid folytatási utasítás csak akkor aktiválhat automatikus taskot, ha a csevegés közelmúltbeli kontextusa tényleges fejlesztési munkát igazol; általános beszélgetésből nem indulhat rejtett fejlesztési task.

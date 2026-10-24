@@ -1,6 +1,6 @@
 "use strict";
 
-const CHATGPT_DOM_ADAPTER_VERSION = "1.1.1";
+const CHATGPT_DOM_ADAPTER_VERSION = "1.1.2";
 
 const CHATGPT_SELECTORS = Object.freeze({
   composer: Object.freeze([
@@ -8,6 +8,8 @@ const CHATGPT_SELECTORS = Object.freeze({
     'textarea[data-testid="prompt-textarea"]',
     '[data-testid="prompt-textarea"][contenteditable="true"]',
     'main form [contenteditable="true"]',
+    '[role="textbox"][contenteditable="true"]',
+    '[role="textbox"][contenteditable="plaintext-only"]',
   ]),
   sendButton: Object.freeze([
     'button[data-testid="send-button"]',
@@ -32,7 +34,7 @@ const CHATGPT_SELECTORS = Object.freeze({
   searchMessage: '[data-chatgpt-search-unit-key][data-chatgpt-search-message-ids]',
   modernTurnRoleAttrs: Object.freeze(["data-turn", "data-message-author-role", "data-author", "data-role"]),
   conversationLink: 'a[href*="/c/"]',
-  main: "main",
+  main: "main, [role='main']",
 });
 
 function selectorsLiteral() {
