@@ -29,6 +29,7 @@ const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfac
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
 const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLiteral, stopSelectorLiteral, microphoneSelectorLiteral, conversationLinkSelectorLiteral, inspectChatGptDom, inspectChatRefreshSafety: inspectChatRefreshSafetyViaAdapter, scrollToLatestChatTurn } = require("./chatgpt/chatgpt-dom-adapter.cjs");
 const { detectChatDevelopmentIntent } = require("./chatgpt/auto-work-start.cjs");
+const { createAutoWorkStartObservationGuard, INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT, READ_LIVE_SUBMISSIONS_SCRIPT } = require("./chatgpt/auto-work-observation.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
@@ -104,6 +105,7 @@ const internalReviewMonitorKeys = new Set();
 const developerGridAutopilotKeys = new Set();
 const autoWorkStartProcessingKeys = new Set();
 const autoWorkStartProcessedTurns = new Set();
+const autoWorkStartObservationGuard = createAutoWorkStartObservationGuard();
 let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
@@ -1980,6 +1982,7 @@ function createChatView(cell) {
   view.webContents.on("unresponsive", () => appendChatDiagnostic("CHAT_WEB_CONTENTS_UNRESPONSIVE", { cellId:cell.id, url:view.webContents.getURL() }));
   view.webContents.on("responsive", () => appendChatDiagnostic("CHAT_WEB_CONTENTS_RESPONSIVE", { cellId:cell.id, url:view.webContents.getURL() }));
   view.webContents.on("did-finish-load", () => {
+    void view.webContents.executeJavaScript(INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT).catch(() => undefined);
     const refreshState = chatRefreshCell(cell.id);
     refreshState.lastRefreshedAt = new Date().toISOString();
     refreshState.lastReason = pendingChatRefreshReasons.get(cell.id) || (refreshState.lastReason ? "navigation" : "startup");
@@ -2168,10 +2171,11 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
       : value.includes('ÁTADÁSI FELADAT – BENJADMIN CHATGRID · HANDOFF V2') && value.includes('BENJADMIN_HANDOFF_META_V2') ? 'HANDOFF_V2_LEGACY'
       : value.includes('új BENJADMIN fejlesztési feladat érkezett') && value.includes('MUNKAFELVÉTEL:') ? 'TASK_LAUNCH_LEGACY'
       : value.trim() ? 'OTHER' : 'EMPTY';
+    const normalizePrompt = value => String(value).replace(/\\s+/g, ' ').trim();
     const existing = read();
     const existingKind = classify(existing);
     if (existing.trim()) {
-      if (marker && existing.includes(marker)) return { inserted: true, reason: 'already-present', existingKind, verifiedMarker: true };
+      if (marker && existing.includes(marker) && normalizePrompt(existing) === normalizePrompt(text)) return { inserted: true, reason: 'already-present', existingKind, verifiedMarker: true };
       return { inserted: false, reason: 'composer-not-empty', existingKind, existingPreview: existing.trim().slice(0, 180) };
     }
     composer.focus();
@@ -2199,7 +2203,7 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
     }
     const current = read();
     const verifiedMarker = !marker || current.includes(marker);
-    const verifiedText = current.includes(text.slice(0, Math.min(80, text.length)));
+    const verifiedText = normalizePrompt(current) === normalizePrompt(text);
     return { inserted: verifiedMarker && verifiedText, reason: verifiedMarker && verifiedText ? '' : 'contenteditable-update-failed', existingKind: classify(current), verifiedMarker };
   })()`, true).catch(() => ({ inserted: false, reason: "execute-failed", existingKind: "NONE" }));
 }
@@ -2413,6 +2417,7 @@ function launchTaskFromWork(work, chatPlan = null) {
   if (!session || !task || !code) return null;
   return {
     ...task,
+    description: String(session.developmentContext?.sourcePrompt || work?.sourcePrompt || task.description || ""),
     status: String(task.status || "READY").toLowerCase(),
     assignedWorkerId: code,
     requestedWorkerId: code,
@@ -3298,6 +3303,15 @@ async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launch
     return { ok:false, code:"OWNED_TASK_DRAFT_NOT_CURRENT", error:"A meglévő TASK_LAUNCH draft nem bizonyítottan a jelenlegi task/session/source proof példánya." };
   }
 
+  const sourcePrompt = String(launchTask?.description || "").replace(/\s+/g, " ").trim();
+  if (sourcePrompt) {
+    const draft = await captureComposerDraftText(view);
+    if (!draft?.ok || !String(draft.text || "").replace(/\s+/g, " ").includes(sourcePrompt)) {
+      return { ok:false, code:"OWNED_TASK_DRAFT_SOURCE_PROMPT_MISSING",
+        error:"A meglévő indítócsomagból hiányzik az eredeti felhasználói utasítás vagy annak korlátai. Ellenőrizd a régi piszkozatot; automatikus küldés tiltva." };
+    }
+  }
+
   const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
   if (sent?.sent !== true || sent?.verified !== true) {
     const chatLaunch = saveTaskLaunchPatch(task, workerCode, {
@@ -3438,7 +3452,10 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
         : insertion?.reason === "composer-not-empty"
           ? "A ChatGPT mező nem üres. A ChatGrid fail-closed módban nem írja felül."
           : "A TASK_LAUNCH prompt nem volt igazolható a ChatGPT mezőben.";
-    return { ok: false, code: "TASK_PROMPT_NOT_INSERTED", error: detail, insertion };
+    const chatLaunch = saveTaskLaunchPatch(task, code, {
+      autoSendState:"PREPARE_FAILED", autoSendError:insertion?.reason || "not-verified",
+    });
+    return { ok: false, code: "TASK_PROMPT_NOT_INSERTED", error: detail, insertion, chatLaunch };
   }
   const mode = "inserted";
   let chatLaunch = saveTaskLaunchPatch(task, code, { surfaceType, preparedAt: new Date().toISOString(), mode, baselineResponseSha256, baselineResponseMessageId });
@@ -5125,10 +5142,30 @@ function rememberAutoWorkStartTurn(key) {
   }
 }
 
-function activeWorkerTaskFromWork(activeWork, workerCode) {
+function centralLaunchPairForSelection(activeWork, selection) {
+  const taskId = String(selection?.taskId || "");
+  const sessionId = String(selection?.sessionId || "");
+  const workerCode = normalizedProofWorkerCode(selection?.workerCode);
+  if (!taskId || !sessionId || !workerCode) return null;
+  const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks
+    : (activeWork?.sessions || []).map(session => ({ task:activeWork?.task, session }));
+  const matches = pairs.filter(pair => pair?.task?.id === taskId
+    && pair?.session?.taskId === taskId && pair?.session?.id === sessionId
+    && pair.session.endedAt == null && normalizedProofWorkerCode(pair.session.workerCode) === workerCode);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function activeWorkerTaskFromWork(activeWork, workerCode, conversationId = "") {
   const backendCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
   const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks : [];
-  return pairs.find((item) => String(item?.session?.workerCode || "").toUpperCase() === backendCode) || null;
+  const workerPairs = pairs.filter((item) => String(item?.session?.workerCode || "").toUpperCase() === backendCode);
+  const exact = workerPairs.filter((item) => {
+    const context = item?.session?.developmentContext || {};
+    return conversationId && String(context.surfaceConversationId || context.chatConversationId || "") === conversationId;
+  });
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return { ambiguous:true };
+  return workerPairs.length === 1 ? workerPairs[0] : workerPairs.length > 1 ? { ambiguous:true } : null;
 }
 
 async function autoStartDeveloperGridWorkFromChat(workerCode) {
@@ -5145,6 +5182,11 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
   if (!capture?.ok || capture.generating || capture.conversationId !== currentConversationId || !Array.isArray(capture.messages)) {
     return { ok:false, reason:capture?.generating ? "CHATGPT_GENERATING" : "TRANSCRIPT_UNAVAILABLE" };
   }
+  const submissions = await view.webContents.executeJavaScript(READ_LIVE_SUBMISSIONS_SCRIPT).catch(() => []);
+  const observation = autoWorkStartObservationGuard.observe({
+    workerCode:code, conversationId:currentConversationId, messages:capture.messages, submissions,
+  });
+  if (!observation.eligible) return { ok:true, reason:observation.reason };
   const intent = detectChatDevelopmentIntent({ messages:capture.messages, conversationTitle:capture.conversationTitle || "" });
   if (!intent?.triggered) return { ok:false, reason:intent?.reason || "NO_INTENT" };
   const messageIdentity = String(intent.latestUserMessageId || "").trim()
@@ -5155,7 +5197,9 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
   autoWorkStartProcessingKeys.add(turnKey);
   try {
     const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }).catch(() => null);
-    const pair = activeWorkerTaskFromWork(activeWork, code);
+    if (!activeWork) return { ok:false, reason:"ACTIVE_WORK_UNAVAILABLE" };
+    const pair = activeWorkerTaskFromWork(activeWork, code, currentConversationId);
+    if (pair?.ambiguous) return { ok:false, reason:"ACTIVE_WORK_AMBIGUOUS" };
     if (pair?.task && pair?.session) {
       const context = pair.session.developmentContext || {};
       const taskConversationId = String(context.surfaceConversationId || context.chatConversationId || "").trim();
@@ -5178,6 +5222,9 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
       }
     }
 
+    if (chatConversationIdFromUrl(view.webContents.getURL()) !== currentConversationId) {
+      return { ok:false, reason:"CONVERSATION_CHANGED_BEFORE_START" };
+    }
     const guards = captureWorkerConversationGuards();
     const backendWorkerCode = code === "BENAI" ? "BENJAMINAI" : code;
     const idempotencyKey = `chat-auto:${backendWorkerCode}:${currentConversationId}:${messageIdentity}`.slice(0, 160);
@@ -5196,6 +5243,15 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
       },
     });
     preserveWorkerConversationsAfterWorkStart(guards);
+    if (assignedWorkerCodeFromWork(work) && normalizedProofWorkerCode(assignedWorkerCodeFromWork(work)) !== backendWorkerCode) {
+      rememberAutoWorkStartTurn(turnKey);
+      appendChatDiagnostic("AUTO_WORK_START_WORKER_MISMATCH", { cellId:cell.id, workerCode:backendWorkerCode, taskId:work?.task?.id || null });
+      return { ok:false, reason:"ROUTED_WORKER_MISMATCH" };
+    }
+    if (chatConversationIdFromUrl(view.webContents.getURL()) !== currentConversationId) {
+      rememberAutoWorkStartTurn(turnKey);
+      return { ok:false, reason:"CONVERSATION_CHANGED_AFTER_START" };
+    }
     const chatPlan = await initializeTaskChatPlan(work, "EXISTING_CHAT", guards);
     const launchTask = launchTaskFromWork(work, chatPlan);
     const launchWorkerCode = assignedWorkerCodeFromWork(work);
@@ -5208,7 +5264,7 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
       cellId:cell.id,
       workerCode:backendWorkerCode,
       taskId:work?.task?.id || null,
-      description:`${intent.reason || "DEVELOPMENT_INTENT"} · ${intent.moduleName || "DIMPRO / DIMPROVER"} · ${work?.routingState || "UNKNOWN"} · ${taskLaunch?.mode || "NO_LAUNCH"}`,
+      description:`${intent.reason || "DEVELOPMENT_INTENT"} · ${intent.moduleName || "DIMPRO / DIMPROVER"} · ${work?.routingState || "UNKNOWN"} · ${taskLaunch?.code || taskLaunch?.insertion?.reason || taskLaunch?.mode || "NO_LAUNCH"}`,
     });
     send("context:refresh", { reason:"chat-auto-work-start", taskId:work?.task?.id || null, workerCode:backendWorkerCode });
     return { ok:true, reason:"AUTO_WORK_STARTED", work, chatPlan, taskLaunch };
@@ -7190,12 +7246,13 @@ function registerIpc() {
       return { ok: true, work, chatPlan, taskLaunch };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
-  ipcMain.handle("work-start:send-prepared-launch", async () => {
+  ipcMain.handle("work-start:send-prepared-launch", async (_event, selection) => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {
       const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      const task = activeWork?.task || null;
-      const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && item?.taskId === task?.id) || null;
+      const selected = centralLaunchPairForSelection(activeWork, selection);
+      const task = selected?.task || null;
+      const session = selected?.session || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs küldhető authoritative task + worker session." };
       const code = String(session.workerCode || "").toUpperCase();
       return await sendPreparedWorkerTaskLaunch(code, task.id);
@@ -7204,12 +7261,13 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle("work-start:resume-launch", async () => {
+  ipcMain.handle("work-start:resume-launch", async (_event, selection) => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {
       let activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      let task = activeWork?.task || null;
-      let session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
+      const selected = centralLaunchPairForSelection(activeWork, selection);
+      let task = selected?.task || null;
+      let session = selected?.session || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs folytatható authoritative task + worker session." };
       if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A task BOOT ACK-ja már validált; nincs újraküldendő Launch Packet." };
 

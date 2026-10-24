@@ -38,19 +38,35 @@
     ];
     return `<nav class="cw-card-nav" aria-label="Central Core kártyanavigáció">${items.map(([id,label])=>`<button type="button" data-cw-jump="${id}" data-active="${state.navSection===id}">${label}</button>`).join("")}</nav>`;
   }
+  function selectedWorkLaunchPair() {
+    const worker = workerUiCode(state.workStartWorkerCode);
+    if (!worker) return null;
+    const pairs = Array.isArray(state.activeWork?.activeSessionTasks) ? state.activeWork.activeSessionTasks
+      : (state.activeWork?.sessions || []).map(session => ({ task:state.activeWork?.task, session }));
+    const candidates = pairs.filter(pair => pair?.task && pair?.session?.endedAt == null
+      && pair.session.taskId === pair.task.id && workerUiCode(pair.session.workerCode) === worker);
+    const cell = (state.config?.cells || []).find(item => workerUiCode(item.workerCode) === worker);
+    const conversationId = String(cell?.url || "").match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/)?.[1] || "";
+    const exact = candidates.filter(pair => {
+      const context = pair.session.developmentContext || {};
+      return conversationId && String(context.surfaceConversationId || context.chatConversationId || "") === conversationId;
+    });
+    return exact.length === 1 ? exact[0] : exact.length > 1 ? null : candidates.length === 1 ? candidates[0] : null;
+  }
   function workStartView() {
-    const task=state.activeWork?.task||null;
-    const reconciliation=state.activeWork?.reconciliation||null;
+    const selectedPair=selectedWorkLaunchPair();
+    const task=selectedPair?.task||null;
+    const reconciliation=task?.id===state.activeWork?.task?.id?state.activeWork?.reconciliation||null:null;
     const terminalTask=Boolean(task&&["COMPLETED","BLOCKED","CANCELLED"].includes(String(task.status||"").toUpperCase()));
     const stale=Boolean(task&&!terminalTask&&reconciliation&&reconciliation.state&&reconciliation.state!=="CURRENT");
     const active=Boolean(task&&!terminalTask&&!stale);
-    const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    const activeSession=selectedPair?.session||null;
     const bootAckState=String(activeSession?.developmentContext?.bootAckState||"").toUpperCase();
     const canResumeLaunch=Boolean(task&&activeSession&&["READY","RUNNING"].includes(String(task.status||"").toUpperCase())&&bootAckState!=="VALIDATED");
     const launchDispatchAuto=state.workLaunchDispatchMode==="AUTO";
     const activeWorkerCode=String(activeSession?.workerCode||state.workStartWorkerCode||"").toUpperCase();
     const activeWorkerLabel=workerDisplayName(activeWorkerCode);
-    const resumeLabel=launchDispatchAuto?"AUTOMATIKUS INDÍTÁS FOLYTATÁSA":("KÜLDÉS "+activeWorkerLabel+"-NAK");
+    const resumeLabel=launchDispatchAuto?("INDÍTÁS FOLYTATÁSA · "+activeWorkerLabel):("KÜLDÉS "+activeWorkerLabel+"-NAK");
     const workerSelected=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode);
     const surfaceType=selectedWorkerSurface();
     const isCodex=surfaceType==="CODEX";
@@ -223,6 +239,9 @@
   }
   async function resumeWorkLaunch(){
     if(state.workResumeBusy)return;
+    const pair=selectedWorkLaunchPair();
+    if(!pair){state.workStartNotice="Válassz egyértelmű kódmérnököt és a hozzá tartozó aktív csevegést.";state.workStartNoticeTone="error";render();return;}
+    const selection={taskId:pair.task.id,sessionId:pair.session.id,workerCode:pair.session.workerCode};
     const manual=state.workLaunchDispatchMode!=="AUTO";
     state.workResumeBusy=true;
     state.workStartStatus=manual?"KÜLDÉS":"INDÍTÁS";
@@ -231,8 +250,8 @@
       :"Az automatikus mód ugyanahhoz a task/sessionhöz folytatja a Launch Packet indítást; új task nem jön létre.";
     state.workStartNoticeTone="info";render();
     const result=manual
-      ?await api.sendPreparedDeveloperGridTaskLaunch?.()
-      :await api.resumeDeveloperGridTaskLaunch?.();
+      ?await api.sendPreparedDeveloperGridTaskLaunch?.(selection)
+      :await api.resumeDeveloperGridTaskLaunch?.(selection);
     state.workResumeBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||(manual?"A központi Launch Packet küldése sikertelen.":"A Launch Packet automatikus folytatása sikertelen."));state.workStartNoticeTone="error";render();return;}
     const pending=result?.taskLaunch?.mode==="response-pending"||result?.mode==="response-pending";

@@ -60,7 +60,7 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   const gate = taskLaunchGate(task);
   if (!gate.ok) throw new Error(gate.error);
   const title = cleanText(task?.title, 500) || "BENJADMIN fejlesztési feladat";
-  const description = cleanText(task?.description, 7000);
+  const description = cleanText(task?.description, 12000);
   const scope = cleanText(task?.scopeText ?? task?.scope ?? task?.allowedScope, 2500);
   const acceptance = cleanText(task?.acceptanceText ?? task?.acceptance ?? task?.acceptanceCriteria, 2500);
   const branch = cleanText(task?.branchName, 500);
