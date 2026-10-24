@@ -41,7 +41,8 @@
   function selectedWorkLaunchPair() {
     const worker = workerUiCode(state.workStartWorkerCode);
     if (!worker) return null;
-    const pairs = Array.isArray(state.activeWork?.activeSessionTasks) ? state.activeWork.activeSessionTasks
+    const pairs = Array.isArray(state.activeWork?.selectableSessionTasks) ? state.activeWork.selectableSessionTasks
+      : Array.isArray(state.activeWork?.activeSessionTasks) ? state.activeWork.activeSessionTasks
       : (state.activeWork?.sessions || []).map(session => ({ task:state.activeWork?.task, session }));
     const candidates = pairs.filter(pair => pair?.task && pair?.session?.endedAt == null
       && pair.session.taskId === pair.task.id && workerUiCode(pair.session.workerCode) === worker);
@@ -62,11 +63,11 @@
     const active=Boolean(task&&!terminalTask&&!stale);
     const activeSession=selectedPair?.session||null;
     const bootAckState=String(activeSession?.developmentContext?.bootAckState||"").toUpperCase();
-    const canResumeLaunch=Boolean(task&&activeSession&&["READY","RUNNING"].includes(String(task.status||"").toUpperCase())&&bootAckState!=="VALIDATED");
+    const canResumeLaunch=Boolean(task&&activeSession&&["READY","RUNNING","RECOVERY_REQUIRED"].includes(String(task.status||"").toUpperCase())&&bootAckState!=="VALIDATED");
     const launchDispatchAuto=state.workLaunchDispatchMode==="AUTO";
     const activeWorkerCode=String(activeSession?.workerCode||state.workStartWorkerCode||"").toUpperCase();
     const activeWorkerLabel=workerDisplayName(activeWorkerCode);
-    const resumeLabel=launchDispatchAuto?("INDÍTÁS FOLYTATÁSA · "+activeWorkerLabel):("KÜLDÉS "+activeWorkerLabel+"-NAK");
+    const resumeLabel=selectedPair?.selectionRecoveryRequired?("INDÍTÁS HELYREÁLLÍTÁSA · "+activeWorkerLabel):launchDispatchAuto?("INDÍTÁS FOLYTATÁSA · "+activeWorkerLabel):("KÜLDÉS "+activeWorkerLabel+"-NAK");
     const workerSelected=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode);
     const surfaceType=selectedWorkerSurface();
     const isCodex=surfaceType==="CODEX";
@@ -267,8 +268,8 @@
 
   function setNotice(message, tone="info") { state.notice=message||""; const el=root.querySelector("[data-context-notice]"); if (el) { el.textContent=state.notice; el.dataset.tone=tone; el.hidden=!state.notice; } }
   function memoryView() {
-    const task=state.activeWork?.task||null;
-    const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    const task=selectedWorkLaunchPair()?.task||null;
+    const session=selectedWorkLaunchPair()?.session||null;
     const ctx=session?.developmentContext||{};
     const memory=state.memory||{};
     const raw=memory.raw||null, context=memory.context||null, handoff=memory.handoff||null;
@@ -283,8 +284,8 @@
   }
 
   function diagnosticsView() {
-    const task=state.activeWork?.task||null;
-    const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    const task=selectedWorkLaunchPair()?.task||null;
+    const session=selectedWorkLaunchPair()?.session||null;
     const summary=state.evidence?.summary||null;
     const counts=summary?.counts||{};
     const gate=state.reviewGate||null, buildGate=state.buildGate||null, closure=state.closureGate||null;
@@ -305,8 +306,8 @@
     const runs=state.buildRuns?.runs||[];
     const latest=runs[0]||null;
     const active=runs.find(r=>["QUEUED","ASSIGNED","RUNNING"].includes(String(r.status||"").toUpperCase()))||null;
-    const task=state.activeWork?.task||null;
-    const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    const task=selectedWorkLaunchPair()?.task||null;
+    const session=selectedWorkLaunchPair()?.session||null;
     const ackOk=session?.developmentContext?.bootAckState==="VALIDATED";
     const stage=Number(session?.developmentContext?.workStageIndex||1);
     const stageReviewOk=stage<5||state.buildGate?.ready===true;
@@ -317,7 +318,7 @@
     return `<section class="cw-runner-pool" data-cw-section="build"><header><div><strong>BUILD RUNNER POOL</strong><span>BUILD01 elsődleges · BUILD02 fallback · queue · evidence</span></div><b>PROD DENY</b></header><div class="cw-runner-grid">${card("build01","BUILD01")}${card("build02","BUILD02")}</div>${runLine}<div class="cw-build-actions"><small>${esc(gateText)}</small><button id="fullBuildButton" type="button" ${canBuild?"":"disabled"}>${state.buildBusy?"BUILD KÉRÉS…":"FULL BUILD INDÍTÁSA"}</button></div></section>`;
   }
   async function requestFullBuild(){
-    if(state.buildBusy)return;const task=state.activeWork?.task||null;const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    if(state.buildBusy)return;const task=selectedWorkLaunchPair()?.task||null;const session=selectedWorkLaunchPair()?.session||null;
     if(!task||!session||session?.developmentContext?.bootAckState!=="VALIDATED"){setNotice("FULL BUILD csak aktív task + worker session + validált BOOT ACK után indítható.","error");return;}
     state.buildBusy=true;render();const result=await api.requestDeveloperGridFullBuild?.({taskId:task.id,sessionId:session.id});state.buildBusy=false;
     if(!result?.ok){setNotice(result?.error||"A FULL BUILD indítása sikertelen.","error");render();return;}
@@ -325,7 +326,7 @@
   }
   async function requestVGuardReview(){
     if(state.reviewBusy)return;
-    const task=state.activeWork?.task||null;
+    const task=selectedWorkLaunchPair()?.task||null;
     if(!task||state.reviewGate?.ready!==true||state.vguard?.providerReady!==true){setNotice("A V.Guard review csak zöld REVIEW READINESS és READY külső provider mellett indítható.","error");return;}
     state.reviewBusy=true;render();
     const result=await api.requestDeveloperGridVGuardReview?.({taskId:task.id,modelPreference:"AUTO"});
@@ -354,7 +355,7 @@
     workPrompt?.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.ctrlKey){e.preventDefault();void startWork();}});
     root.querySelector("#workStartProjectId")?.addEventListener("input",e=>{state.workStartProjectId=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelector("#workStartModuleName")?.addEventListener("input",e=>{state.workStartModuleName=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();});
+    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;state.memory=null;state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();else void refresh(false);});
     root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";render();}));
     root.querySelectorAll('input[name="workLaunchDispatchMode"]').forEach(r=>r.addEventListener("change",e=>{state.workLaunchDispatchMode=e.target.value==="AUTO"?"AUTO":"MANUAL";try{localStorage.setItem("benjadminWorkLaunchDispatchMode",state.workLaunchDispatchMode);}catch{}state.workStartKey="";state.workStartNotice="";render();}));
@@ -394,8 +395,11 @@
     return raw||"A BENJADMIN Fejlesztői Vezérlőpult nem tölthető be.";
   }
   async function refresh(showLoading=true) {
+    const workerAtStart=state.workStartWorkerCode;
+    const refreshRevision=(state.refreshRevision||0)+1;state.refreshRevision=refreshRevision;
     if(showLoading){state.notice="Vezérlőpult frissítése…";render();}
     const [result,workResult,healthResult,buildResult,windowsResult]=await Promise.all([api.getContextWorkspace(),api.getDeveloperGridActiveWork?.(),api.getSystemHealth?.(),api.getDeveloperGridBuildRuns?.(),api.getDeveloperGridWindowsE2E?.()]);
+    if(workerAtStart!==state.workStartWorkerCode||refreshRevision!==state.refreshRevision)return;
     if(!result?.ok){state.notice=contextErrorMessage(result?.error);render();const notice=root.querySelector("[data-context-notice]");if(notice)notice.dataset.tone="error";return;}
     state.snapshot=result.context||state.snapshot;
     if(workResult?.ok&&workResult.activeWork)state.activeWork=workResult.activeWork;
@@ -403,17 +407,19 @@
     if(buildResult?.ok&&buildResult.buildRuns)state.buildRuns=buildResult.buildRuns;
     if(selectedWorkerSurface()==="CODEX"&&state.workStartWorkerCode){const bridgeResult=await api.getDeveloperGridTaskBridge?.({workerCode:state.workStartWorkerCode});if(bridgeResult?.ok)state.taskBridge=bridgeResult.taskBridge||null;}
     if(windowsResult?.ok)state.windowsE2E=windowsResult.windowsE2E||null;
-    const taskId=state.activeWork?.task?.id||"";
+    const selectedPair=selectedWorkLaunchPair();
+    const taskId=selectedPair?.task?.id||"";
     if(taskId){
-      const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===taskId&&s.endedAt==null)||null;
+      const activeSession=selectedPair?.session||null;
       const [evidenceResult,reviewResult,buildGateResult,closureResult,memoryResult]=await Promise.all([api.getDeveloperGridEvidence?.(taskId),api.getDeveloperGridReviewGate?.(taskId,"REVIEW"),api.getDeveloperGridReviewGate?.(taskId,"BUILD"),api.getDeveloperGridReviewGate?.(taskId,"CLOSURE"),activeSession?api.getDeveloperGridConversationMemory?.({taskId,sessionId:activeSession.id,conversationId:activeSession.developmentContext?.surfaceConversationId||activeSession.developmentContext?.chatConversationId||""}):null]);
+      if(workerAtStart!==state.workStartWorkerCode||refreshRevision!==state.refreshRevision||selectedWorkLaunchPair()?.task?.id!==taskId||selectedWorkLaunchPair()?.session?.id!==activeSession?.id)return;
       if(evidenceResult?.ok)state.evidence={evidence:evidenceResult.evidence||[],summary:evidenceResult.summary||null};
       if(reviewResult?.ok){state.reviewGate=reviewResult.gate||null;state.vguard=reviewResult.vguard||null;}
       if(buildGateResult?.ok)state.buildGate=buildGateResult.gate||null;
       if(closureResult?.ok)state.closureGate=closureResult.gate||null;
       if(memoryResult?.ok)state.memory=memoryResult.memory||null;
     }else{state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;state.memory=null;}
-    state.workStartStatus=state.activeWork?.task?(String(state.activeWork?.reconciliation?.state||"")==="STALE"?"ELAVULT":"AKTÍV"):"KÉSZ"; state.notice=""; render();
+    state.workStartStatus=selectedPair?.task?(selectedPair.selectionRecoveryRequired?"HELYREÁLLÍTÁSRA VÁR":"AKTÍV"):"KÉSZ"; state.notice=""; render();
   }
   function applyLayout(layout) { const zoom=Math.max(50,Math.min(150,Number(layout?.zoomPercent)||100)); document.documentElement.style.setProperty("--context-workspace-zoom",String(zoom/100)); document.querySelectorAll('[data-context-action="zoom-reset"]').forEach(b=>{b.textContent=`${zoom}%`;}); if(detached)return; const visible=Boolean(layout?.visible&&layout?.detached!==true&&layout?.docked!==false); host?.classList.toggle("is-hidden",!visible); document.body.classList.toggle("has-context-workspace",visible); const width=Number(layout?.effectiveWidth||layout?.width||500);document.documentElement.style.setProperty("--context-workspace-width",`${Math.max(380,Math.min(760,width))}px`); toolbarButton?.classList.toggle("is-active",visible); }
   function bindWorkerDrops() { document.querySelectorAll(".chat-cell[data-worker-code]").forEach(cell=>{ cell.addEventListener("dragover",e=>{if(e.dataTransfer.types.includes("application/x-benjadmin-context")){e.preventDefault();cell.classList.add("is-context-drop");}}); cell.addEventListener("dragleave",()=>cell.classList.remove("is-context-drop")); cell.addEventListener("drop",e=>{cell.classList.remove("is-context-drop");const raw=e.dataTransfer.getData("application/x-benjadmin-context");if(!raw)return;e.preventDefault();try{void bindItem(cell.dataset.workerCode,JSON.parse(raw));}catch{}}); }); }

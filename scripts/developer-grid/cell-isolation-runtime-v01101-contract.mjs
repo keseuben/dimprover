@@ -206,4 +206,105 @@ await check("launch projection preserves original restrictions from session sour
  const task=context.run({task:{id:"test",description:"stale"},session:{id:"session",developmentContext:{sourcePrompt:source}}});
  assert.equal(task.description,source);
 });
-console.log("Developer Grid cell isolation/runtime v0.1.101 PASS "+n+"/"+n);
+
+// The live DEV API excludes pre-BOOT-ACK sessions without a live engine claim
+// from activeSessionTasks, but retains their exact identity in allActiveSessions.
+const selectableFn=extract(main,"function withSelectableDeveloperGridWork(","function centralLaunchPairForSelection");
+const recoveryContext={normalizedProofWorkerCode:code=>code==="BENAI"?"BENJAMINAI":code};
+vm.createContext(recoveryContext);vm.runInContext(selectableFn+pairFn+";globalThis.decorate=withSelectableDeveloperGridWork;globalThis.select=centralLaunchPairForSelection;",recoveryContext);
+const recoverableBen={...ben.session,
+ developmentContext:{taskId:ben.task.id,projectId:"project_dimprover",moduleName:"Developer Grid V1",workItem:"Benjámin próba",surfaceConversationId:"ben-chat"},
+ sourceProvenance:{taskId:ben.task.id,sessionId:ben.session.id,worker:"BENJAMINAI"},
+};
+await check("preboot Benjamin can be selected when engine live-pair list is empty",()=>{
+ const decorated=recoveryContext.decorate({task:armin.task,sessions:[armin.session],activeSessionTasks:[],allActiveSessions:[recoverableBen]});
+ assert.equal(decorated.activeSessionTasks.length,0);
+ assert.equal(decorated.selectableSessionTasks.length,1);
+ const pair=decorated.selectableSessionTasks[0];
+ assert.equal(pair.task.id,"ben-task");assert.equal(pair.task.status,"RECOVERY_REQUIRED");assert.equal(pair.selectionRecoveryRequired,true);
+ uiContext.state.activeWork=decorated;uiContext.state.config={cells:[{workerCode:"BENAI",url:"https://chatgpt.com/c/ben-chat"}]};
+ assert.equal(uiContext.select().task.id,"ben-task");
+});
+await check("display-only recovery projection never grants live launch authority",()=>{
+ const decorated=recoveryContext.decorate({activeSessionTasks:[],allActiveSessions:[recoverableBen]});
+ const selection={taskId:"ben-task",sessionId:"ben-session",workerCode:"BENAI"};
+ assert.equal(recoveryContext.select(decorated,selection),null);
+ assert.equal(recoveryContext.select(decorated,selection,{allowRecovery:true}).selectionRecoveryRequired,true);
+});
+await check("mismatched recovery provenance cannot become selectable",()=>{
+ for(const sourceProvenance of [{...recoverableBen.sourceProvenance,taskId:"other"},{...recoverableBen.sourceProvenance,sessionId:"other"},{...recoverableBen.sourceProvenance,worker:"ARMINAI"}]){
+  assert.equal(recoveryContext.decorate({activeSessionTasks:[],allActiveSessions:[{...recoverableBen,sourceProvenance}]}).selectableSessionTasks.length,0);
+ }
+});
+await check("live pair is retained without duplicate recovery projection",()=>{
+ const live={task:ben.task,session:recoverableBen};
+ const decorated=recoveryContext.decorate({activeSessionTasks:[live],allActiveSessions:[recoverableBen]});
+ assert.equal(decorated.selectableSessionTasks.length,1);assert.equal(decorated.selectableSessionTasks[0],live);
+});
+const refreshFn=extract(ui,"  async function refresh(showLoading=true)","  function applyLayout(");
+function refreshFixture(){
+ const state={workStartWorkerCode:"ARMINAI",activeWork:active,snapshot:{},memory:null,workStartStatus:"",evidence:{evidence:[],summary:null}};
+ const context={state,selectedWorkerSurface:()=>"CHATGPT",selectedWorkLaunchPair:()=>({task:armin.task,session:armin.session}),
+  contextErrorMessage:x=>x,render:()=>{},root:{querySelector:()=>null},
+  api:{getContextWorkspace:async()=>({ok:true,context:{}}),getDeveloperGridActiveWork:async()=>({ok:true,activeWork:active}),getSystemHealth:async()=>({ok:true,health:{}}),getDeveloperGridBuildRuns:async()=>({ok:true,buildRuns:{}}),getDeveloperGridWindowsE2E:async()=>({ok:true}),getDeveloperGridEvidence:async()=>({ok:true,evidence:[]}),getDeveloperGridReviewGate:async()=>({ok:true,gate:{ready:false}}),getDeveloperGridConversationMemory:async()=>({ok:true,memory:{taskId:"armin-task"}})}};
+ vm.createContext(context);vm.runInContext(refreshFn+";globalThis.run=refresh;",context);return context;
+}
+await check("old worker refresh response cannot replace newly selected worker context",async()=>{
+ const context=refreshFixture();let complete;
+ context.api.getContextWorkspace=()=>new Promise(resolve=>{complete=resolve;});
+ const pending=context.run(false);context.state.workStartWorkerCode="BENJAMINAI";context.state.memory={taskId:"ben-task"};
+ complete({ok:true,context:{}});await pending;
+ assert.equal(context.state.memory.taskId,"ben-task");
+});
+await check("late Armin memory response cannot replace Benjamin memory after selection",async()=>{
+ const context=refreshFixture();let complete,started;
+ const waiting=new Promise(resolve=>{started=resolve;});
+ context.api.getDeveloperGridConversationMemory=()=>new Promise(resolve=>{complete=resolve;started();});
+ const pending=context.run(false);await waiting;
+ context.state.workStartWorkerCode="BENJAMINAI";context.state.memory={taskId:"ben-task"};
+ complete({ok:true,memory:{taskId:"armin-task"}});await pending;
+ assert.equal(context.state.memory.taskId,"ben-task");
+});
+await check("task cards and requests resolve the same selected task/session",()=>{
+ const section=ui.slice(ui.indexOf("  function memoryView()"),ui.indexOf("  function applyLayout("));
+ assert.doesNotMatch(section,/const task=state\.activeWork\?\.task\|\|null/);
+ assert.match(section,/const task=selectedWorkLaunchPair\(\)\?\.task\|\|null/);
+ assert.match(section,/const session=selectedWorkLaunchPair\(\)\?\.session\|\|null/);
+});
+
+function ipcFixture(channel,activeWork){
+ const handlers={};const calls=[];const context={
+  ipcMain:{handle:(name,fn)=>{handlers[name]=fn;}},unlocked:true,config:{benjadminBaseUrl:"https://admin.dev.dimpro.hu"},readDeviceToken:()=>"test",
+  fetchDeveloperGridActiveWork:async()=>activeWork,
+  withSelectableDeveloperGridWork:recoveryContext.decorate,centralLaunchPairForSelection:recoveryContext.select,
+  normalizedProofWorkerCode:code=>code==="BENAI"?"BENJAMINAI":code,
+  assignedWorkerCodeFromWork:work=>work.session.workerCode==="BENJAMINAI"?"BENAI":work.session.workerCode,
+  launchTaskFromWork:work=>({...work.task,sessionId:work.session.id}),
+  recoverDeveloperGridLaunchExecution:async({input})=>{calls.push(input);return {recovery:{task:{id:input.taskId},session:{id:input.sessionId,workerCode:"ARMINAI"}}};},
+  sendPreparedWorkerTaskLaunch:async(code,taskId,options)=>{calls.push({code,taskId,options});return {ok:true};},
+ };
+ const marker='  ipcMain.handle("'+channel+'"';
+ const start=main.indexOf(marker);const end=main.indexOf('\n  ipcMain.handle(',start+marker.length);
+ assert.ok(start>=0&&end>start);
+ vm.createContext(context);vm.runInContext(main.slice(start,end),context);
+ return {context,calls,run:handlers[channel]};
+}
+await check("automatic recovery targets Benjamin and rejects a mismatched returned worker",async()=>{
+ const activeWork={task:armin.task,sessions:[armin.session],activeSessionTasks:[],allActiveSessions:[recoverableBen]};
+ const f=ipcFixture("work-start:resume-launch",activeWork);
+ const result=await f.run({}, {taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
+ assert.equal(result.ok,false);assert.equal(result.code,"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED");
+ assert.equal(f.calls.length,1);assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0])),{taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
+});
+await check("manual recovery also rejects the wrong returned worker before sending",async()=>{
+ const activeWork={task:armin.task,sessions:[armin.session],activeSessionTasks:[],allActiveSessions:[recoverableBen]};
+ const f=ipcFixture("work-start:send-prepared-launch",activeWork);
+ const result=await f.run({}, {taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
+ assert.equal(result.ok,false);assert.equal(result.code,"ACTIVE_TASK_RECOVERY_IDENTITY_MISMATCH");assert.equal(f.calls.length,1);
+});
+await check("manual live launch sends the selected Benjamin identity instead of global Armin",async()=>{
+ const f=ipcFixture("work-start:send-prepared-launch",active);
+ const result=await f.run({}, {taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
+ assert.equal(result.ok,true);assert.equal(f.calls.length,1);assert.equal(f.calls[0].code,"BENJAMINAI");assert.equal(f.calls[0].taskId,"ben-task");assert.equal(f.calls[0].options.taskOverride.sessionId,"ben-session");
+});
+console.log("Developer Grid cell isolation/runtime v0.1.102 PASS "+n+"/"+n);

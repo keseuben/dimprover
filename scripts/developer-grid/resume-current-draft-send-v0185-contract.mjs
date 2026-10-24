@@ -9,7 +9,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 let n=0;
 function check(name,fn){fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+name);}
 
-check("desktop version v0.1.101",()=>assert.equal(pkg.version,"0.1.101"));
+check("desktop version v0.1.102",()=>assert.equal(pkg.version,"0.1.102"));
 check("READY Central proof can be reused without rotation",()=>{
   assert.ok(main.includes("function reusableLaunchExecutionProof(task, session)"));
   assert.ok(main.includes('proof?.state === "VERIFIED"'));
@@ -25,7 +25,7 @@ check("execution recovery is conditional instead of unconditional",()=>{
   const start=main.indexOf('ipcMain.handle("work-start:resume-launch"');
   const end=main.indexOf('ipcMain.handle("work-close:run"',start);
   const body=main.slice(start,end);
-  assert.ok(body.includes("const reusableProof = reusableLaunchExecutionProof(task, session);"));
+  assert.ok(body.includes("const reusableProof = selected.selectionRecoveryRequired ? { ok:false } : reusableLaunchExecutionProof(task, session);"));
   const gate=body.indexOf("if (!reusableProof.ok) {");
   const recovery=body.indexOf("recoverDeveloperGridLaunchExecution",gate);
   assert.ok(gate>=0 && recovery>gate);
@@ -58,4 +58,4 @@ check("fail-closed behavior remains for unverifiable direct send",()=>{
   assert.ok(main.includes("OWNED_TASK_DRAFT_NOT_CURRENT"));
 });
 
-console.log("Developer Grid v0.1.101 resume current-draft send contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.102 resume current-draft send contract PASS · "+n+"/"+n);

@@ -3490,10 +3490,14 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
   } catch (error) {
     return { ok:false, code:"MANUAL_LAUNCH_ACTIVE_WORK_UNAVAILABLE", error:error instanceof Error ? error.message : "Az authoritative task állapot nem olvasható." };
   }
-  const task = activeWork?.task || null;
-  const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === id) || null;
+  const exact = centralLaunchPairForSelection(activeWork, {
+    taskId:id, sessionId:taskOverride?.sessionId || (activeWork?.sessions || []).find(item => item?.taskId === id)?.id,
+    workerCode:code,
+  });
+  const task = exact?.task || null;
+  const session = exact?.session || null;
   if (!task || String(task.id || "") !== id || !session) return { ok:false, code:"MANUAL_LAUNCH_ACTIVE_TASK_REQUIRED", error:"A kézi küldéshez az authoritative aktív task/session szükséges." };
-  if (String(session?.workerCode || "").toUpperCase() !== code) return { ok:false, code:"MANUAL_LAUNCH_WORKER_MISMATCH", error:"A kijelölt worker nem egyezik az authoritative session workerével." };
+  if (normalizedProofWorkerCode(session?.workerCode) !== normalizedProofWorkerCode(code)) return { ok:false, code:"MANUAL_LAUNCH_WORKER_MISMATCH", error:"A kijelölt worker nem egyezik az authoritative session workerével." };
   if (String(task.status || "").toUpperCase() !== "READY") return { ok:false, code:"MANUAL_LAUNCH_TASK_NOT_READY", error:"A task nincs READY állapotban." };
   if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A BOOT ACK már validált; Launch Packet nem küldhető újra." };
 
@@ -3594,6 +3598,10 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
   const baselineCapture = await captureLatestBootAckCandidate(view);
   const baselineResponseSha256 = String(launchRecord.baselineResponseSha256 || (baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : ""));
   const baselineResponseMessageId = String(launchRecord.baselineResponseMessageId || (baselineCapture?.ok ? baselineCapture.messageId || "" : ""));
+  const requiredSourcePrompt = String(launchTask.description || "").replace(/\s+/g, " ").trim();
+  if (requiredSourcePrompt && !String(draft?.text || "").replace(/\s+/g, " ").includes(requiredSourcePrompt)) {
+    return { ok:false, code:"MANUAL_LAUNCH_SOURCE_PROMPT_MISSING", error:"A piszkozatból hiányzik az eredeti felhasználói utasítás vagy annak korlátai; küldés tiltva." };
+  }
   const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
   if (sent?.sent !== true || sent?.verified !== true) {
     const chatLaunch = saveTaskLaunchPatch(launchTask, code, {
@@ -5142,13 +5150,42 @@ function rememberAutoWorkStartTurn(key) {
   }
 }
 
-function centralLaunchPairForSelection(activeWork, selection) {
+function withSelectableDeveloperGridWork(activeWork) {
+  if (!activeWork || typeof activeWork !== "object") return activeWork;
+  const live = Array.isArray(activeWork.activeSessionTasks) ? activeWork.activeSessionTasks
+    : (activeWork.sessions || []).filter(session => session?.taskId === activeWork.task?.id).map(session => ({ task:activeWork.task, session }));
+  const selectable = live.filter(pair => pair?.task?.id && pair?.session?.id && pair.session.endedAt == null);
+  const sessions = Array.isArray(activeWork.allActiveSessions) ? activeWork.allActiveSessions : activeWork.sessions || [];
+  for (const session of sessions) {
+    const context = session?.developmentContext || {};
+    const provenance = session?.sourceProvenance || {};
+    if (!session?.id || !session.taskId || session.endedAt != null
+        || !["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(normalizedProofWorkerCode(session.workerCode))
+        || context.taskId !== session.taskId
+        || provenance.taskId !== session.taskId || provenance.sessionId !== session.id
+        || normalizedProofWorkerCode(provenance.worker) !== normalizedProofWorkerCode(session.workerCode)
+        || !context.projectId || !context.moduleName
+        || selectable.some(pair => pair.session.id === session.id)) continue;
+    // Display/recovery identity only. This projection grants no launch authority.
+    selectable.push({
+      task:{ id:session.taskId, projectId:context.projectId, title:context.workItem || session.taskId,
+        status:"RECOVERY_REQUIRED", environment:"DEV", productionAccess:"DENY", acceptance:[],
+        selectionRecoveryRequired:true },
+      session,
+      selectionRecoveryRequired:true,
+    });
+  }
+  return { ...activeWork, selectableSessionTasks:selectable };
+}
+
+function centralLaunchPairForSelection(activeWork, selection, { allowRecovery = false } = {}) {
   const taskId = String(selection?.taskId || "");
   const sessionId = String(selection?.sessionId || "");
   const workerCode = normalizedProofWorkerCode(selection?.workerCode);
   if (!taskId || !sessionId || !workerCode) return null;
-  const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks
-    : (activeWork?.sessions || []).map(session => ({ task:activeWork?.task, session }));
+  const pairs = allowRecovery && Array.isArray(activeWork?.selectableSessionTasks) ? activeWork.selectableSessionTasks
+    : Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks
+      : (activeWork?.sessions || []).map(session => ({ task:activeWork?.task, session }));
   const matches = pairs.filter(pair => pair?.task?.id === taskId
     && pair?.session?.taskId === taskId && pair?.session?.id === sessionId
     && pair.session.endedAt == null && normalizedProofWorkerCode(pair.session.workerCode) === workerCode);
@@ -7075,7 +7112,7 @@ function registerIpc() {
   });
   ipcMain.handle("work-start:get", async () => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
-    try { return { ok: true, activeWork: await fetchDeveloperGridActiveWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken() }) }; }
+    try { return { ok: true, activeWork: withSelectableDeveloperGridWork(await fetchDeveloperGridActiveWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken() })) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Az aktív munka nem tölthető be." }; }
   });
   ipcMain.handle("conversation-memory:get", async (_event, payload) => {
@@ -7250,12 +7287,23 @@ function registerIpc() {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {
       const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      const selected = centralLaunchPairForSelection(activeWork, selection);
-      const task = selected?.task || null;
-      const session = selected?.session || null;
+      const selected = centralLaunchPairForSelection(withSelectableDeveloperGridWork(activeWork), selection, { allowRecovery:true });
+      let task = selected?.task || null;
+      let session = selected?.session || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs küldhető authoritative task + worker session." };
+      if (selected.selectionRecoveryRequired) {
+        const recovered = await recoverDeveloperGridLaunchExecution({
+          baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
+          input:{ taskId:task.id, sessionId:session.id, workerCode:session.workerCode },
+        });
+        if (recovered?.recovery?.task?.id !== task.id || recovered?.recovery?.session?.id !== session.id
+            || normalizedProofWorkerCode(recovered.recovery.session.workerCode) !== normalizedProofWorkerCode(session.workerCode)) {
+          return { ok:false, code:"ACTIVE_TASK_RECOVERY_IDENTITY_MISMATCH", error:"A helyreállítás nem a kiválasztott task/session/workerhez tartozik." };
+        }
+        task = recovered.recovery.task; session = recovered.recovery.session;
+      }
       const code = String(session.workerCode || "").toUpperCase();
-      return await sendPreparedWorkerTaskLaunch(code, task.id);
+      return await sendPreparedWorkerTaskLaunch(code, task.id, { taskOverride:launchTaskFromWork({ task, session }) });
     } catch (error) {
       return { ok:false, error:error instanceof Error ? error.message : "A központi Launch Packet küldése sikertelen." };
     }
@@ -7265,7 +7313,7 @@ function registerIpc() {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {
       let activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      const selected = centralLaunchPairForSelection(activeWork, selection);
+      const selected = centralLaunchPairForSelection(withSelectableDeveloperGridWork(activeWork), selection, { allowRecovery:true });
       let task = selected?.task || null;
       let session = selected?.session || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs folytatható authoritative task + worker session." };
@@ -7277,7 +7325,7 @@ function registerIpc() {
       const preRecoveryWork = { task, session };
       const preRecoveryCode = assignedWorkerCodeFromWork(preRecoveryWork);
       const preRecoveryLaunchTask = launchTaskFromWork(preRecoveryWork, null);
-      if (preRecoveryCode && preRecoveryLaunchTask) {
+      if (!selected.selectionRecoveryRequired && preRecoveryCode && preRecoveryLaunchTask) {
         const preRecoveryCell = workerCellForCode(preRecoveryCode);
         const preRecoverySurface = normalizeWorkerSurfaceType(preRecoveryLaunchTask.surfaceType || session?.developmentContext?.surfaceType || preRecoveryCell?.surfaceType || "CHATGPT");
         if (preRecoveryCell && preRecoverySurface === "CHATGPT") {
@@ -7324,7 +7372,7 @@ function registerIpc() {
       }
 
       const previousSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
-      const reusableProof = reusableLaunchExecutionProof(task, session);
+      const reusableProof = selected.selectionRecoveryRequired ? { ok:false } : reusableLaunchExecutionProof(task, session);
       let sourceProofRefreshed = false;
 
       if (!reusableProof.ok) {
@@ -7335,7 +7383,8 @@ function registerIpc() {
         });
         const recoveredTask = recoveredExecution?.recovery?.task || null;
         const recoveredSession = recoveredExecution?.recovery?.session || null;
-        if (!recoveredTask || !recoveredSession || recoveredTask.id !== task?.id || recoveredSession.id !== session?.id) {
+        if (!recoveredTask || !recoveredSession || recoveredTask.id !== task?.id || recoveredSession.id !== session?.id
+            || normalizedProofWorkerCode(recoveredSession.workerCode) !== normalizedProofWorkerCode(selected.session.workerCode)) {
           return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az exact task/session nem olvasható." };
         }
         task = recoveredTask;
