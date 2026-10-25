@@ -18,6 +18,10 @@ function executionAllowed(config, code, task, record, proof, conversationId, act
     && (permission.access === "DEV" || ["LIST_FILES", "READ_FILE", "SEARCH_FILES", "GIT_STATUS", "GIT_DIFF", "GIT_DIFF_CHECK"].includes(action)));
 }
 function executionPending(record) {
+  // Older clients could leave this label after a later successful send. They
+  // stored neither the request nor its result; it cannot be a v104 queue item.
+  // Keep the legacy label for inspection, and never reconstruct/re-run a write.
+  if (record?.executionBridgeState === "RESULT_SEND_PENDING" && !record.pendingExecutionResult && !record.executionRequest) return false;
   return Boolean(record?.pendingExecutionResult || ["REQUEST_RUNNING", "RESULT_SEND_PENDING", "TRANSPORT_RETRY", "EXECUTION_UNCERTAIN", "WAITING_MANUAL_EXECUTION"].includes(record?.executionBridgeState));
 }
 function requestKey(request, hash) {

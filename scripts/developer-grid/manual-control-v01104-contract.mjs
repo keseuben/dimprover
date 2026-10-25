@@ -40,6 +40,10 @@ await check('manual continuation retains original restrictions and fails when or
  assert.ok(control.continuationPrompt(task,'OUTMINAI','b'.repeat(64),[]).includes(task.description));
  assert.throws(()=>control.continuationPrompt({...task,description:''},'OUTMINAI','b'.repeat(64),[]),/ORIGINAL_INSTRUCTION/);
 });
+await check('legacy pending-send label cannot become a replayable queue item or permanently block explicit recovery',()=>{
+ assert.equal(control.executionPending({executionBridgeState:'RESULT_SEND_PENDING',lastExecutionRequestId:'req-001'}),false);
+ assert.equal(control.executionPending({executionBridgeState:'RESULT_SEND_PENDING',executionRequest:{request}}),true);
+});
 await check('manual mode cannot execute or deliver before explicit task permission',async()=>{
  const f=fixture({manual:true});assert.equal((await f.run()).reason,'MANUAL_PERMISSION_REQUIRED');assert.equal(f.calls,0);assert.equal(f.sends,0);
 });
