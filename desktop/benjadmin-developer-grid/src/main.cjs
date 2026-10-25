@@ -2113,7 +2113,7 @@ async function insertLargeClipboardText(view, sourceText) {
       }
       insertedChars += chunk.length;
     }
-    const currentLength = String(composer.innerText || composer.textContent || '').length;
+    const currentLength = String(composer.innerText ?? composer.textContent ?? '').length;
     return { ok: insertedChars === text.length, chars: insertedChars, totalChars: currentLength, mode: 'contenteditable', elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) };
   })()`, true).catch((error) => ({ ok: false, error: error?.message || "A nagy beillesztés végrehajtása sikertelen." }));
 }
@@ -2170,7 +2170,7 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
       if (candidate && candidate.getClientRects().length) { composer = candidate; break; }
     }
     if (!composer) return { inserted: false, reason: 'composer-not-found', existingKind: 'NONE' };
-    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText ?? composer.textContent ?? ''));
     const classify = (value) => value.includes('BENJADMIN_PROMPT_KIND: HANDOFF_V2') ? 'HANDOFF_V2'
       : value.includes('BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3') ? 'TASK_LAUNCH_V3'
       : value.includes('BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V2') ? 'TASK_LAUNCH_V2'
@@ -2225,7 +2225,7 @@ async function captureComposerDraftText(view) {
       if (candidate && candidate.getClientRects().length) { composer = candidate; break; }
     }
     if (!composer) return { ok:false, reason:'composer-not-found', text:'' };
-    const text = String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    const text = String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText ?? composer.textContent ?? ''));
     return { ok:true, reason:'', text };
   })()`, true).catch(() => ({ ok:false, reason:"execute-failed", text:"" }));
 }
@@ -2252,7 +2252,7 @@ async function clearStaleOwnedTaskLaunchDraft(view, { taskId, sessionId, current
     }
     if (!composer) return { cleared:false, reason:'composer-not-found' };
 
-    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText ?? composer.textContent ?? ''));
     const initial = read();
     if (initial.trim() !== expectedText.trim()) {
       return { cleared:false, reason:'composer-changed-before-clear', beforeLength:initial.length, expectedLength:expectedText.length };
@@ -2333,7 +2333,7 @@ async function sendPreparedChatPrompt(view, expectedMarker = "", canSend = () =>
     let composer = null;
     for (const selector of selectors) { const candidate = document.querySelector(selector); if (candidate && candidate.getClientRects().length) { composer = candidate; break; } }
     if (!composer) return { sent:false, reason:'composer-not-found' };
-    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText ?? composer.textContent ?? ''));
     if (marker && !read().includes(marker)) return { sent:false, reason:'marker-mismatch' };
     const form = composer.closest('form') || document.querySelector('main form');
     const sendSelectors = ${sendSelectorLiteral()};
@@ -6978,7 +6978,7 @@ async function manualControlStatus(selection) {
   const record = loadTaskLaunchRecords()[ctx.task.id] || {};
   const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
   const text = String(draft?.text || "");
-  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview || null}};
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
 }
 
 async function runManualControl(input) {
@@ -7030,7 +7030,7 @@ async function runManualControl(input) {
     if (action === "prepare") {
       if (pair.session.developmentContext?.bootAckState !== "VALIDATED") return prepareWorkerTaskLaunch(code,task.id,{autoSend:false,taskOverride:task});
       const text = workflowControl.continuationPrompt(task,code,proof,executionBridgeProtocolLines(task,code,proof));
-      saveTaskLaunchPatch(task,code,{manualContinuationPreview:{text,sha256:createHash("sha256").update(text).digest("hex"),sourceProofSha256:proof,conversationId,taskId:task.id,sessionId:task.sessionId}});
+      saveTaskLaunchPatch(task,code,{manualContinuationPreview:{protocolVersion:2,text,sha256:createHash("sha256").update(text).digest("hex"),sourceProofSha256:proof,conversationId,taskId:task.id,sessionId:task.sessionId}});
       return {ok:true,message:"A folytatási üzenet előnézete elkészült. Küldés előtt itt elolvashatod."};
     }
     if (action === "send-preview" || action === "send-draft") {
@@ -7038,7 +7038,7 @@ async function runManualControl(input) {
       let text,marker;
       if (action === "send-preview") {
         const preview = record.manualContinuationPreview;
-        if (!preview || input.sha256 !== preview.sha256 || preview.taskId !== task.id || preview.sessionId !== task.sessionId || preview.sourceProofSha256 !== proof || preview.conversationId !== conversationId) throw new Error("Az előnézet elavult. Készíts friss előnézetet.");
+        if (!preview || preview.protocolVersion !== 2 || input.sha256 !== preview.sha256 || preview.taskId !== task.id || preview.sessionId !== task.sessionId || preview.sourceProofSha256 !== proof || preview.conversationId !== conversationId) throw new Error("Az előnézet elavult. Készíts friss előnézetet.");
         text=preview.text; marker="BENJADMIN_PROMPT_KIND: MANUAL_CONTINUE_V1";
         const inserted=await insertWorkerTaskPrompt(view,text,marker);
         if (!inserted?.inserted || !inserted?.verifiedMarker) throw new Error("A beviteli mezőben másik piszkozat van, vagy a beillesztés nem igazolható. A piszkozatot nem írtam felül.");

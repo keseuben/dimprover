@@ -180,7 +180,7 @@ const REFRESH_SAFETY_SCRIPT = String.raw`(() => {
     ${sharedPrelude()}
     const generating = Boolean(firstVisible(selectors.stopButton));
     const composer = firstVisible(selectors.composer);
-    const readComposer = (node) => String(node instanceof HTMLTextAreaElement ? node.value : (node?.innerText || node?.textContent || ""));
+    const readComposer = (node) => String(node instanceof HTMLTextAreaElement ? node.value : (node?.innerText ?? node?.textContent ?? ""));
     const hasDraft = Boolean(composer && readComposer(composer).trim().length > 0);
     const updatePattern = /(refresh|reload|update available|frissít|újratölt|actualizar|mettre à jour|aktualisieren)/i;
     const updateAvailable = Array.from(document.querySelectorAll("button")).filter(visible).some((button) => {

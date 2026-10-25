@@ -583,7 +583,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A meglévő fail-closed szabály megmarad: reload csak láthatóan kijelentkezett és éppen nem töltődő ChatGPT felületen engedélyezett.
 - Célzott regresszió: `chat-auth-reload-loop-v0199-contract.mjs`.
 
-## v0.1.104 · Chat-to-Grid automatic work start / auto rebind
+## v0.1.105 · Chat-to-Grid automatic work start / auto rebind
 
 - A ChatGPT kódoló cellák transcript-monitorja a felhasználó fejlesztési utasításait (`kezdd el`, `folytasd`, `javítsd`, `fejleszd`, `vidd végig` és ezek angol megfelelői) automatikus Central Core work-start jelként tudja értelmezni.
 - A rövid folytatási utasítás csak akkor aktiválhat automatikus taskot, ha a csevegés közelmúltbeli kontextusa tényleges fejlesztési munkát igazol; általános beszélgetésből nem indulhat rejtett fejlesztési task.
@@ -598,7 +598,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Regression contract: `chat-auto-work-start-v01100-contract.mjs`.
 
 
-### v0.1.104 desktop manual control
+### v0.1.105 desktop manual control
 The Central Core KÉZI VEZÉRLÉS page is the default after upgrading. Each worker has a persistent MANUAL/AUTO mode. MANUAL suppresses automatic task creation, stage prompts, heartbeat authority recovery and rollover continuation messages. Existing task/session records are preserved. Read-only and DEV execution permissions are explicit and bound to the exact worker, task, session, source proof and conversation; changing the proof requires fresh permission. Original user restrictions and server gates still apply.
 The manual page supports task creation, initial conversation binding, Launch Packet/continuation preview and explicit send, same-task recovery, phase report acceptance, phase instruction and handoff preparation. A BOOT ACK does not certify a currently live engine session.
 Execution results are journaled before composer delivery and delivery retries reuse the stored result. Network-uncertain writes and commands stop for server-side inspection rather than automatic re-execution. A current-proof GIT_STATUS PASS must be delivered before the first phase instruction. Historical worker handoffs from a different task/module are excluded from automatic Context Pack insertion.

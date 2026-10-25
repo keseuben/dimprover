@@ -22,7 +22,9 @@ function executionPending(record) {
   // stored neither the request nor its result; it cannot be a v104 queue item.
   // Keep the legacy label for inspection, and never reconstruct/re-run a write.
   if (record?.executionBridgeState === "RESULT_SEND_PENDING" && !record.pendingExecutionResult && !record.executionRequest) return false;
-  return Boolean(record?.pendingExecutionResult || ["REQUEST_RUNNING", "RESULT_SEND_PENDING", "TRANSPORT_RETRY", "EXECUTION_UNCERTAIN", "WAITING_MANUAL_EXECUTION"].includes(record?.executionBridgeState));
+  // Waiting for permission has not started an operation. It must not prevent
+  // the operator from recovering the connection or sending fresh instructions.
+  return Boolean(record?.pendingExecutionResult || record?.executionRequest || ["REQUEST_RUNNING", "RESULT_SEND_PENDING", "TRANSPORT_RETRY", "EXECUTION_UNCERTAIN"].includes(record?.executionBridgeState));
 }
 function requestKey(request, hash) {
   return `${request.taskId}:${request.sessionId}:${request.requestId}:${hash}`;
@@ -42,6 +44,8 @@ function continuationPrompt(task, code, proof, protocolLines) {
     `HEAD: ${task.sourceHead}`, `Source proof: ${proof}`,
     "EREDETI FELHASZNÁLÓI UTASÍTÁS ÉS KORLÁTAI:", source,
     "A kézi folytatás nem bővíti ezt a scope-ot és nem oldja fel a fennálló tiltásokat.",
+    "A csevegésben kapott KÉSŐBBI felhasználói korlátozások is változatlanul érvényesek; ez az összefoglaló nem írja felül őket.",
+    "Ha későbbi utasítás szerint új végrehajtási kérést ne indíts, akkor csak az állapot átvételét igazold vissza, majd várj. Ezt a tiltást csak új, kifejezett felhasználói utasítás oldhatja fel.",
     "Ne hozz létre új taskot vagy sessiont. A fázisok jóváhagyását a kezelő végzi.",
     "Ha az eredeti utasítás tiltja a végrehajtást, csak az átvett állapotot igazold vissza, majd várj.",
     "Ha az eredeti utasítás megengedi az olvasást, először egyetlen GIT_STATUS kérést adj ki, majd várd meg a hozzá tartozó végrehajtási választ.",

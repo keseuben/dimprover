@@ -104,6 +104,26 @@ await check('old execution-result marker is insufficient without the exact resul
  assert.equal((await sandbox.run({},'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 new request')).verified,false);
  assert.equal((await sandbox.run({},'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 old request')).verified,true);
 });
+await check('an unexecuted permission wait does not block recovery; actual queued/running/uncertain work still blocks',()=>{
+ assert.equal(control.executionPending({executionBridgeState:'WAITING_MANUAL_EXECUTION'}),false);
+ for(const state of ['REQUEST_RUNNING','TRANSPORT_RETRY','EXECUTION_UNCERTAIN'])assert.equal(control.executionPending({executionBridgeState:state}),true);
+ assert.equal(control.executionPending({executionBridgeState:'WAITING_MANUAL_EXECUTION',executionRequest:{request}}),true);
+});
+await check('manual continuation preserves later no-new-execution instructions and old previews are rejected',()=>{
+ const prompt=control.continuationPrompt(task,'OUTMINAI','b'.repeat(64),[]);
+ assert.ok(prompt.includes('KÉSŐBBI felhasználói korlátozások'));assert.ok(prompt.includes('új végrehajtási kérést ne indíts'));
+ assert.ok(main.includes('preview.protocolVersion !== 2'));assert.ok(main.includes('manualContinuationPreview?.protocolVersion === 2'));
+});
+await check('empty visible editor text is not replaced by hidden placeholder text, while real user text is preserved',async()=>{
+ let visible='';
+ const node={getClientRects:()=>[1],get innerText(){return visible;},textContent:'Kérdezd meg a ChatGPT-t'};
+ const document={querySelector:()=>node};
+ class HTMLTextAreaElement {}
+ const view={webContents:{isDestroyed:()=>false,executeJavaScript:async script=>vm.runInNewContext(script,{document,HTMLTextAreaElement})}};
+ const sandbox={waitForChatComposer:async()=>true,composerSelectorLiteral:()=>JSON.stringify(['#prompt-textarea'])};
+ vm.createContext(sandbox);vm.runInContext(extract('captureComposerDraftText')+';globalThis.run=captureComposerDraftText',sandbox);
+ assert.equal((await sandbox.run(view)).text,'');visible='Saját be nem küldött szöveg';assert.equal((await sandbox.run(view)).text,visible);
+});
 await check('manual IPC and actual navigation page are wired through preload',()=>{
  const preload=fs.readFileSync(source+'preload.cjs','utf8'),renderer=fs.readFileSync(source+'renderer/context-workspace.js','utf8');
  for(const channel of ['manual-control:get','manual-control:run'])assert.ok(preload.includes(channel)&&main.includes('ipcMain.handle("'+channel+'"'));
