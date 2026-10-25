@@ -120,6 +120,10 @@ ${continuityContextSummary}`);
       "Production access: DENY"
     );
   }
+  const review=task?.reviewedWriteApproval;
+  if(review?.authority==="MANUAL_REPLACEMENT_PLAN"&&review.taskId===task.id&&review.sessionId===sessionId&&review.head===sourceHead&&review.proofSha256===sourceProofSha256&&Array.isArray(review.paths)&&review.paths.length){
+    lines.push("KÉZZEL JÓVÁHAGYOTT PONTOS ÍRÁSI FÁJLOK · csak validált BOOT ACK és Grid végrehajtási engedély után:",...review.paths.map(p=>cleanText(p,1000)),`Approval plan SHA-256: ${cleanText(review.planSha256,64)}`);
+  }
   lines.push(`ACCEPTANCE: ${acceptance}`);
 
   lines.push(

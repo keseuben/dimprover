@@ -12,7 +12,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { developerGridWorkReplacement, fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -2436,6 +2436,7 @@ function launchTaskFromWork(work, chatPlan = null) {
     sourceHead: session.sourceProvenance?.head || null,
     sourceProofSha256: session.developmentContext?.sourceExecutionProof?.sha256 || null,
     sourceExecutionProof: session.developmentContext?.sourceExecutionProof || null,
+    reviewedWriteApproval: session.developmentContext?.reviewedWriteApproval || null,
     sessionId: session.id || null,
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
     acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
@@ -7447,6 +7448,29 @@ function registerIpc() {
     }catch(error){return {ok:false,error:error instanceof Error?error.message:"A Codex result import sikertelen."};}
   });
 
+  ipcMain.handle("work-start:replace", async (_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const guards=captureWorkerConversationGuards();
+    try{
+      const apply=payload?.action==="REPLACE_WORK";
+      if(!apply&&payload?.action!=="PREPARE_WORK_REPLACEMENT")throw new Error("WORK_REPLACEMENT_ACTION_INVALID");
+      const code=workflowControl.worker(payload?.workerCode);
+      if(!workflowControl.WORKERS.includes(code))throw new Error("EXPLICIT_WORKER_REQUIRED");
+      if(apply)saveConfig({...config,workflowControlModes:{...config.workflowControlModes,[code]:"MANUAL"}});
+      const result=await developerGridWorkReplacement({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:payload});
+      if(!apply)return result;
+      preserveWorkerConversationsAfterWorkStart(guards);
+      const work=result.work;
+      const chatPlan=await initializeTaskChatPlan(work,"EXISTING_CHAT",guards);
+      const task=launchTaskFromWork(work,chatPlan),worker=assignedWorkerCodeFromWork(work);
+      if(task&&worker)saveTaskLaunchPatch(task,worker,{dispatchMode:"MANUAL"});
+      let taskLaunch=null;
+      if(work?.routingState==="ROUTED"&&task&&worker&&chatPlan?.conversationBound===true)
+        taskLaunch=await prepareWorkerTaskLaunch(worker,task.id,{autoSend:false,taskOverride:task});
+      send("context:refresh",{reason:"work-replaced",taskId:work?.task?.id});
+      return {...result,chatPlan,taskLaunch};
+    }catch(error){return {ok:false,error:error.message,code:error.code||"WORK_REPLACEMENT_FAILED"};}
+  });
   ipcMain.handle("work-start:create", async (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
     const conversationGuards = captureWorkerConversationGuards();

@@ -1,4 +1,7 @@
 "server-only";
+import {boundReviewedWritePaths} from "./reviewed-write-scope";
+import moduleCatalog from "@/config/developer-grid-module-sources.json";
+import {withDeveloperGridTaskOperation} from "./task-operation-lock";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -42,6 +45,7 @@ type Result = { status: "PASS" | "FAIL" | "BLOCKED"; code: string; summary: stri
 type ScopeCandidate = { path: string; riskLevel: string; decision: string };
 type ScopePlan = {
   moduleName: string;
+  reviewedWritePaths?: string[];
   readablePaths: string[];
   writablePaths: string[];
   candidates: ScopeCandidate[];
@@ -166,13 +170,14 @@ async function assertWritablePath(root: string, rel: string, scope: ScopePlan) {
   const rootReal = await canonicalRoot(root);
   const policy = classifyScopePath(rel);
   if (policy.decision === "DENIED") throw new DeveloperGridExecutionError(`Tiltott RED path: ${rel}.`, "EXECUTION_RED_PATH_DENIED", 403, { reasons: policy.reasons });
-  if (policy.decision !== "AUTO_APPROVED") throw new DeveloperGridExecutionError("YELLOW/shared path automatikus Execution Bridge írása tiltott.", "EXECUTION_SCOPE_REVIEW_REQUIRED", 403, { path: rel, reasons: policy.reasons });
+  const reviewed=scope.reviewedWritePaths?.includes(rel)===true;
+  if (policy.decision !== "AUTO_APPROVED" && !reviewed) throw new DeveloperGridExecutionError("YELLOW/shared path automatikus Execution Bridge írása tiltott.", "EXECUTION_SCOPE_REVIEW_REQUIRED", 403, { path: rel, reasons: policy.reasons });
 
   let exists = false;
   try { await lstat(path.join(rootReal, rel)); exists = true; } catch { exists = false; }
   if (exists) {
-    if (!pathInScope(rel, scope.writablePaths)) throw new DeveloperGridExecutionError("A fájl nincs a task AUTO_APPROVED write scope-jában.", "EXECUTION_SCOPE_DENIED", 403, { path: rel, moduleName: scope.moduleName });
-  } else if (!newFileDirectoryAllowed(rel, scope.writablePaths)) {
+    if (!pathInScope(rel, scope.writablePaths) && !reviewed) throw new DeveloperGridExecutionError("A fájl nincs a task AUTO_APPROVED write scope-jában.", "EXECUTION_SCOPE_DENIED", 403, { path: rel, moduleName: scope.moduleName });
+  } else if (!newFileDirectoryAllowed(rel, scope.writablePaths) && !reviewed) {
     throw new DeveloperGridExecutionError("Új fájl csak task-analyzer által igazolt AUTO_APPROVED könyvtárban hozható létre.", "EXECUTION_NEW_FILE_SCOPE_DENIED", 403, { path: rel, moduleName: scope.moduleName });
   }
 
@@ -208,9 +213,21 @@ async function git(root: string, args: string[], timeout = 15_000) {
     return { code: typeof candidate.code === "number" ? candidate.code : 1, stdout: String(candidate.stdout || ""), stderr: String(candidate.stderr || "") };
   }
 }
-async function buildScopePlan(input: { root: string; taskTitle: string; sourcePrompt: string; moduleName: string }): Promise<ScopePlan> {
+async function buildScopePlan(input: { root: string; taskTitle: string; sourcePrompt: string; moduleName: string; projectId?: string }): Promise<ScopePlan> {
   const analysis = await analyzeTechnicalScope({ title: input.taskTitle, goal: input.sourcePrompt, moduleHint: input.moduleName || null }, input.root);
   const candidates = analysis.candidates.map((item) => ({ path: normalizePath(item.path), riskLevel: item.riskLevel, decision: item.decision }));
+  const moduleKey=(value:string)=>value.normalize("NFKC").trim().toLocaleLowerCase("hu-HU").replace(/\s+/g," ");
+  const registered=moduleCatalog.sources.find(item=>item.projectId===input.projectId&&item.modules.some(name=>moduleKey(name)===moduleKey(input.moduleName)));
+  if(registered){
+    const roots=registered.readRoots.filter(rel=>rel&&!rel.startsWith("/")&&!rel.split("/").includes(".."));
+    const listed=await git(input.root,["ls-files","-z","--",...roots]);
+    if(listed.code!==0)throw new DeveloperGridExecutionError("A modul forráslistája nem olvasható.","EXECUTION_MODULE_SCOPE_UNAVAILABLE",409);
+    for(const rel of listed.stdout.split("\0").filter(Boolean).slice(0,5000)){
+      const normalized=cleanRel(rel),policy=classifyScopePath(normalized);
+      if(policy.decision!=="DENIED"&&!candidates.some(item=>item.path===normalized))
+        candidates.push({path:normalized,riskLevel:policy.riskLevel,decision:"NEEDS_REVIEW"});
+    }
+  }
   const readablePaths = candidates.filter((item) => item.decision !== "DENIED").map((item) => item.path);
   const writablePaths = candidates.filter((item) => item.decision === "AUTO_APPROVED" && item.riskLevel === "GREEN").map((item) => item.path);
   if (!readablePaths.length) throw new DeveloperGridExecutionError("A Central Core scope-analyzer nem igazolt olvasható task pathot.", "EXECUTION_SCOPE_EMPTY", 409, { moduleName: input.moduleName });
@@ -285,10 +302,13 @@ async function validateContext(input: Input) {
 
   const scopePlan = await buildScopePlan({
     root: rootReal,
+    projectId:task.projectId,
     taskTitle: text(task.title, 500),
     sourcePrompt: text(context.sourcePrompt, 12_000) || text(task.title, 500),
     moduleName: text(context.moduleName, 180),
   });
+  scopePlan.reviewedWritePaths=boundReviewedWritePaths(context.reviewedWriteApproval,{taskId,sessionId,workerCode:worker,head,proofSha256:proofSha});
+  scopePlan.readablePaths=[...new Set([...scopePlan.readablePaths,...scopePlan.reviewedWritePaths])];
   return { requestId, taskId, sessionId, worker, proofSha, action, engineSessionId, root: rootReal, scopePlan, requestHash: publicRequestHash(input) };
 }
 
@@ -415,6 +435,10 @@ async function perform(root: string, scope: ScopePlan, input: Input, action: Exe
 }
 
 export async function executeDeveloperGridRequest(raw: unknown) {
+  const taskId=String((raw as Record<string,unknown>)?.taskId||"");
+  return withDeveloperGridTaskOperation(taskId,()=>executeDeveloperGridRequestLocked(raw));
+}
+async function executeDeveloperGridRequestLocked(raw: unknown) {
   const input = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Input;
   const context = await validateContext(input);
   const existing = await findAudit(context.taskId, context.requestId);

@@ -8,6 +8,7 @@ import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/develo
 import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
 import { encodeEventCursor } from "./events";
+import { resolveDeveloperGridModuleSource } from "./module-source";
 import { findLatestContinuationContext } from "./conversation-memory";
 import { verifyCurrentSourceExecutionState, verifySourceProvenance } from "./source-provenance";
 import { ensureDeveloperWorkerWorkspace, retargetDeveloperWorkerWorkspace } from "./worker-workspace";
@@ -79,6 +80,8 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const submoduleName = text(input.submoduleName, 180) || null;
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
   const autoRetireStalePreBoot = input.autoRetireStalePreBoot === true;
+  const sourceCommit = text(input.sourceCommit,80).toLowerCase() || null;
+  if(sourceCommit && !/^[0-9a-f]{40}$/.test(sourceCommit)) throw Object.assign(new Error("Teljes modulforrás-commit szükséges."),{code:"MODULE_SOURCE_HEAD_INVALID",status:400});
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const rawSurfaceType = text(input.surfaceType, 40).toUpperCase();
@@ -119,7 +122,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -536,6 +539,12 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   const stalePreBootRetirement = await retireStalePreBootWorkerSessionForAutoStart(input);
   const engineState = await getDevCenterEngineState();
   const continuity = await resolveContinuityContext(engineState, input, taskId);
+  const existingGrid = await readGridState();
+  const existingSession = existingGrid.sessions.find(item=>item.taskId===taskId&&item.endedAt===null);
+  const existingEngineTask = engineState.tasks.find(item=>item.id===taskId);
+  const existingMeta = existingEngineTask?.metadata && typeof existingEngineTask.metadata === "object" ? existingEngineTask.metadata as Record<string,unknown> : {};
+  const storedBinding = existingMeta.moduleSourceBinding as {head?:string} | undefined;
+  const moduleSourceBinding = await resolveDeveloperGridModuleSource({projectId:input.projectId,moduleName:input.moduleName,fallbackHead:String(foundation.sourceProvenance.head || ""),pinnedHead:storedBinding?.head || existingSession?.sourceProvenance.head || input.sourceCommit});
   // Handoff/continuity kizárólag kontextust adhat. Worker-választást nem írhat felül.
   const routingPreference = input.preferredWorkerCode;
   const routingPreferenceSource = "BENJADMIN_EXPLICIT";
@@ -573,6 +582,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
           origin: "BENJADMIN_DEVELOPER_GRID_WORK_START",
           sourcePrompt: input.sourcePrompt,
           sourcePromptPreserved: true,
+          moduleSourceBinding,
           chatLaunchMode: input.chatLaunchMode,
           preferredWorkerCode: input.preferredWorkerCode,
           routingPreferenceSource,
@@ -658,7 +668,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       taskId,
       workerCode:routedCode,
       engineSessionId,
-      baseHead:String(foundation.sourceProvenance.head || "").toLowerCase(),
+      baseHead:moduleSourceBinding.head,
       scope:[{ type:"module", key:input.moduleName }],
       gridSessionId,
     });
@@ -673,6 +683,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     workStageIndex: 1,
     taskId,
     sourcePrompt: input.sourcePrompt,
+    moduleSourceBinding,
     chatLaunchMode: input.chatLaunchMode,
     surfaceType: input.surfaceType,
     preferredWorkerCode: input.preferredWorkerCode,

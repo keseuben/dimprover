@@ -1332,7 +1332,7 @@ export async function setDevEngineTaskTesting(taskId: string) {
   return { ok: true as const, task: mapTask(data as JsonRecord) };
 }
 
-export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null }) {
+export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null; rebalance?: boolean }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
   if (task.status === "cancelled") throw new DevCenterEngineError("Törölt task nem zárható le eredménnyel.", "DEV_CENTER_TASK_FINALIZE_STATE_DENIED", 409);
@@ -1373,7 +1373,7 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
   });
   let rebalance: Awaited<ReturnType<typeof rebalanceBenAiWaitingTasks>> | null = null;
   try {
-    rebalance = await rebalanceBenAiWaitingTasks(12, { trigger: "TASK_FINALIZED", sourceTaskId: task.id, sourceOutcome: input.outcome });
+    if(input.rebalance !== false) rebalance = await rebalanceBenAiWaitingTasks(12, { trigger: "TASK_FINALIZED", sourceTaskId: task.id, sourceOutcome: input.outcome });
   } catch { /* a task lezárását a koordinátori újraosztás hibája nem törheti meg */ }
   return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false, rebalance };
 }

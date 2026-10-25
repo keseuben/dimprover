@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "projectId": "project_dimprover",
+      "modules": [
+        "DIMPRO Drive",
+        "Drive"
+      ],
+      "branch": "worker/benjaminai/drive-desktop-v019-v0924-integration-20261007",
+      "minimumCommit": "376ef8558b4a7f3084cc6abc1e5fc3c14746ad57",
+      "requiredPaths": [
+        "components/drive/driveBuildInfo.ts",
+        "app/lib/transfer-core/personalReceiptStorage.ts"
+      ],
+      "readRoots": [
+        "components/drive",
+        "app/lib/transfer-core",
+        "app/lib/drive",
+        "app/api/drive"
+      ]
+    },
+    {
+      "projectId": "project_dimprover",
+      "modules": [
+        "Developer Grid V1",
+        "BENJADMIN Developer Grid"
+      ],
+      "branch": "codex/grid-launch-handoff-20261023",
+      "minimumCommit": "0b66ea6c9cfd13add6588cb4e2642fdc6e21a3f8",
+      "requiredPaths": [
+        "desktop/benjadmin-developer-grid/src/main.cjs",
+        "app/lib/developer-grid/work-start.ts"
+      ],
+      "readRoots": [
+        "desktop/benjadmin-developer-grid",
+        "app/lib/developer-grid",
+        "app/api/dev/grid",
+        "scripts/developer-grid"
+      ]
+    }
+  ]
+}

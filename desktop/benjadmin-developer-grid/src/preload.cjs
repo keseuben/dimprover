@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   setUiOverlay: (visible) => ipcRenderer.invoke("ui:overlay", { visible }),
   getReviewRoom: () => ipcRenderer.invoke("review:get"),
   getContextWorkspace: (filters = {}) => ipcRenderer.invoke("context:get", filters),
+  replaceDeveloperGridWork: (input) => ipcRenderer.invoke("work-start:replace", input),
   getDeveloperGridManualControl: (selection) => ipcRenderer.invoke("manual-control:get", selection),
   runDeveloperGridManualControl: (input) => ipcRenderer.invoke("manual-control:run", input),
   getDeveloperGridActiveWork: () => ipcRenderer.invoke("work-start:get"),

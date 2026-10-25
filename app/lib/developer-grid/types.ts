@@ -54,6 +54,8 @@ export type DevelopmentContext = {
   workItem: string;
   workStageIndex?: number | null;
   taskId: string;
+  reviewedWriteApproval?: import("./reviewed-write-scope").ReviewedWriteApproval | null;
+  moduleSourceBinding?: import("./module-source").ModuleSourceBinding | null;
   sourcePrompt?: string | null;
   chatLaunchMode?: ChatLaunchMode | null;
   surfaceType?: WorkerSurfaceType | null;

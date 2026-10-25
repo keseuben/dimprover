@@ -10,7 +10,8 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"manual", manualControl:null, manualNotice:"", manualBusy:false, manualTaskId:"", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"manual", manualControl:null, manualNotice:"", manualBusy:false, manualTaskId:"", replacementPreview:null, replacementPending:null, reviewedWritePaths:"", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  try{state.replacementPending=JSON.parse(localStorage.getItem("gridPendingReplacementV106")||"null");}catch{}
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
   try {
@@ -368,14 +369,18 @@
       <small>Az engedély kizárólag ehhez a taskhoz, sessionhöz, source proofhoz és csevegéshez tartozik. A forrásutasítás korlátait és a szerver kapuit nem bővíti. Fázislépéshez külön kattintás kell.</small>
       ${m.resultPending?`<p>Megőrzött végrehajtási válasz vár kézbesítésre.</p>${btn("retry-result","MEGŐRZÖTT VÁLASZ KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
       ${m.preview?`<details open><summary>Előkészített folytatás · még nincs elküldve</summary><pre>${esc(m.preview.text)}</pre></details>${btn("send-preview","ELŐNÉZET ELKÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
-      ${m.draft?.text?`<details open><summary>A csevegés jelenlegi piszkozata · még nincs elküldve</summary><pre>${esc(m.draft.text)}</pre></details>${btn("send-draft","ELLENŐRZÖTT GÉPI PISZKOZAT KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
+      ${String(m.draft?.text||"").trim()?`<details open><summary>A csevegés jelenlegi piszkozata · még nincs elküldve</summary><pre>${esc(m.draft.text)}</pre></details>${btn("send-draft","ELLENŐRZÖTT GÉPI PISZKOZAT KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
       ${m.stageReport?`<p>Elfogadásra vár: ${esc(m.stageReport.stage)}/6 · ${esc(m.stageReport.result)} · ${esc(m.stageReport.summary)}</p>${btn("accept-report","JELENTÉS ELFOGADÁSA",disabled||mode!=="MANUAL")}`:""}
       <div class="cw-manual-actions">${btn("stage","FÁZISUTASÍTÁS KÜLDÉSE",disabled||mode!=="MANUAL"||m.resultPending||m.bootAck!=="VALIDATED")}${btn("handoff","ÁTADÓ ELŐKÉSZÍTÉSE",disabled||mode!=="MANUAL"||m.resultPending)}</div>`:pair?"<p>A kiválasztott task állapotának lekérése folyamatban.</p>":""}
+      ${state.replacementPending&&workerUiCode(state.replacementPending.workerCode)===code?`<p>Korábbi átállítás eredménye még nem igazolt. Azonos kéréssel folytatható, új task duplikálása nélkül.</p><button id="replacementRetry" type="button" ${state.manualBusy?"disabled":""}>ÁTÁLLÍTÁS ÁLLAPOTÁNAK ELLENŐRZÉSE / FOLYTATÁSA</button>`:""}
       <div role="status" class="cw-notice">${esc(state.manualNotice||"")}</div>
-      <details class="cw-manual-new"><summary>ÚJ FEJLESZTÉSI FELADAT KÉZI INDÍTÁSA</summary><p>Meglévő munkához a fenti folytatást használd. Itt új task jön létre a kiválasztott kódmérnöknek.</p>
+      <details class="cw-manual-new" ${state.workStartDraft.trim()||state.replacementPreview?"open":""}><summary>ÚJ FEJLESZTÉSI FELADAT KÉZI INDÍTÁSA</summary><p>A folytatás megőrzi a korábbi feladat korlátait. Új fejlesztési megbízáshoz írd le a munkát és engedélyezett műveleteit. Foglalt worker esetén a régi, tiszta 1/6-os feladat ellenőrzött leváltása szükséges.</p>
       <label>Új feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a feladatot és korlátait…">${esc(state.workStartDraft)}</textarea></label>
       <div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}"></label></div>
       <label><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${state.workStartChatMode!=="NEW_PROJECT_CHAT"?"checked":""}> Meglévő csevegés</label><label><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${state.workStartChatMode==="NEW_PROJECT_CHAT"?"checked":""}> Új projektcsevegés</label>
+      <label>Külön jóváhagyandó forrásfájlok · opcionális<textarea id="reviewedWritePaths" rows="3" placeholder="Pontos relatív fájlútvonal, soronként. Csak az itt felsorolt közös fájlokra adsz írási engedélyt.">${esc(state.reviewedWritePaths)}</textarea></label>
+      <button id="replacementPrepare" type="button" ${!same||state.manualBusy||state.workStartDraft.trim().length<12?"disabled":""}>RÉGI TASK LEVÁLTÁSÁNAK ELŐNÉZETE</button>
+      ${state.replacementPreview?`<details open><summary>Új fejlesztési kör · jóváhagyásra vár</summary><pre>${esc(JSON.stringify(state.replacementPreview.plan,null,2))}</pre><p>A korábbi task sikertelenként lezárul, forrása és naplója megmarad. Új task/session és új BOOT ACK szükséges. Üzenetküldés külön gombbal.</p><button id="replacementApply" type="button" ${state.manualBusy?"disabled":""}>ÚJ FEJLESZTÉSI KÖR ELŐKÉSZÍTÉSE A FENTI UTASÍTÁSSAL</button></details>`:""}
       <button id="workStartButton" type="button" ${!code||state.workStartBusy||state.workStartDraft.trim().length<12?"disabled":""}>${state.workStartBusy?"ELŐKÉSZÍTÉS…":"TASK ÉS LAUNCH PACKET ELŐKÉSZÍTÉSE"}</button><p role="status">${esc(state.workStartNotice)}</p></details>
     </section>`;
   }
@@ -386,7 +391,25 @@
     const latest=manualSelection();
     if(latest.taskId!==selection.taskId||latest.sessionId!==selection.sessionId||latest.workerCode!==selection.workerCode)return;
     state.manualControl=result?.ok?result.control:null;
+    if(!state.workStartDraft.trim()&&state.manualControl){const pair=selectedWorkLaunchPair();state.workStartProjectId=pair?.task?.projectId||state.workStartProjectId;state.workStartModuleName=pair?.session?.developmentContext?.moduleName||state.workStartModuleName;}
     if(!result?.ok)state.manualNotice=result?.error||"A kézi állapot nem olvasható.";
+  }
+  async function replacementAction(apply,retry=false){
+    if(state.manualBusy)return;
+    const selection=manualSelection(),m=state.manualControl;
+    if(!retry&&(!selection.taskId||m?.taskId!==selection.taskId||m?.sessionId!==selection.sessionId))return;
+    let input={...selection,reviewedWritePaths:state.reviewedWritePaths.split(/\r?\n/).map(p=>p.trim()).filter(Boolean),sourcePrompt:state.workStartDraft.trim(),projectId:state.workStartProjectId.trim(),moduleName:state.workStartModuleName.trim(),expectedSourceProofSha256:m?.sourceProofSha256,action:apply?"REPLACE_WORK":"PREPARE_WORK_REPLACEMENT"};
+    if(retry){input=state.replacementPending;if(!input||workerUiCode(input.workerCode)!==workerUiCode(state.workStartWorkerCode))return;}
+    else if(apply){if(!state.replacementPreview)return;input.planSha256=state.replacementPreview.planSha256;input.sourceCommit=state.replacementPreview.plan.targetSource.head;}
+    if(apply){state.replacementPending=input;localStorage.setItem("gridPendingReplacementV106",JSON.stringify(input));}
+    state.manualBusy=true;state.manualNotice="Forrás és végrehajtási napló ellenőrzése…";render();
+    try{
+      const result=await api.replaceDeveloperGridWork?.(input);
+      if(!result?.ok)throw Error(result?.error||"Az új kör blokkolva maradt.");
+      if(!apply){state.replacementPreview=result.replacement;state.manualNotice="Az előnézet kész. Ellenőrizd az új utasítást és forrást.";}
+      else{if(result.work?.routingState!=="ROUTED"){state.manualNotice="Az új kör várólistán van; ugyanennek az átállításnak a folytatása szükséges.";return;}state.replacementPending=null;localStorage.removeItem("gridPendingReplacementV106");state.replacementPreview=null;state.manualTaskId=result.work?.task?.id||"";state.workStartDraft="";state.manualNotice="Az új task előkészítve. A Launch Packet küldése és az új BOOT ACK még szükséges.";await refresh(false);}
+    }catch(error){state.manualNotice=error.message;if(apply)state.replacementPreview=null;}
+    finally{state.manualBusy=false;render();}
   }
   async function manualAction(action){
     if(state.manualBusy)return;
@@ -404,18 +427,22 @@
 
   function render() { if(state.navSection==="manual"){root.innerHTML=cardNavView()+manualControlView();bindRenderedUi();return;} root.innerHTML=`${cardNavView()}${workStartView()}${memoryView()}${diagnosticsView()}${runnerPoolView()}${packView()}<div data-cw-section="handoffs"><nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav></div><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
   function bindRenderedUi() {
+    root.querySelector("#replacementRetry")?.addEventListener("click",()=>void replacementAction(true,true));
+    root.querySelector("#reviewedWritePaths")?.addEventListener("input",e=>{state.reviewedWritePaths=e.target.value;state.replacementPreview=null;root.querySelector("#replacementApply")?.setAttribute("disabled","");});
+    root.querySelector("#replacementPrepare")?.addEventListener("click",()=>void replacementAction(false));
+    root.querySelector("#replacementApply")?.addEventListener("click",()=>void replacementAction(true));
     root.querySelectorAll("[data-manual-action]").forEach(b=>b.addEventListener("click",()=>void manualAction(b.dataset.manualAction)));
     root.querySelector("#manualRefresh")?.addEventListener("click",()=>void refresh(false));
-    root.querySelector("#manualTaskId")?.addEventListener("change",e=>{state.manualTaskId=e.target.value;state.manualControl=null;render();void refresh(false);});
+    root.querySelector("#manualTaskId")?.addEventListener("change",e=>{state.manualTaskId=e.target.value;state.manualControl=null;state.replacementPreview=null;render();void refresh(false);});
     const workPrompt=root.querySelector("#workStartPrompt");
-    workPrompt?.addEventListener("input",()=>{state.workStartDraft=workPrompt.value;state.workStartKey="";state.workStartNotice="";const b=root.querySelector("#workStartButton");if(b)b.disabled=state.workStartBusy||state.workStartDraft.trim().length<12;});
+    workPrompt?.addEventListener("input",()=>{state.workStartDraft=workPrompt.value;state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;const b=root.querySelector("#workStartButton");if(b)b.disabled=state.workStartBusy||state.workStartDraft.trim().length<12;const replacement=root.querySelector("#replacementPrepare");if(replacement)replacement.disabled=state.manualBusy||state.workStartDraft.trim().length<12||!state.manualControl||state.manualControl.taskId!==manualSelection().taskId;root.querySelector("#replacementApply")?.setAttribute("disabled","");});
     workPrompt?.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.ctrlKey){e.preventDefault();void startWork();}});
-    root.querySelector("#workStartProjectId")?.addEventListener("input",e=>{state.workStartProjectId=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelector("#workStartModuleName")?.addEventListener("input",e=>{state.workStartModuleName=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.manualTaskId="";state.manualControl=null;state.manualNotice="";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;state.memory=null;state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();else void refresh(false);});
-    root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";render();}));
-    root.querySelectorAll('input[name="workLaunchDispatchMode"]').forEach(r=>r.addEventListener("change",e=>{state.workLaunchDispatchMode=e.target.value==="AUTO"?"AUTO":"MANUAL";try{localStorage.setItem("benjadminWorkLaunchDispatchMode",state.workLaunchDispatchMode);}catch{}state.workStartKey="";state.workStartNotice="";render();}));
+    root.querySelector("#workStartProjectId")?.addEventListener("input",e=>{state.workStartProjectId=e.target.value;state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;});
+    root.querySelector("#workStartModuleName")?.addEventListener("input",e=>{state.workStartModuleName=e.target.value;state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;});
+    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.manualTaskId="";state.manualControl=null;state.manualNotice="";state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;state.taskBridge=null;state.memory=null;state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();else void refresh(false);});
+    root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;});
+    root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;render();}));
+    root.querySelectorAll('input[name="workLaunchDispatchMode"]').forEach(r=>r.addEventListener("change",e=>{state.workLaunchDispatchMode=e.target.value==="AUTO"?"AUTO":"MANUAL";try{localStorage.setItem("benjadminWorkLaunchDispatchMode",state.workLaunchDispatchMode);}catch{}state.workStartKey="";state.workStartNotice="";state.replacementPreview=null;render();}));
     root.querySelector("#workStartButton")?.addEventListener("click",()=>void startWork());
     root.querySelector("#taskBridgeCopyButton")?.addEventListener("click",()=>void copyTaskBridgeToCodex());
     root.querySelector("#taskBridgeRefreshButton")?.addEventListener("click",()=>void refreshTaskBridge());

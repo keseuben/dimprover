@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isChatGridDeviceAuthorized } from "@/app/lib/dev-center/chatgrid-device-auth";
 import { bindDeveloperGridConversation, getDeveloperGridActiveWork, recordDeveloperGridBootAck, recoverDeveloperGridExecutionAuthority, recoverDeveloperGridLaunchExecution, retargetDeveloperGridPreBootSource, startDeveloperGridWork } from "@/app/lib/developer-grid/work-start";
 
+import {prepareDeveloperGridWorkReplacement,replaceDeveloperGridWork} from "@/app/lib/developer-grid/work-replacement";
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -20,6 +22,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const action = body && typeof body === "object" ? String((body as Record<string, unknown>).action || "").toUpperCase() : "";
+    if(action === "PREPARE_WORK_REPLACEMENT") return json({ok:true,replacement:await prepareDeveloperGridWorkReplacement(body as Record<string,unknown>)});
+    if(action === "REPLACE_WORK") return json({ok:true,...await replaceDeveloperGridWork(body as Record<string,unknown>)});
     if (action === "RECOVER_LAUNCH_EXECUTION") {
       const recovery = await recoverDeveloperGridLaunchExecution(body as Record<string, unknown>);
       return json({ ok:true, recovery, activeWork:await getDeveloperGridActiveWork() });

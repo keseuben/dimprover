@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 const require=createRequire(import.meta.url);
 const ts=require("typescript");
 const source=fs.readFileSync("app/lib/developer-grid/execution-bridge.ts","utf8");
-const compiled=ts.transpileModule(source+"\nexport const runtimeTest={validateContext,cleanRel,assertReadableScope,assertWritablePath};",{
+const compiled=ts.transpileModule(source+"\nexport const runtimeTest={validateContext,cleanRel,assertReadableScope,assertWritablePath,buildScopePlan};",{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
 }).outputText;
 let count=0;
@@ -35,13 +35,16 @@ function load(data) {
   const execFile=()=>{throw new Error("unexpected real process");};
   execFile[promisify.custom]=async(file,args)=>{
     calls.push({file,args});
-    return {stdout:data.gitError?"invalid":args.includes("rev-parse")?data.head:data.branch,stderr:""};
+    return {stdout:args.includes("ls-files")?(data.tracked||""):data.gitError?"invalid":args.includes("rev-parse")?data.head:data.branch,stderr:""};
   };
   const stubs={
+    "./reviewed-write-scope":{normalizeReviewedWritePaths:()=>[],boundReviewedWritePaths:()=>[]},
+    "@/config/developer-grid-module-sources.json":data.catalog||{sources:[]},
+    "./task-operation-lock":{withDeveloperGridTaskOperation:async(_id,fn)=>fn()},
     "node:child_process":{execFile},
     "node:fs/promises":{realpath:async root=>root,lstat:async()=>{if(data.missingPath)throw Object.assign(new Error("missing"),{code:"ENOENT"});return {isSymbolicLink:()=>false};},stat:async()=>({})},
     "@/app/lib/dev-center/ai-worker/scope-analyzer":{analyzeTechnicalScope:async()=>({candidates:[{path:"app/drive/page.tsx",decision:"AUTO_APPROVED",riskLevel:"GREEN"}]})},
-    "@/app/lib/dev-center/ai-worker/scope-policy":{classifyScopePath:()=>({decision:"AUTO_APPROVED",riskLevel:"GREEN",reasons:[]})},
+    "@/app/lib/dev-center/ai-worker/scope-policy":{classifyScopePath:rel=>data.policy?data.policy(rel):rel.includes(".env")?({decision:"DENIED",riskLevel:"RED",reasons:[]}):({decision:"AUTO_APPROVED",riskLevel:"GREEN",reasons:[]})},
     "@/app/lib/dev-center/engine-repository":{getDevCenterEngineState:async()=>({tasks:data.engineTask?[data.engineTask]:[]}),assertDevEngineOperation:async(id,operation)=>{calls.push({id,operation});if(data.engineError)throw Object.assign(new Error(data.engineError),{code:data.engineError});return data.authorization;}},
     "./work-start":{getDeveloperGridTaskById:async id=>data.task?.id===id?data.task:null},
     "./state-store":{readGridState:async()=>data.state},
@@ -112,5 +115,24 @@ await check("read outside analyzed scope denied",()=>{
 await check("new file outside approved directory denied",async()=>{
   const data=fixture();data.missingPath=true;const bridge=load(data);
   await assert.rejects(()=>bridge.assertWritablePath(data.root,"app/auth/new.tsx",{writablePaths:["app/drive/page.tsx"]}),error=>error.code==="EXECUTION_NEW_FILE_SCOPE_DENIED");
+});
+await check("registered module files become readable without widening write scope",async()=>{
+ const data=fixture();data.catalog={sources:[{projectId:"project_dimprover",modules:["Drive"],readRoots:["app/lib/drive"]}]};data.tracked="app/lib/drive/receipt.ts\0app/lib/drive/.env\0";
+ const bridge=load(data),scope=await bridge.buildScopePlan({root:data.root,projectId:"project_dimprover",moduleName:"Drive",taskTitle:"Drive",sourcePrompt:"Drive"});
+ assert(scope.readablePaths.includes("app/lib/drive/receipt.ts"));assert(!scope.writablePaths.includes("app/lib/drive/receipt.ts"));assert(!scope.readablePaths.includes("app/lib/drive/.env"));
+});
+await check("other project does not inherit module read scope",async()=>{
+ const data=fixture();data.catalog={sources:[{projectId:"project_dimprover",modules:["Drive"],readRoots:["app/lib/drive"]}]};data.tracked="app/lib/drive/receipt.ts\0";
+ const bridge=load(data),scope=await bridge.buildScopePlan({root:data.root,projectId:"other",moduleName:"Drive",taskTitle:"Drive",sourcePrompt:"Drive"});assert(!scope.readablePaths.includes("app/lib/drive/receipt.ts"));
+});
+await check("exact reviewed YELLOW file is writable while another YELLOW file stays denied",async()=>{
+ const data=fixture();data.policy=()=>({decision:"NEEDS_REVIEW",riskLevel:"YELLOW",reasons:[]});const bridge=load(data);
+ const rel="app/lib/drive/receipt.ts",scope={writablePaths:[],reviewedWritePaths:[rel]};
+ await bridge.assertWritablePath(data.root,rel,scope);
+ await assert.rejects(()=>bridge.assertWritablePath(data.root,"app/lib/drive/other.ts",scope),e=>e.code==="EXECUTION_SCOPE_REVIEW_REQUIRED");
+});
+await check("reviewed file approval never overrides RED denial",async()=>{
+ const data=fixture();data.policy=()=>({decision:"DENIED",riskLevel:"RED",reasons:[]});const bridge=load(data),rel="app/lib/drive/.env";
+ await assert.rejects(()=>bridge.assertWritablePath(data.root,rel,{writablePaths:[],reviewedWritePaths:[rel]}),e=>e.code==="EXECUTION_RED_PATH_DENIED");
 });
 console.log("Execution Bridge runtime security PASS · "+count+"/"+count);
