@@ -1,3 +1,4 @@
+import {renewReviewedWriteApproval} from "./reviewed-write-scope";
 "server-only";
 
 import { createHash } from "node:crypto";
@@ -122,7 +123,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit, continuityMode: input.continuityMode === "NEW_WORK" ? "NEW_WORK" as const : "CONTINUE" as const };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -196,6 +197,8 @@ async function syncEngineBridgeTarget(taskId: string, target: "HANDED_OFF" | "RU
 }
 
 async function resolveContinuityContext(engineState: Awaited<ReturnType<typeof getDevCenterEngineState>>, input: ReturnType<typeof normalizeWorkStartInput>, currentTaskId: string) {
+  // Explicit replacement is a new instruction, not an inherited historical directive.
+  if (input.continuityMode === "NEW_WORK") return { previousTaskId:null, previousWorkerCode:null, handoffId:null, handoffSummary:null, contextSnapshotId:null, contextRevision:null, contextSummary:null };
   const candidates = engineState.tasks
     .filter((task) => task.id !== currentTaskId && task.projectId === input.projectId)
     .filter((task) => !["queued", "ready"].includes(String(task.status || "").toLowerCase()))
@@ -833,6 +836,7 @@ export async function recoverDeveloperGridLaunchExecution(rawInput: Record<strin
       ...session.developmentContext,
       engineSessionId,
       sourceExecutionProof,
+      reviewedWriteApproval:renewReviewedWriteApproval(session.developmentContext.reviewedWriteApproval,{taskId:task.id,sessionId:session.id,workerCode},session.developmentContext.sourceExecutionProof,sourceExecutionProof),
       bootAckState:"WAITING",
       bootAckValidatedAt:null,
       bootAckSha256:null,
@@ -979,6 +983,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
       ...session.developmentContext,
       engineSessionId,
       sourceExecutionProof:ready.proof,
+      reviewedWriteApproval:renewReviewedWriteApproval(session.developmentContext.reviewedWriteApproval,{taskId,sessionId:gridSessionId,workerCode},previousProof,ready.proof),
       executionAuthorityRecoveredAt:now,
       executionAuthorityRecoveredFromEngineSessionId:recoveredFromEngineSessionId,
       executionAuthorityPreviousSourceProofSha256:expectedPreviousProofSha256,

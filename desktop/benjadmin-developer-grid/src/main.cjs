@@ -3368,7 +3368,7 @@ async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launch
   };
 }
 
-async function initializeTaskChatPlan(work, requestedMode, conversationGuards = []) {
+async function initializeTaskChatPlan(work, requestedMode, conversationGuards = [], { automatic = true } = {}) {
   const task = work?.task;
   const code = assignedWorkerCodeFromWork(work);
   if (!task?.id || !code) return null;
@@ -3381,7 +3381,7 @@ async function initializeTaskChatPlan(work, requestedMode, conversationGuards = 
   const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
   if (!adapterGate.ok) return { ...record, surfaceType, surfaceReady:false, surfaceBlockCode:adapterGate.code, surfaceBlockError:adapterGate.error };
   if (chatLaunchMode === "EXISTING_CHAT" && previousConversationId) {
-    const bound = await bindCurrentTaskConversation(code, task.id, { automatic: true, taskOverride: task }).catch((error) => ({ ok: false, error: error.message }));
+    const bound = await bindCurrentTaskConversation(code, task.id, { automatic, taskOverride: task }).catch((error) => ({ ok: false, error: error.message }));
     if (bound?.ok) record = bound.chatLaunch;
   }
   return record;
@@ -7461,7 +7461,7 @@ function registerIpc() {
       if(!apply)return result;
       preserveWorkerConversationsAfterWorkStart(guards);
       const work=result.work;
-      const chatPlan=await initializeTaskChatPlan(work,"EXISTING_CHAT",guards);
+      const chatPlan=await initializeTaskChatPlan(work,"EXISTING_CHAT",guards,{automatic:false});
       const task=launchTaskFromWork(work,chatPlan),worker=assignedWorkerCodeFromWork(work);
       if(task&&worker)saveTaskLaunchPatch(task,worker,{dispatchMode:"MANUAL"});
       let taskLaunch=null;
@@ -7481,7 +7481,7 @@ function registerIpc() {
       if (workflowControl.isManual(config, code)) payload = {...payload,launchDispatchMode:"MANUAL"};
       const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
       preserveWorkerConversationsAfterWorkStart(conversationGuards);
-      const chatPlan = await initializeTaskChatPlan(work, payload?.chatLaunchMode, conversationGuards);
+      const chatPlan = await initializeTaskChatPlan(work, payload?.chatLaunchMode, conversationGuards, {automatic:false});
       let taskLaunch = null;
       const launchTask = launchTaskFromWork(work, chatPlan);
       const launchWorkerCode = assignedWorkerCodeFromWork(work);

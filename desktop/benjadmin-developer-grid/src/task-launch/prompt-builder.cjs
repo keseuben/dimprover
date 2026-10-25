@@ -151,6 +151,8 @@ ${continuityContextSummary}`);
     "First check: ellenőrizd a Launch Packet CENTRAL CORE SOURCE PREFLIGHT PROOF blokkját, a proof SHA-256 értékét és a Context Pack / handoff folytonosságát",
     "Risk/blocker: <röviden>",
     "Coding allowed: YES vagy NO",
+    "A Coding allowed mező kizárólag a forrás/scope preflight elfogadását jelenti; önmagában nem végrehajtási engedély. Valódi source/scope hiba esetén NO és konkrét indok szükséges. A Grid külön kézi végrehajtási engedélyének hiánya önmagában nem source/scope hiba.",
+    "Kézi módban az ACK után is várj a külön Grid végrehajtási engedélyre. Addig ne adj execution requestet és ne végezz fájlműveletet. A forrásutasítás tiltásai továbbra is érvényesek.",
     "SOURCE AUTHORITY SZABÁLY: a Launch Packet WORKTREE/BRANCH/BASE HEAD + CENTRAL CORE SOURCE PREFLIGHT PROOF együtt authoritative. Ne helyettesítsd /root/dimprover, scratch repo, default MCP cwd vagy más lokális Git nézettel.",
     "Ha a CENTRAL CORE proof State=VERIFIED, Authority=CENTRAL_CORE, Handshake=READY, legalább 1 scope lock és 1 worktree lease szerepel, valamint a BOOT ACK Source proof mezőjébe pontosan visszaadod a Proof SHA-256 értéket, akkor a source/scope preflight teljesítettnek tekintendő. A ChatGPT saját környezetéből közvetlen /srv fájlrendszer- vagy MCP-mount hiánya önmagában NEM preflight blocker és emiatt Coding allowed: NO nem adható.",
     "SOURCE_BASELINE_MISMATCH csak a Central Core által jelzett proof/provenance eltérésre használható. A saját ChatGPT sandboxból hiányzó /srv útvonalat ne minősítsd source mismatchnek.",

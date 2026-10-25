@@ -74,7 +74,7 @@ async function replaceDeveloperGridWorkLocked(raw:Record<string,unknown>){
    await assertNoPendingExecution(task.id);
    await patchGridWorkerSession({sessionId:session.id,taskId:session.taskId,workerCode:session.workerCode,expectedSourceProofSha256:plan.previousSourceProofSha256,endedAt:new Date().toISOString()});
   }
-  const work=await startDeveloperGridWork({...input,idempotencyKey,sourceCommit:plan.targetSource.head,autoRetireStalePreBoot:false});
+  const work=await startDeveloperGridWork({...input,idempotencyKey,sourceCommit:plan.targetSource.head,autoRetireStalePreBoot:false,continuityMode:"NEW_WORK"});
   if(work.session&&plan.reviewedWritePaths.length){
    const updated={...work.session,developmentContext:{...work.session.developmentContext,reviewedWriteApproval:{authority:"MANUAL_REPLACEMENT_PLAN" as const,taskId:nextTaskId,sessionId:work.session.id,workerCode:work.session.workerCode,head:plan.targetSource.head,proofSha256:String(work.session.developmentContext.sourceExecutionProof?.sha256||""),planSha256,paths:plan.reviewedWritePaths}}};
    work.session=await patchGridWorkerSession({sessionId:updated.id,taskId:nextTaskId,workerCode:updated.workerCode,expectedSourceProofSha256:updated.developmentContext.sourceExecutionProof?.sha256||"",developmentContext:{reviewedWriteApproval:updated.developmentContext.reviewedWriteApproval}});

@@ -408,7 +408,7 @@
       const result=await api.replaceDeveloperGridWork?.(input);
       if(!result?.ok)throw Error(result?.error||"Az új kör blokkolva maradt.");
       if(!apply){state.replacementPreview=result.replacement;state.manualNotice="Az előnézet kész. Ellenőrizd az új utasítást és forrást.";}
-      else{if(result.work?.routingState!=="ROUTED"){state.manualNotice="Az új kör várólistán van; ugyanennek az átállításnak a folytatása szükséges.";return;}state.replacementPending=null;localStorage.removeItem("gridPendingReplacementV106:"+workerUiCode(input.workerCode));state.replacementPreview=null;state.manualTaskId=result.work?.task?.id||"";state.workStartDraft="";state.manualNotice="Az új task előkészítve. A Launch Packet küldése és az új BOOT ACK még szükséges.";await refresh(false);}
+      else{if(result.work?.routingState!=="ROUTED"){state.manualNotice="Az új kör várólistán van; ugyanennek az átállításnak a folytatása szükséges.";return;}state.replacementPending=null;localStorage.removeItem("gridPendingReplacementV106:"+workerUiCode(input.workerCode));state.replacementPreview=null;state.manualTaskId=result.work?.task?.id||"";state.workStartDraft="";state.manualNotice=result.taskLaunch?.ok?"Az új task és a Launch Packet előkészítve. Küldés és új BOOT ACK szükséges.":result.chatPlan?.conversationBound?"Az új task csevegése rögzítve, de a Launch Packet előkészítése még nem igazolt. Készíts előnézetet.":"Az új task létrejött, de a csevegés még nincs hozzárendelve. Rögzítsd a csevegést; Launch Packet még nem készült.";await refresh(false);}
     }catch(error){state.manualNotice=error.message;if(apply)state.replacementPreview=null;}
     finally{state.manualBusy=false;render();}
   }
