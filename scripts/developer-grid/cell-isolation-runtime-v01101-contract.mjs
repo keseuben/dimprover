@@ -308,4 +308,4 @@ await check("manual live launch sends the selected Benjamin identity instead of 
  const result=await f.run({}, {taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
  assert.equal(result.ok,true);assert.equal(f.calls.length,1);assert.equal(f.calls[0].code,"BENJAMINAI");assert.equal(f.calls[0].taskId,"ben-task");assert.equal(f.calls[0].options.taskOverride.sessionId,"ben-session");
 });
-console.log("Developer Grid cell isolation/runtime v0.1.106 PASS "+n+"/"+n);
+console.log("Developer Grid cell isolation/runtime v0.1.107 PASS "+n+"/"+n);
