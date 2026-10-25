@@ -1,3 +1,4 @@
+import {automaticWorkflowVm} from "./automatic-workflow-test-context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -46,7 +47,7 @@ function load(data) {
     "./state-store":{readGridState:async()=>data.state},
   };
   const sandbox={exports:{},require:id=>Object.hasOwn(stubs,id)?stubs[id]:require(id),process:{env:{}},Buffer,console};
-  vm.runInNewContext(compiled,sandbox,{filename:"execution-bridge.ts"});
+  automaticWorkflowVm(vm).runInNewContext(compiled,sandbox,{filename:"execution-bridge.ts"});
   return {...sandbox.exports.runtimeTest,calls};
 }
 function resign(data) {

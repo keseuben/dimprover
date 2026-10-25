@@ -19,7 +19,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 let n=0;
 function check(name,fn){fn();n+=1;console.log("PASS",name);}
 
-check("desktop v0.1.103",()=>assert.equal(pkg.version,"0.1.103"));
+check("desktop v0.1.104",()=>assert.equal(pkg.version,"0.1.104"));
 const task={id:"task-1",sessionId:"session-1",sourceHead:"a".repeat(40),branchName:"worker/test",worktreePath:"/srv/dimpro-dev/worktrees/test"};
 const reviewPrompt=promptBuilder.buildInternalReviewFallbackPrompt({workerCode:"BENAI",workerLabel:"BenjáminAI",task,presence:{branch:"worker/test",worktree:"/srv/dimpro-dev/worktrees/test"}});
 check("internal review prompt is explicit non-independent fallback",()=>{assert.match(reviewPrompt,/INTERNAL_REVIEW_FALLBACK/);assert.match(reviewPrompt,/NEM független V\.Guard review/);assert.match(reviewPrompt,/DEV ONLY · PROD DENY/);});
@@ -28,10 +28,10 @@ check("internal review report parses and normalizes BENAI",()=>{const p=parser.p
 const bad=`BENJADMIN_INTERNAL_REVIEW_V1\n${JSON.stringify({schemaVersion:1,reviewMode:"INTERNAL_REVIEW_FALLBACK",workerCode:"BENAI",taskId:"task-1",sessionId:"session-1",head:"a".repeat(40),result:"PASS",summary:"bad",findings:[{severity:"HIGH",category:"SECURITY",message:"x"}],tests:[]})}\nBENJADMIN_INTERNAL_REVIEW_END`;
 check("PASS with blocker is fail-closed",()=>assert.equal(parser.parseDeveloperGridInternalReviewReport(bad).ok,false));
 check("conversation monitor drives autopilot without human stage click",()=>assert.match(main,/await continueDeveloperGridAutopilot\(code\)/));
-check("stages 1-3 automatically send next stage",()=>{assert.match(main,/stage>=1 && stage<=3/);assert.match(main,/prepareWorkerStageAction\(uiCode,"advance-stage",context\)/);});
+check("stages 1-3 automatically send next stage",()=>{assert.match(main,/stage>=1 && stage<=3/);assert.match(main,/prepareWorkerStageAction\(uiCode,"advance-stage",context, \{automatic:true\}\)/);});
 check("stage 4 chooses external VGuard when ready",()=>{assert.match(main,/gate\?\.vguard\?\.providerReady===true/);assert.match(main,/requestDeveloperGridVGuardReview/);});
 check("stage 4 falls back to same worker internal review",()=>{assert.match(main,/prepareInternalReviewFallback\(uiCode,context\)/);assert.match(main,/submitDeveloperGridInternalReviewFallback/);});
-check("review and build failures have autonomous rework prompts",()=>{assert.match(stage,/"review-rework"/);assert.match(stage,/"build-rework"/);assert.match(main,/prepareWorkerStageAction\(uiCode,"build-rework",context\)/);});
+check("review and build failures have autonomous rework prompts",()=>{assert.match(stage,/"review-rework"/);assert.match(stage,/"build-rework"/);assert.match(main,/prepareWorkerStageAction\(uiCode,"build-rework",context, \{automatic:true\}\)/);});
 check("stage 5 automatically requests Central Core full build",()=>assert.match(main,/requestDeveloperGridFullBuild\(\{baseUrl:config\.benjadminBaseUrl/));
 check("stage 6 forces memory refresh then closure",()=>{assert.match(main,/syncConversationMemoryForWorker\(uiCode,true\)/);assert.match(main,/closeDeveloperGridWork/);});
 check("internal fallback is disabled when external provider is ready",()=>assert.match(vguard,/DEVELOPER_GRID_EXTERNAL_VGUARD_READY/));
@@ -42,4 +42,4 @@ check("review gate accepts audited review evidence",()=>{assert.match(gate,/item
 check("review route has explicit internal fallback action",()=>assert.match(route,/INTERNAL_REVIEW_FALLBACK/));
 check("README declares autonomous no-folytasd workflow",()=>{assert.match(readme,/desktop autopilot PASS után automatikusan folytatja az 1\/6→6\/6 láncot/);assert.match(readme,/nincs köztes felhasználói „folytasd”/);});
 
-console.log("Developer Grid v0.1.103 autonomous 1/6→6/6 workflow contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.104 autonomous 1/6→6/6 workflow contract PASS · "+n+"/"+n);

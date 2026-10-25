@@ -1,5 +1,7 @@
 "use strict";
 
+const workflowControl = require("./workflow/control.cjs");
+
 const { app, BrowserWindow, WebContentsView, ipcMain, Notification, safeStorage, session, powerMonitor, nativeTheme, globalShortcut, shell, screen, clipboard, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -370,9 +372,13 @@ function clearContextBindings(workerCode) {
   return bindings;
 }
 
-function contextPackPromptForWorker(workerCode) {
+function contextPackPromptForWorker(workerCode, task = null) {
   const code = String(workerCode || "").toUpperCase();
-  const bindings = Array.isArray(loadContextBindings()[code]) ? loadContextBindings()[code] : [];
+  const bound = Array.isArray(loadContextBindings()[code]) ? loadContextBindings()[code] : [];
+  // A worker can switch modules. Historical worker-level handoffs must not
+  // override the task's authoritative module continuation.
+  const bindings = bound.filter(item => String(item.type || "").toLowerCase() !== "handoff"
+    || Boolean(task?.continuityHandoffId && item.id === task.continuityHandoffId));
   if (!bindings.length) return "";
   return [
     "BENJADMIN CONTEXT PACK:",
@@ -2314,10 +2320,13 @@ async function clearStaleOwnedTaskLaunchDraft(view, { taskId, sessionId, current
   return { ok:true, cleared:true, decision, clearResult };
 }
 
-async function sendPreparedChatPrompt(view, expectedMarker = "") {
+async function sendPreparedChatPrompt(view, expectedMarker = "", canSend = () => true) {
+  const marker = String(expectedMarker || "").trim();
+  if (!canSend()) return {sent:false,verified:false,reason:"send-permission-changed"};
   if (!view || view.webContents.isDestroyed()) return { sent: false, reason: "chat-unavailable" };
   await waitForChatComposer(view);
   const markerLiteral = JSON.stringify(String(expectedMarker || ""));
+  if (!canSend()) return {sent:false,verified:false,reason:"send-permission-changed"};
   const firstAttempt = await view.webContents.executeJavaScript(`(async () => {
     const marker = ${markerLiteral};
     const selectors = ${composerSelectorLiteral()};
@@ -2361,6 +2370,7 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
     return { ...firstAttempt, verified:false, nativeFallback:false, draft };
   }
 
+  if (!canSend()) return {sent:false,verified:false,reason:"send-permission-changed"};
   try {
     view.webContents.focus();
     view.webContents.sendInputEvent({ type:"keyDown", keyCode:"ENTER" });
@@ -2540,6 +2550,7 @@ function executionBridgeProtocolLines(task, workerCode, sourceProofSha256Overrid
 }
 
 async function sendBootAckAcceptedContinuation(view, task, workerCode, sourceProofSha256Override = "") {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const marker = "BENJADMIN_PROMPT_KIND: BOOT_ACK_ACCEPTED_V1";
   const authoritativeProofSha256 = resolvedExecutionProofSha256(task, sourceProofSha256Override);
   const prompt = [
@@ -2553,6 +2564,7 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode, sourcePro
     `Base HEAD: ${task.sourceHead}`,
     `Source proof: ${authoritativeProofSha256 || "—"}`,
     "DEV ONLY · PROD DENY.",
+    "Az eredeti utasítás korlátai elsőbbséget élveznek. Ha olvasás engedélyezett, először egyetlen GIT_STATUS kérést adj ki és várd meg a választ. Ha végrehajtás tiltott, csak állapotot igazolj vissza és várj.",
     "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot.",
     ...executionBridgeProtocolLines(task, workerCode, authoritativeProofSha256)
   ].join("\n");
@@ -2587,6 +2599,7 @@ function buildConversationRolloverReadyContinuationPrompt(task, workerCode, sour
 }
 
 async function sendConversationRolloverReadyContinuation(view, task, workerCode, sourceProofSha256Override = "") {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const marker = "BENJADMIN_PROMPT_KIND: CONVERSATION_ROLLOVER_READY_V1";
   const prompt = buildConversationRolloverReadyContinuationPrompt(task, workerCode, sourceProofSha256Override);
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
@@ -2711,6 +2724,7 @@ function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
 }
 
 async function sendExecutionAuthorityRecoveredContinuation(view, task, workerCode, authority) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_AUTHORITY_RECOVERED_V1";
   const prompt = buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority);
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
@@ -2815,7 +2829,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
 
     void sendEngineSessionHeartbeatOnce({ taskId, sessionId, workerCode }).catch(() => undefined);
     let continuation = { sent:false, verified:false, reason:"continuation-disabled" };
-    if (sendContinuation && view && !view.webContents.isDestroyed()) {
+    if (sendContinuation && !workflowControl.isManual(config, workerCode) && view && !view.webContents.isDestroyed()) {
       const currentRecord = loadTaskLaunchRecords()[taskId] || {};
       if (String(currentRecord.ackContinuationState || "").toUpperCase() === "SENT") {
         continuation = { sent:true, verified:true, duplicate:true };
@@ -2856,6 +2870,7 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
 }
 
 async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null, launchAfterBind = false } = {}) {
+  if (automatic && workflowControl.isManual(config,workerCode)) return {ok:false,reason:"MANUAL_CONTROL"};
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
@@ -2893,7 +2908,7 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   let taskLaunch = null;
   if (launchAfterBind) {
-    const dispatchMode = String(record.dispatchMode || "MANUAL").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
+    const dispatchMode = !workflowControl.isManual(config,code) && String(record.dispatchMode || "MANUAL").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
     taskLaunch = await prepareWorkerTaskLaunch(code, id, { autoSend:dispatchMode === "AUTO", taskOverride:taskOverride || task });
     saveTaskLaunchPatch(taskOverride || task, code, { dispatchMode });
   }
@@ -3372,6 +3387,7 @@ async function initializeTaskChatPlan(work, requestedMode, conversationGuards = 
 }
 
 async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, taskOverride = null } = {}) {
+  if (autoSend && workflowControl.isManual(config,workerCode)) return {ok:false,reason:"MANUAL_CONTROL"};
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
   try {
     if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Worker Task Launch kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
@@ -3441,7 +3457,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
       error:"A ChatGPT jelenleg választ generál ebben a worker-csevegésben. A Grid nem írja felül és nem duplikálja a Launch Packetet. Várd meg vagy állítsd le a generálást, majd használd az INDÍTÁS FOLYTATÁSA gombot.",
     };
   }
-  const contextPack = contextPackPromptForWorker(code);
+  const contextPack = contextPackPromptForWorker(code, task);
   const prompt = `${buildWorkerTaskPrompt({ task, workerCode: code, workerLabel: cell.label, presence })}${contextPack ? `\n\n${contextPack}` : ""}`;
   const insertion = await insertWorkerTaskPrompt(view, prompt, TASK_LAUNCH_PROMPT_MARKER);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
@@ -3716,6 +3732,7 @@ async function resolveExecutionRecoveryAuthority(task, workerCode, candidate, la
 }
 
 async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, invalidBody, parserCode) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const taskId = String(task?.id || "");
   const sessionId = String(task?.sessionId || "");
   const launchRecord = loadTaskLaunchRecords()[taskId] || {};
@@ -3811,12 +3828,26 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
   }
 }
 
-async function sendExecutionResultToWorker(view, payload) {
+async function executionResultTranscriptProof(view,prompt) {
+  const capture=await captureConversationTranscript(view).catch(()=>null);
+  const normalize=value=>String(value || "").replace(/\s+/g," ").trim();
+  const expected=normalize(prompt);
+  const found=capture?.ok && capture.messages?.find(item=>item.role === "USER" && normalize(item.text) === expected);
+  return {verified:Boolean(found),messageId:found?.messageId || null,generating:capture?.generating === true};
+}
+
+async function sendExecutionResultToWorker(view, payload, canSend = () => true) {
   const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1";
   const prompt = buildDeveloperGridExecutionResultPrompt(payload);
+  const previous = await executionResultTranscriptProof(view,prompt);
+  if(previous.verified) return {sent:true,verified:true,duplicate:true,transcriptProof:previous};
+  if(previous.generating || !canSend()) return {sent:false,verified:false,reason:previous.generating?"chat-generating":"send-permission-changed"};
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason:insertion?.reason || "execution-result-not-inserted" };
-  return sendPreparedChatPrompt(view, marker);
+  if (!canSend()) return {sent:false,verified:false,reason:"send-permission-changed"};
+  const sent=await sendPreparedChatPrompt(view, marker,canSend);
+  const transcriptProof=await executionResultTranscriptProof(view,prompt);
+  return {...sent,verified:transcriptProof.verified,transcriptProof,reason:transcriptProof.verified?null:sent?.reason || "exact-execution-result-not-observed"};
 }
 
 async function processCapturedExecutionRequest({ view, body, workerCode, task }) {
@@ -3851,33 +3882,27 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
     && /^[0-9a-f]{64}$/.test(recoveredProof);
   const expectedProof = recoveredProofBound ? recoveredProof : resolvedExecutionProofSha256(task);
   const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
-  const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
-  const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
-  if (processedExecutionRequestHashes.has(key) || String(launchRecord.lastExecutionRequestId || "") === request.requestId) return { processed:false, duplicate:true };
-  if (executionRequestProcessingKeys.has(key)) return { processed:false, pending:true };
-  executionRequestProcessingKeys.add(key);
-  try {
-    let payload;
-    if (localMismatch) {
-      payload = { requestId:request.requestId, taskId:String(task.id), sessionId:String(task.sessionId), action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_IDENTITY_MISMATCH", summary:"A request task/session/worker/source proof identity eltér az authoritative aktív Grid állapottól.", data:{} } };
-    } else {
-      payload = await executeDeveloperGridRequest({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:request }).catch((error) => ({ requestId:request.requestId, taskId:request.taskId, sessionId:request.sessionId, action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_BRIDGE_HTTP_FAILED", summary:error instanceof Error ? error.message : "Execution Bridge API hiba.", data:{} } }));
-    }
-    const sent = await sendExecutionResultToWorker(view, payload);
-    if (sent?.sent !== true || sent?.verified !== true) {
-      saveTaskLaunchPatch(task, workerCode, { executionBridgeState:"RESULT_SEND_PENDING", executionBridgeError:sent?.reason || "not-verified", executionBridgeAt:new Date().toISOString() });
-      send("context:refresh", { reason:"execution-result-send-pending", taskId:task.id, workerCode, requestId:request.requestId });
-      return { processed:false, retryable:true, payload, sent };
-    }
-    processedExecutionRequestHashes.add(key);
-    if (processedExecutionRequestHashes.size > 500) { const first=processedExecutionRequestHashes.values().next().value; if(first) processedExecutionRequestHashes.delete(first); }
-    saveTaskLaunchPatch(task, workerCode, { lastExecutionRequestId:request.requestId, lastExecutionAction:request.action, executionBridgeState:String(payload?.execution?.status || "PASS").toUpperCase(), executionBridgeCode:String(payload?.execution?.code || ""), executionBridgeAt:new Date().toISOString() });
-    send("context:refresh", { reason:"execution-result-sent", taskId:task.id, workerCode, requestId:request.requestId, status:payload?.execution?.status || null, code:payload?.execution?.code || null });
-    return { processed:true, payload, sent };
-  } finally { executionRequestProcessingKeys.delete(key); }
+  const process = require("./workflow/execution-journal.cjs").createExecutionJournal({
+    read:id=>loadTaskLaunchRecords()[id] || {},
+    patch:(target,code,patch)=>saveTaskLaunchPatch(target,code,patch),
+    execute:input=>executeDeveloperGridRequest({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input}),
+    deliver:sendExecutionResultToWorker,
+    conversation:target=>chatConversationIdFromUrl(target.webContents.getURL()),
+    allowed:(code,target,record,proof,conversationId,action)=> {
+      const bound=String(target.surfaceConversationId || target.chatConversationId || "");
+      return Boolean(bound && bound === conversationId && workflowControl.executionAllowed(config,code,target,record,proof,conversationId,action));
+    },
+    running:executionRequestProcessingKeys,
+    hash:value=>createHash("sha256").update(value).digest("hex"),
+  });
+  const before=loadTaskLaunchRecords()[task.id] || {};
+  const fingerprint=record=>JSON.stringify([record.executionBridgeState,record.executionBridgeError,record.lastExecutionRequestId,record.pendingExecutionResult?.key]);
+  const result=await process({view,task,workerCode,request,expectedProof,localMismatch});
+  if(result?.processed || fingerprint(before)!==fingerprint(loadTaskLaunchRecords()[task.id] || {})) send("context:refresh",{reason:result?.processed ? "execution-result-sent" : "execution-result-pending",taskId:task.id,workerCode});
+  return result;
 }
 
-async function processCapturedStageReport({ body, workerCode, task, baselineResponseSha256 = "" }) {
+async function processCapturedStageReport({ body, workerCode, task, baselineResponseSha256 = "", manualAccept = false }) {
   const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
   const uiWorkerCode = backendWorkerCode === "BENJAMINAI" ? "BENAI" : backendWorkerCode;
   const textBody = String(body || "");
@@ -3897,11 +3922,6 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     return { processed:false, reason:"parse" };
   }
   const report = parsed.report;
-  processedStageReportHashes.add(dedupeKey);
-  if (processedStageReportHashes.size > 500) {
-    const first = processedStageReportHashes.values().next().value;
-    if (first) processedStageReportHashes.delete(first);
-  }
   if (report.workerCode !== backendWorkerCode || report.taskId !== String(task.id) || report.sessionId !== String(task.sessionId)) {
     if (checkpointPending) publishTaskLaunchPatch(task, uiWorkerCode, {
       checkpointState:"BLOCKED", checkpointError:"STAGE_REPORT_IDENTITY_MISMATCH",
@@ -3909,6 +3929,11 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     }, "checkpoint-stage-report-identity-blocked");
     send("context:refresh", { reason:"stage-report-identity-blocked", taskId:task.id, workerCode:backendWorkerCode });
     return { processed:true, error:"identity-mismatch" };
+  }
+  if (workflowControl.executionPending(loadTaskLaunchRecords()[task.id])) return {processed:false, reason:"EXECUTION_RESULT_PENDING"};
+  if (workflowControl.isManual(config, workerCode) && !manualAccept) {
+    if (checkpointRecord.pendingStageReport?.sha256 !== responseSha256 && checkpointRecord.acceptedStageReportSha256 !== responseSha256) saveTaskLaunchPatch(task, uiWorkerCode, {pendingStageReport:{body:textBody, sha256:responseSha256, stage:report.stage, result:report.result, summary:report.summary}});
+    return {processed:false, reason:"WAITING_MANUAL_ACCEPT"};
   }
   const result = await submitDeveloperGridEvidence({
     baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
@@ -3930,7 +3955,12 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     }, passed ? "checkpoint-pass" : "checkpoint-blocked");
   }
   send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
-  if (!result?.error && report.result === "PASS") setTimeout(() => void continueDeveloperGridAutopilot(uiWorkerCode, task.id), 700);
+  if (!result?.error) {
+    processedStageReportHashes.add(dedupeKey);
+    if (processedStageReportHashes.size > 500) processedStageReportHashes.delete(processedStageReportHashes.values().next().value);
+    saveTaskLaunchPatch(task, uiWorkerCode, {pendingStageReport:null, acceptedStageReportSha256:responseSha256});
+  }
+  if (!result?.error && !workflowControl.isManual(config, workerCode) && report.result === "PASS") setTimeout(() => void continueDeveloperGridAutopilot(uiWorkerCode, task.id), 700);
   return { processed:true, result };
 }
 
@@ -4036,6 +4066,7 @@ function markConversationRolloverBlocked(task, workerCode, code, detail = "") {
 }
 
 async function requestConversationRolloverReAck({ view, task, workerCode, identity, currentConversationId, currentConversationUrl }) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const taskId = String(task?.id || "");
   if (!view || view.webContents.isDestroyed() || !taskId || !currentConversationId || !currentConversationUrl) {
     return { sent:false, verified:false, reason:"REACK_IDENTITY_INCOMPLETE" };
@@ -4196,6 +4227,7 @@ async function processConversationRolloverAck({ view, body, workerCode, task, ob
     chatSessionId:currentConversationId,
   }, "conversation-rollover-ready");
 
+  if (workflowControl.isManual(config, workerCode)) return { processed:true, ready:true, validation, binding, continuation:{sent:false, reason:"MANUAL_CONTROL"} };
   let continuation = { sent:false, verified:false, reason:"not-attempted" };
   const readyRecord = loadTaskLaunchRecords()[taskId] || {};
   const readyAuthorityVersion = String(readyRecord.conversationRolloverReadyContinuationAuthorityVersion || readyRecord.executionAuthorityRecoveryVersion || "").toUpperCase();
@@ -4235,6 +4267,7 @@ async function processConversationRolloverAck({ view, body, workerCode, task, ob
 }
 
 async function handleConversationRollover({ view, workerCode, task, capture, memory }) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   const taskId = String(task?.id || "");
   const record = loadTaskLaunchRecords()[taskId] || {};
   const currentState = String(record.conversationRolloverState || task?.conversationRolloverState || task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
@@ -5206,6 +5239,7 @@ function activeWorkerTaskFromWork(activeWork, workerCode, conversationId = "") {
 }
 
 async function autoStartDeveloperGridWorkFromChat(workerCode) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   if (!unlocked || !readDeviceToken()) return { ok:false, reason:"LOCKED_OR_UNPAIRED" };
   const code = String(workerCode || "").toUpperCase();
   const cell = workerCellForCode(code);
@@ -5235,6 +5269,7 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
   try {
     const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }).catch(() => null);
     if (!activeWork) return { ok:false, reason:"ACTIVE_WORK_UNAVAILABLE" };
+    if (workflowControl.isManual(config, code)) return { ok:false, reason:"MANUAL_CONTROL" };
     const pair = activeWorkerTaskFromWork(activeWork, code, currentConversationId);
     if (pair?.ambiguous) return { ok:false, reason:"ACTIVE_WORK_AMBIGUOUS" };
     if (pair?.task && pair?.session) {
@@ -5262,6 +5297,7 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
     if (chatConversationIdFromUrl(view.webContents.getURL()) !== currentConversationId) {
       return { ok:false, reason:"CONVERSATION_CHANGED_BEFORE_START" };
     }
+    if (workflowControl.isManual(config, code)) return { ok:false, reason:"MANUAL_CONTROL" };
     const guards = captureWorkerConversationGuards();
     const backendWorkerCode = code === "BENAI" ? "BENJAMINAI" : code;
     const idempotencyKey = `chat-auto:${backendWorkerCode}:${currentConversationId}:${messageIdentity}`.slice(0, 160);
@@ -5280,6 +5316,7 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
       },
     });
     preserveWorkerConversationsAfterWorkStart(guards);
+    if (workflowControl.isManual(config,code)) return {ok:false,reason:"MANUAL_CONTROL",work};
     if (assignedWorkerCodeFromWork(work) && normalizedProofWorkerCode(assignedWorkerCodeFromWork(work)) !== backendWorkerCode) {
       rememberAutoWorkStartTurn(turnKey);
       appendChatDiagnostic("AUTO_WORK_START_WORKER_MISMATCH", { cellId:cell.id, workerCode:backendWorkerCode, taskId:work?.task?.id || null });
@@ -5294,7 +5331,7 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
     const launchWorkerCode = assignedWorkerCodeFromWork(work);
     let taskLaunch = null;
     if (work?.routingState === "ROUTED" && launchTask && launchWorkerCode && chatPlan?.conversationBound === true) {
-      taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:true, taskOverride:launchTask });
+      if (!workflowControl.isManual(config, code)) taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:true, taskOverride:launchTask });
     }
     rememberAutoWorkStartTurn(turnKey);
     appendChatDiagnostic("AUTO_WORK_START", {
@@ -5462,6 +5499,9 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
       currentConversationUrl:currentConversationUrl,
     }).catch(() => undefined);
   }
+  const queuedExecution = loadTaskLaunchRecords()[live.task.id]?.executionRequest?.request;
+  const bodyWithExecutionRequest = queuedExecution ? {text:EXECUTION_REQUEST_START+"\n"+JSON.stringify(queuedExecution)+"\nBENJADMIN_EXECUTION_REQUEST_END"} : [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(EXECUTION_REQUEST_START));
+  if (bodyWithExecutionRequest) await processCapturedExecutionRequest({ view, body:bodyWithExecutionRequest.text, workerCode:code, task:live.task }).catch(() => undefined);
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
   const bodyWithInternalReview = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(INTERNAL_REVIEW_REPORT_START));
@@ -5494,8 +5534,7 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
   const rollover = await handleConversationRollover({ view, workerCode:code, task:live.task, capture, memory }).catch(() => null);
   if (rollover?.started || rollover?.blocked) return memory;
 
-  const bodyWithExecutionRequest = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(EXECUTION_REQUEST_START));
-  if (bodyWithExecutionRequest) await processCapturedExecutionRequest({ view, body:bodyWithExecutionRequest.text, workerCode:code, task:live.task }).catch(() => undefined);
+
   return memory;
 }
 
@@ -5531,6 +5570,7 @@ function authoritativeAutopilotContext(activeWork, workerCode, taskId = "") {
 }
 
 async function prepareInternalReviewFallback(workerCode, contextOverride) {
+  if (workflowControl.isManual(config, workerCode)) return {ok:false, error:"MANUAL_CONTROL"};
   const code = String(workerCode || "").toUpperCase();
   const cell = workerCellForCode(code);
   const presence = contextOverride?.presence || null;
@@ -5574,7 +5614,7 @@ async function processCapturedInternalReviewReport({body,workerCode,task,baselin
   else if (review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
     const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
     const context=authoritativeAutopilotContext(activeWork,uiCode,task.id);
-    if (context) await prepareWorkerStageAction(uiCode,"review-rework",context).catch(()=>undefined);
+    if (context) await prepareWorkerStageAction(uiCode,"review-rework",context, {automatic:true}).catch(()=>undefined);
   },700);
   return {processed:true,review};
 }
@@ -5597,6 +5637,7 @@ async function monitorInternalReviewReport({view,workerCode,task,baselineRespons
 }
 
 async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   if (!unlocked || !readDeviceToken()) return {ok:false,reason:"locked"};
   const uiCode=String(workerCode || "").toUpperCase();
   const key=`${uiCode}:${taskId || "*"}`;
@@ -5604,19 +5645,22 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
   developerGridAutopilotKeys.add(key);
   try {
     const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()});
+    if (workflowControl.isManual(config, uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
     const context=authoritativeAutopilotContext(activeWork,uiCode,taskId);
     if(!context) return {ok:false,reason:"no-live-pair"};
     const {task,presence,session}=context;
     if(String(task.bootAckState || "").toUpperCase()!=="VALIDATED" || task.bootAckCodingAllowed!==true) return {ok:false,reason:"boot-ack"};
     const stage=Number(presence.workStageIndex || 1);
     const record=loadTaskLaunchRecords()[String(task.id)] || {};
+    if (workflowControl.executionPending(record)) return {ok:false,reason:"EXECUTION_RESULT_PENDING"};
+    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return {ok:false,reason:"GIT_STATUS_RESULT_REQUIRED"};
     const head=String(task.sourceHead || "");
 
     if(stage>=1 && stage<=3) {
       const stageKey=`${stage}:${head}`;
       if(String(record.autopilotStagePromptKey || "")===stageKey && String(record.autopilotState || "")==="WAITING_STAGE_REPORT") return {ok:true,state:"WAITING_STAGE_REPORT",stage};
       publishTaskLaunchPatch(task,uiCode,{autopilotState:"PREPARING_STAGE",autopilotStagePromptKey:stageKey,autopilotAt:new Date().toISOString()}, "autopilot-stage-preparing");
-      const sent=await prepareWorkerStageAction(uiCode,"advance-stage",context);
+      const sent=await prepareWorkerStageAction(uiCode,"advance-stage",context, {automatic:true});
       publishTaskLaunchPatch(task,uiCode,{autopilotState:sent?.ok&&sent?.mode==="sent"?"WAITING_STAGE_REPORT":"BLOCKED",autopilotError:sent?.ok&&sent?.mode==="sent"?null:(sent?.error || sent?.mode || "STAGE_SEND_NOT_VERIFIED"),autopilotAt:new Date().toISOString()}, sent?.ok&&sent?.mode==="sent"?"autopilot-stage-sent":"autopilot-stage-blocked");
       return {ok:sent?.ok===true&&sent?.mode==="sent",state:sent?.mode||"BLOCKED",stage};
     }
@@ -5628,12 +5672,13 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
         const reviewKey=`external:${head}`;
         if(String(record.autopilotReviewKey || "")===reviewKey && String(record.autopilotState || "")==="EXTERNAL_REVIEW") return {ok:true,state:"WAITING_EXTERNAL_REVIEW"};
         publishTaskLaunchPatch(task,uiCode,{autopilotReviewKey:reviewKey,autopilotState:"EXTERNAL_REVIEW",autopilotAt:new Date().toISOString()}, "autopilot-external-review");
+      if (workflowControl.isManual(config,uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
         const review=await requestDeveloperGridVGuardReview({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id}});
         if(review?.ok && review?.state==="PASS") setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
         else if(review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
           const refreshed=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
           const reworkContext=authoritativeAutopilotContext(refreshed,uiCode,task.id);
-          if(reworkContext) await prepareWorkerStageAction(uiCode,"review-rework",reworkContext).catch(()=>undefined);
+          if(reworkContext) await prepareWorkerStageAction(uiCode,"review-rework",reworkContext, {automatic:true}).catch(()=>undefined);
         },700);
         return {ok:review?.ok===true,state:review?.state||"BLOCKED"};
       }
@@ -5650,7 +5695,8 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
       const runs=(Array.isArray(buildRuns?.runs)?buildRuns.runs:[]).filter((run)=>String(run.taskId||"")===String(task.id) && String(run.sessionId||"")===String(session.id) && String(run.sourceCommit||"").toLowerCase()===head.toLowerCase()).sort((a,b)=>Date.parse(b.queuedAt||0)-Date.parse(a.queuedAt||0));
       const latest=runs[0] || null;
       if(!latest) {
-        const build=await requestDeveloperGridFullBuild({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}});
+        if (workflowControl.isManual(config,uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
+      const build=await requestDeveloperGridFullBuild({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}});
         publishTaskLaunchPatch(task,uiCode,{autopilotState:"BUILD_REQUESTED",autopilotBuildRunId:build?.run?.id || null,autopilotAt:new Date().toISOString()}, "autopilot-build-requested");
         return {ok:true,state:"BUILD_REQUESTED",runId:build?.run?.id || null};
       }
@@ -5664,13 +5710,14 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
         const reworkKey=`${latest.id}:${head}`;
         if(String(record.autopilotBuildReworkKey || "")===reworkKey && String(record.autopilotState || "")==="BUILD_REWORK") return {ok:true,state:"WAITING_BUILD_REWORK"};
         publishTaskLaunchPatch(task,uiCode,{autopilotBuildReworkKey:reworkKey,autopilotState:"BUILD_REWORK",autopilotAt:new Date().toISOString()}, "autopilot-build-rework");
-        const sent=await prepareWorkerStageAction(uiCode,"build-rework",context);
+        const sent=await prepareWorkerStageAction(uiCode,"build-rework",context, {automatic:true});
         return {ok:sent?.ok===true&&sent?.mode==="sent",state:sent?.mode||"BLOCKED"};
       }
     }
 
     if(stage===6) {
       await syncConversationMemoryForWorker(uiCode,true).catch(()=>null);
+      if (workflowControl.isManual(config,uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
       const close=await closeDeveloperGridWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}}).catch((error)=>({error:error instanceof Error?error.message:"CLOSURE_BLOCKED"}));
       if(close?.task?.status==="COMPLETED" || close?.session?.endedAt) {
         publishTaskLaunchPatch(task,uiCode,{autopilotState:"COMPLETED",autopilotError:null,autopilotAt:new Date().toISOString()}, "autopilot-completed");
@@ -5732,7 +5779,8 @@ function checkpointGuard(task, workerCode, view) {
   return { ok:blockers.length === 0, blockers, proofSha, expectedConversationId, currentConversationId };
 }
 
-async function prepareWorkerStageAction(workerCode, action, contextOverride = null) {
+async function prepareWorkerStageAction(workerCode, action, contextOverride = null, { automatic = false } = {}) {
+  if (automatic && workflowControl.isManual(config, workerCode)) return {ok:false, error:"MANUAL_CONTROL"};
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   try {
     if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Stage action kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
@@ -5752,6 +5800,9 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
     shellWindow.focus();
   }
   const baselineCapture = await captureLatestAssistantText(view);
+  if (action === "advance-stage" && loadTaskLaunchRecords()[task.id]?.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return {ok:false,error:"Először a jelenlegi source proofhoz tartozó GIT_STATUS PASS válasz szükséges."};
+  if (baselineCapture?.generating || workflowControl.executionPending(loadTaskLaunchRecords()[task.id])) return {ok:false, error:"CHAT_BUSY_OR_EXECUTION_RESULT_PENDING"};
+  if (automatic && workflowControl.isManual(config, workerCode)) return {ok:false, error:"MANUAL_CONTROL"};
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   view.webContents.focus();
 
@@ -5873,7 +5924,7 @@ async function prepareWorkerHandoff(workerCode) {
   const baselineIsV2 = baselineCapture?.ok && String(baselineCapture.format || "").startsWith("v2");
   const baselineResponseSha256 = baselineIsV2 ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   const { presence, task } = liveContextForWorker(code);
-  const contextPack = contextPackPromptForWorker(code);
+  const contextPack = contextPackPromptForWorker(code, task);
   const prompt = `${buildHandoffPrompt({ workerCode: code, workerLabel: cell.label, ...conversation, task, presence })}${contextPack ? `\n\n${contextPack}` : ""}`;
   view.webContents.focus();
   const insertion = await insertWorkerTaskPrompt(view, prompt, HANDOFF_PROMPT_MARKER);
@@ -6392,10 +6443,12 @@ async function heartbeatCodexTaskBridgesOnce() {
 }
 
 async function recoverExecutionAuthorityFromHeartbeat({ task, session, workerCode, errorCode }) {
+  if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   if (String(errorCode || "") !== "DEVELOPER_GRID_ENGINE_HEARTBEAT_ENGINE_SESSION_MISMATCH") {
     return { recovered:false, attempted:false, reason:"HEARTBEAT_ERROR_NOT_RECOVERABLE" };
   }
   const launchTask = launchTaskFromWork({ task, session });
+  if (workflowControl.executionPending(loadTaskLaunchRecords()[launchTask?.id])) return {recovered:false,attempted:false,reason:"EXECUTION_RESULT_PENDING"};
   if (!launchTask?.id || !launchTask?.sessionId) {
     return { recovered:false, attempted:false, reason:"HEARTBEAT_RECOVERY_GRID_IDENTITY_MISSING" };
   }
@@ -6900,6 +6953,133 @@ async function fetchDeveloperGridSystemHealth() {
   return lastAuthError || { ok: false, error: "A Developer Grid hitelesítése sikertelen.", code: "AUTH_REJECTED", unauthorized: true };
 }
 
+const manualControlKeys = new Set();
+async function manualControlContext(selection, requireConversation = true) {
+  if (!unlocked || !readDeviceToken()) throw new Error("A Developer Grid zárolva van vagy nincs párosítva.");
+  if (new URL(config.benjadminBaseUrl).hostname !== "admin.dev.dimpro.hu") throw new Error("Kézi vezérlés csak DEV kapcsolaton használható. PROD DENY.");
+  const activeWork = withSelectableDeveloperGridWork(await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}));
+  const pair = centralLaunchPairForSelection(activeWork, selection, {allowRecovery:true});
+  if (!pair) throw new Error("Válassz egyértelmű aktív taskot, sessiont és kódmérnököt.");
+  const code = workflowControl.worker(pair.session.workerCode);
+  const task = launchTaskFromWork({task:pair.task,session:pair.session});
+  const cell = workerCellForCode(code);
+  const view = cell ? chatViews.get(cell.id) : null;
+  const expected = String(task?.surfaceConversationId || "");
+  const observed = view && !view.webContents.isDestroyed() ? await inspectChatGptDom(view).catch(()=>null) : null;
+  const domIdentity = observed?.conversationId && isChatGptUrl(observed.url) && chatConversationIdFromUrl(observed.url) === observed.conversationId;
+  const conversationId = domIdentity ? observed.conversationId : view && !view.webContents.isDestroyed() ? chatConversationIdFromUrl(view.webContents.getURL()) : "";
+  const conversationBound = Boolean(expected && expected === conversationId && task.surfaceType === "CHATGPT");
+  if (requireConversation && !conversationBound) throw new Error("A worker cellájában nem a taskhoz kötött ChatGPT-csevegés van megnyitva.");
+  return {pair,task,code,view,conversationId,conversationBound,proof:resolvedExecutionProofSha256(task)};
+}
+
+async function manualControlStatus(selection) {
+  const ctx = await manualControlContext(selection, false);
+  const record = loadTaskLaunchRecords()[ctx.task.id] || {};
+  const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
+  const text = String(draft?.text || "");
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview || null}};
+}
+
+async function runManualControl(input) {
+  const modeAction=String(input?.action || "");
+  if (modeAction === "pause" || modeAction === "auto") {
+    if (!unlocked) throw new Error("A Developer Grid zárolva van.");
+    const code=workflowControl.worker(input.workerCode);
+    if (!workflowControl.WORKERS.includes(code)) throw new Error("Válassz kódmérnököt.");
+    saveConfig({...config,workflowControlModes:{...config.workflowControlModes,[code]:modeAction === "auto" ? "AUTO" : "MANUAL"}});
+    for (const [id,record] of Object.entries(loadTaskLaunchRecords())) if (workflowControl.worker(record.workerCode) === code) saveTaskLaunchPatch({id},code,{manualExecutionPermission:null,manualContinuationPreview:null});
+    send("config:state",config);send("context:refresh",{reason:"manual-mode",workerCode:code});
+    return {ok:true,message:modeAction === "auto" ? "Automatikus vezérlés bekapcsolva ennél a kódmérnöknél." : "Kézi mód; az új végrehajtások szünetelnek. A már futó művelet befejeződhet."};
+  }
+  const ctx = await manualControlContext(input,input.action !== "bind");
+  const {code,task,view,proof,conversationId,pair} = ctx;
+  if (manualControlKeys.has(code)) throw new Error("A worker kézi művelete már folyamatban van.");
+  manualControlKeys.add(code);
+  try {
+    const action = String(input.action || "");
+    if (action === "pause" || action === "auto") {
+      if (executionRequestProcessingKeys.has(`${task.id}:${task.sessionId}`) && action === "auto") throw new Error("Folyamatban lévő végrehajtás mellett nem váltható üzemmód.");
+      saveConfig({...config,workflowControlModes:{...config.workflowControlModes,[code]:action === "auto" ? "AUTO" : "MANUAL"}});
+      saveTaskLaunchPatch(task,code,{manualExecutionPermission:null,manualContinuationPreview:null});
+      send("config:state",config);
+      return {ok:true,message:action === "auto" ? "Automatikus vezérlés bekapcsolva ennél a kódmérnöknél." : "Kézi mód; az új végrehajtások szünetelnek. A már futó művelet befejeződhet."};
+    }
+    if (!workflowControl.isManual(config,code)) throw new Error("Először válts kézi módra ennél a kódmérnöknél.");
+    const record = loadTaskLaunchRecords()[task.id] || {};
+    if (action === "bind") {
+      if (task.surfaceConversationId) throw new Error("A tasknak már van rögzített csevegése. Átadáshoz a meglévő átadási folyamatot használd.");
+      return bindCurrentTaskConversation(code,task.id,{taskOverride:task,launchAfterBind:true});
+    }
+    if (action === "allow-read" || action === "allow-dev") {
+      if (pair.selectionRecoveryRequired || pair.session.developmentContext?.bootAckState !== "VALIDATED") throw new Error("Előbb helyreállítás és validált BOOT ACK szükséges.");
+      if (!/^[0-9a-f]{64}$/.test(proof)) throw new Error("Nincs ellenőrzött source proof.");
+      saveTaskLaunchPatch(task,code,{manualExecutionPermission:{taskId:task.id,sessionId:task.sessionId,workerCode:code,sourceProofSha256:proof,conversationId,access:action === "allow-dev" ? "DEV" : "READ_ONLY",grantedAt:new Date().toISOString()}});
+      return {ok:true,message:action === "allow-dev" ? "A task scope-ján belüli DEV műveletek engedélyezve. Az eredeti utasítás és a szerverkapuk továbbra is érvényesek." : "Olvasási műveletek engedélyezve ehhez a taskhoz és csevegéshez."};
+    }
+    const capture = await captureLatestAssistantText(view);
+    if (!capture?.ok || capture.generating) throw new Error("A csevegés még választ ír vagy nem olvasható. Várd meg a válasz végét.");
+    if (action === "recover") {
+      if (workflowControl.executionPending(record)) throw new Error("Előbb rendezd a függő végrehajtási választ; helyreállítás most nem forgathat source proofot.");
+      let recovered;
+      if (pair.session.developmentContext?.bootAckState === "VALIDATED") recovered = await recoverConversationExecutionAuthority(task,code);
+      else recovered = await recoverDeveloperGridLaunchExecution({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:task.sessionId,workerCode:normalizedProofWorkerCode(code)}});
+      saveTaskLaunchPatch(task,code,{manualExecutionPermission:null,manualContinuationPreview:null});
+      return {ok:true,message:"A kiválasztott task kapcsolata helyreállítva. Üzenetet nem küldtem; frissítsd és ellenőrizd az állapotot."};
+    }
+    if (action === "prepare") {
+      if (pair.session.developmentContext?.bootAckState !== "VALIDATED") return prepareWorkerTaskLaunch(code,task.id,{autoSend:false,taskOverride:task});
+      const text = workflowControl.continuationPrompt(task,code,proof,executionBridgeProtocolLines(task,code,proof));
+      saveTaskLaunchPatch(task,code,{manualContinuationPreview:{text,sha256:createHash("sha256").update(text).digest("hex"),sourceProofSha256:proof,conversationId,taskId:task.id,sessionId:task.sessionId}});
+      return {ok:true,message:"A folytatási üzenet előnézete elkészült. Küldés előtt itt elolvashatod."};
+    }
+    if (action === "send-preview" || action === "send-draft") {
+      if (workflowControl.executionPending(record)) throw new Error("Előbb a függő végrehajtási választ kell kézbesíteni.");
+      let text,marker;
+      if (action === "send-preview") {
+        const preview = record.manualContinuationPreview;
+        if (!preview || input.sha256 !== preview.sha256 || preview.taskId !== task.id || preview.sessionId !== task.sessionId || preview.sourceProofSha256 !== proof || preview.conversationId !== conversationId) throw new Error("Az előnézet elavult. Készíts friss előnézetet.");
+        text=preview.text; marker="BENJADMIN_PROMPT_KIND: MANUAL_CONTINUE_V1";
+        const inserted=await insertWorkerTaskPrompt(view,text,marker);
+        if (!inserted?.inserted || !inserted?.verifiedMarker) throw new Error("A beviteli mezőben másik piszkozat van, vagy a beillesztés nem igazolható. A piszkozatot nem írtam felül.");
+      } else {
+        const draft=await captureComposerDraftText(view);text=String(draft?.text || "");
+        if (!draft?.ok || createHash("sha256").update(text).digest("hex") !== input.sha256) throw new Error("A piszkozat megváltozott. Frissítsd az előnézetet.");
+        marker=text.match(/^BENJADMIN_PROMPT_KIND: (TASK_LAUNCH_V3|EXECUTION_AUTHORITY_RECOVERED_V1|CONVERSATION_ROLLOVER_READY_V1|MANUAL_CONTINUE_V1)\s*$/m)?.[0]?.trim();
+        if (marker?.endsWith("TASK_LAUNCH_V3")) return sendPreparedWorkerTaskLaunch(code,task.id,{taskOverride:task});
+        const field=name=>{const values=text.split(/\r?\n/).filter(line=>line.startsWith(name+": ")).map(line=>line.slice(name.length+2).trim());return values.length===1?values[0]:"";};
+        if (!marker || field("Task") !== task.id || field("Session") !== task.sessionId || normalizedProofWorkerCode(field("Worker")) !== normalizedProofWorkerCode(code) || (field("Source proof") || field("Fresh source proof")) !== proof || field("HEAD") !== task.sourceHead) throw new Error("A gépi piszkozat task/session/worker/source proof azonossága nem igazolt.");
+      }
+      const sent=await sendPreparedChatPrompt(view,marker);
+      if (!sent?.sent || !sent?.verified) throw new Error(sent?.reason || "Az elküldés nem igazolható.");
+      saveTaskLaunchPatch(task,code,{manualContinuationPreview:null,manualContinuationSentAt:new Date().toISOString()});
+      return {ok:true,message:"Az ellenőrzött üzenet elküldve a kiválasztott csevegésnek."};
+    }
+    if (action === "accept-report") {
+      const pending=record.pendingStageReport;
+      if (!pending || input.sha256 !== pending.sha256 || createHash("sha256").update(String(capture.text || "")).digest("hex") !== pending.sha256) throw new Error("A jelentés megváltozott vagy már nincs a legfrissebb válaszban. Frissítsd az állapotot.");
+      const result=await processCapturedStageReport({body:pending.body,workerCode:code,task,manualAccept:true});
+      if (!result?.processed || result?.result?.error) throw new Error(result?.result?.error || result?.reason || "A jelentés nem fogadható el.");
+      return {ok:true,message:"A jelentés rögzítve. Következő fázisutasítást külön gombbal küldhetsz."};
+    }
+    if (action === "stage") {
+      const context=authoritativeAutopilotContext({activeSessionTasks:[pair]},code,task.id);
+      if (!context) throw new Error("A fázishoz aktív task/session szükséges.");
+      return prepareWorkerStageAction(code,"advance-stage",context);
+    }
+    if (action === "retry-result") {
+      const request=record.executionRequest?.request;
+      if (!request || !record.pendingExecutionResult) throw new Error("Nincs megőrzött, kézbesíthető végrehajtási válasz.");
+      const result=await processCapturedExecutionRequest({view,body:`${EXECUTION_REQUEST_START}\n${JSON.stringify(request)}\nBENJADMIN_EXECUTION_REQUEST_END`,workerCode:code,task});
+      if (!result?.processed) throw new Error(result?.reason || result?.sent?.reason || "A válasz kézbesítése továbbra is függőben van.");
+      return {ok:true,message:"A megőrzött végrehajtási válasz kézbesítve; a művelet nem futott újra."};
+    }
+    throw new Error("Ismeretlen kézi művelet.");
+  } finally {manualControlKeys.delete(code);send("context:refresh",{reason:"manual-control",taskId:task.id,workerCode:code});}
+}
+
+
+
 function registerIpc() {
   ipcMain.handle("app:get-version", () => ({ ok: true, version: app.getVersion() }));
   ipcMain.handle("chat-refresh:get", () => ({ ok: unlocked, state: publicChatRefreshState() }));
@@ -7009,8 +7189,8 @@ function registerIpc() {
     // Preserve the authoritative runtime layout so an appearance save cannot hide/detach it.
     const runtimeContextWorkspace = config.contextWorkspace ? { ...config.contextWorkspace } : null;
     const mergedConfig = runtimeContextWorkspace
-      ? { ...(nextConfig || {}), contextWorkspace: runtimeContextWorkspace }
-      : nextConfig;
+      ? { ...(nextConfig || {}), contextWorkspace: runtimeContextWorkspace, workflowControlModes:config.workflowControlModes }
+      : {...(nextConfig || {}),workflowControlModes:config.workflowControlModes};
     const candidate = sanitizeConfig(mergedConfig);
     for (const cell of candidate.cells) {
       const previous = previousCells.get(cell.id);
@@ -7109,6 +7289,12 @@ function registerIpc() {
   ipcMain.handle("context:get", async (_event, filters) => {
     try { return { ok: true, context: await getContextWorkspacePayload(filters || {}) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Context Workspace nem tölthető be." }; }
+  });
+  ipcMain.handle("manual-control:get", async (_event, input) => {
+    try { return await manualControlStatus(input); } catch(error) { return {ok:false,error:error.message}; }
+  });
+  ipcMain.handle("manual-control:run", async (_event, input) => {
+    try { return await runManualControl(input || {}); } catch(error) { return {ok:false,error:error.message}; }
   });
   ipcMain.handle("work-start:get", async () => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
@@ -7265,6 +7451,10 @@ function registerIpc() {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
     const conversationGuards = captureWorkerConversationGuards();
     try {
+      const code = workflowControl.worker(payload?.preferredWorkerCode);
+      if (!workflowControl.WORKERS.includes(code)) throw new Error("EXPLICIT_WORKER_REQUIRED");
+      if (payload?.workflowControlMode === "MANUAL") saveConfig({...config,workflowControlModes:{...config.workflowControlModes,[code]:"MANUAL"}});
+      if (workflowControl.isManual(config, code)) payload = {...payload,launchDispatchMode:"MANUAL"};
       const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
       preserveWorkerConversationsAfterWorkStart(conversationGuards);
       const chatPlan = await initializeTaskChatPlan(work, payload?.chatLaunchMode, conversationGuards);
@@ -7274,7 +7464,7 @@ function registerIpc() {
       const launchDispatchMode = String(payload?.launchDispatchMode || "MANUAL").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
       if (launchTask && launchWorkerCode) saveTaskLaunchPatch(launchTask, launchWorkerCode, { dispatchMode:launchDispatchMode });
       if (work?.routingState === "ROUTED" && launchTask && launchWorkerCode && chatPlan?.conversationBound === true) {
-        taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:launchDispatchMode === "AUTO", taskOverride:launchTask });
+        taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:launchDispatchMode === "AUTO" && !workflowControl.isManual(config, launchWorkerCode), taskOverride:launchTask });
         if (taskLaunch?.chatLaunch) {
           saveTaskLaunchPatch(launchTask, launchWorkerCode, { dispatchMode:launchDispatchMode });
         }

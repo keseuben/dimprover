@@ -1,3 +1,4 @@
+import {automaticWorkflowVm} from "./automatic-workflow-test-context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -82,7 +83,7 @@ function observerFixture(){
  const button={closest:selector=>selector==='main form button[type="submit"]'?button:null};
  const sandbox={window:state,location:{href:"https://chatgpt.com/g/project"},URL,HTMLTextAreaElement:Textarea,Date,
  document:{querySelector:selector=>adapter.CHATGPT_SELECTORS.composer.includes(selector)?field:null,addEventListener:(name,fn)=>{listeners[name]=fn;}}};
- vm.runInNewContext(observation.INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT,sandbox);
+ automaticWorkflowVm(vm).runInNewContext(observation.INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT,sandbox);
  return {state,field,button,listeners,sandbox};
 }
 await check("observer records trusted Enter and send-button click",()=>{
@@ -101,7 +102,7 @@ await check("observer ignores typing, Shift-Enter, IME and untrusted synthetic s
 await check("observer ignores machine packets and installs only once",()=>{
  const f=observerFixture();f.field.innerText="BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3\nStart build";
  f.listeners.click({isTrusted:true,type:"click",target:f.button});
- vm.runInNewContext(observation.INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT,f.sandbox);
+ automaticWorkflowVm(vm).runInNewContext(observation.INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT,f.sandbox);
  assert.equal(f.state.__benjadminLiveUserSubmissions.events.length,0);
 });
 function extract(source,start,end){const a=source.indexOf(start);const b=source.indexOf(end,a);assert.ok(a>=0&&b>a);return source.slice(a,b);}
@@ -129,7 +130,7 @@ await check("actual auto-start function creates exactly one task for one fresh c
   prepareWorkerTaskLaunch:async(code)=>{prepared.push(code);return {ok:true,mode:"sent"};},
   rememberAutoWorkStartTurn:key=>processed.add(key),appendChatDiagnostic:()=>{},send:()=>{},
  };
- vm.createContext(sandbox);vm.runInContext(autoFn+";globalThis.run=autoStartDeveloperGridWorkFromChat;",sandbox);
+ automaticWorkflowVm(vm).createContext(sandbox);vm.runInContext(autoFn+";globalThis.run=autoStartDeveloperGridWorkFromChat;",sandbox);
  for(const code of workers)await sandbox.run(code);
  assert.deepEqual(calls,[]);assert.deepEqual(prepared,[]);
  captures.get("BENAI").messages.push(user("fresh-ben"));
@@ -143,7 +144,7 @@ const ben={task:{id:"ben-task"},session:{id:"ben-session",taskId:"ben-task",work
 const armin={task:{id:"armin-task"},session:{id:"armin-session",taskId:"armin-task",workerCode:"ARMINAI",endedAt:null}};
 const active={task:armin.task,sessions:[armin.session],activeSessionTasks:[armin,ben]};
 const pairContext={normalizedProofWorkerCode:code=>code==="BENAI"?"BENJAMINAI":code};
-vm.createContext(pairContext);vm.runInContext(pairFn+";globalThis.select=centralLaunchPairForSelection;",pairContext);
+automaticWorkflowVm(vm).createContext(pairContext);vm.runInContext(pairFn+";globalThis.select=centralLaunchPairForSelection;",pairContext);
 await check("Central Core exact selection beats unrelated global active task",()=>{
  assert.equal(pairContext.select(active,{taskId:"ben-task",sessionId:"ben-session",workerCode:"BENAI"}),ben);
 });
@@ -155,7 +156,7 @@ await check("duplicate exact sessions are rejected",()=>{
 });
 const uiFn=extract(ui,"  function selectedWorkLaunchPair()","  function workStartView()");
 const uiContext={state:{workStartWorkerCode:"BENJAMINAI",activeWork:active,config:{cells:[{workerCode:"BENAI",url:"https://chatgpt.com/c/ben-chat"}]}},workerUiCode:code=>code==="BENJAMINAI"?"BENAI":code};
-vm.createContext(uiContext);vm.runInContext(uiFn+";globalThis.select=selectedWorkLaunchPair;",uiContext);
+automaticWorkflowVm(vm).createContext(uiContext);vm.runInContext(uiFn+";globalThis.select=selectedWorkLaunchPair;",uiContext);
 await check("rendered resume action selects Benjamin instead of global Armin",()=>assert.equal(uiContext.select(),ben));
 await check("Central Core without explicit worker cannot resume another task",()=>{uiContext.state.workStartWorkerCode="";assert.equal(uiContext.select(),null);uiContext.state.workStartWorkerCode="BENJAMINAI";});
 await check("ambiguous worker sessions without matching conversation fail closed",()=>{
@@ -169,9 +170,9 @@ async function insertFixture(existing="",transform=text=>text.replace(/\n/g,"\n\
  const field={innerText:existing,getClientRects:()=>[1],focus:()=>{},replaceChildren:()=>{field.innerText="";},append:p=>{field.innerText=p.textContent;}};
  const sandbox={HTMLTextAreaElement:Textarea,window:{getSelection:()=>({removeAllRanges:()=>{},addRange:()=>{}})},InputEvent:class {},
  document:{querySelector:()=>field,createRange:()=>({selectNodeContents:()=>{}}),execCommand:(_command,_show,text)=>{field.innerText=transform(text);return true;}}};
- const view={webContents:{isDestroyed:()=>false,executeJavaScript:async script=>vm.runInNewContext(script,sandbox)}};
+ const view={webContents:{isDestroyed:()=>false,executeJavaScript:async script=>automaticWorkflowVm(vm).runInNewContext(script,sandbox)}};
  const host={waitForChatComposer:async()=>true,composerSelectorLiteral:()=>JSON.stringify(adapter.CHATGPT_SELECTORS.composer)};
- vm.createContext(host);vm.runInContext(insertFn+";globalThis.run=insertWorkerTaskPrompt;",host);
+ automaticWorkflowVm(vm).createContext(host);vm.runInContext(insertFn+";globalThis.run=insertWorkerTaskPrompt;",host);
  return {result:await host.run(view,prompt,prompts.TASK_LAUNCH_PROMPT_MARKER),field};
 }
 await check("actual insertion accepts editor newline representation across the full prompt",async()=>{
@@ -193,7 +194,7 @@ await check("legacy current-proof draft missing original restrictions is not sen
  let sends=0;
  const context={captureComposerDraftText:async()=>({ok:true,text:"BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3 old packet"}),
   sendPreparedChatPrompt:async()=>{sends++;return {sent:true,verified:true};}};
- vm.createContext(context);vm.runInContext(resumeDraftFn+";globalThis.run=sendExistingOwnedTaskLaunchDraft;",context);
+ automaticWorkflowVm(vm).createContext(context);vm.runInContext(resumeDraftFn+";globalThis.run=sendExistingOwnedTaskLaunchDraft;",context);
  const result=await context.run({view:{},task:{id:"test"},workerCode:"BENAI",launchTask:{sessionId:"session",description:"Csak állapotellenőrzés. Forrásmódosítás és build tilos."},
   decision:{reason:"current-proof",identity:{kind:"TASK_LAUNCH_V3",taskId:"test",sessionId:"session",sourceProofSha256:"a".repeat(64)}}});
  assert.equal(result.ok,false);assert.equal(result.code,"OWNED_TASK_DRAFT_SOURCE_PROMPT_MISSING");assert.equal(sends,0);
@@ -202,7 +203,7 @@ const launchFn=extract(main,"function launchTaskFromWork(","\nfunction normalize
 await check("launch projection preserves original restrictions from session sourcePrompt",()=>{
  const source="Állapotellenőrzés בלבד. FORRÁSMÓDOSÍTÁS TILOS; build, törlés és DB módosítás TILOS.";
  const context={assignedWorkerCodeFromWork:()=>"BENAI",normalizeWorkerSurfaceType:x=>x};
- vm.createContext(context);vm.runInContext(launchFn+";globalThis.run=launchTaskFromWork;",context);
+ automaticWorkflowVm(vm).createContext(context);vm.runInContext(launchFn+";globalThis.run=launchTaskFromWork;",context);
  const task=context.run({task:{id:"test",description:"stale"},session:{id:"session",developmentContext:{sourcePrompt:source}}});
  assert.equal(task.description,source);
 });
@@ -211,7 +212,7 @@ await check("launch projection preserves original restrictions from session sour
 // from activeSessionTasks, but retains their exact identity in allActiveSessions.
 const selectableFn=extract(main,"function withSelectableDeveloperGridWork(","function centralLaunchPairForSelection");
 const recoveryContext={normalizedProofWorkerCode:code=>code==="BENAI"?"BENJAMINAI":code};
-vm.createContext(recoveryContext);vm.runInContext(selectableFn+pairFn+";globalThis.decorate=withSelectableDeveloperGridWork;globalThis.select=centralLaunchPairForSelection;",recoveryContext);
+automaticWorkflowVm(vm).createContext(recoveryContext);vm.runInContext(selectableFn+pairFn+";globalThis.decorate=withSelectableDeveloperGridWork;globalThis.select=centralLaunchPairForSelection;",recoveryContext);
 const recoverableBen={...ben.session,
  developmentContext:{taskId:ben.task.id,projectId:"project_dimprover",moduleName:"Developer Grid V1",workItem:"Benjámin próba",surfaceConversationId:"ben-chat"},
  sourceProvenance:{taskId:ben.task.id,sessionId:ben.session.id,worker:"BENJAMINAI"},
@@ -247,7 +248,7 @@ function refreshFixture(){
  const context={state,selectedWorkerSurface:()=>"CHATGPT",selectedWorkLaunchPair:()=>({task:armin.task,session:armin.session}),
   contextErrorMessage:x=>x,render:()=>{},root:{querySelector:()=>null},
   api:{getContextWorkspace:async()=>({ok:true,context:{}}),getDeveloperGridActiveWork:async()=>({ok:true,activeWork:active}),getSystemHealth:async()=>({ok:true,health:{}}),getDeveloperGridBuildRuns:async()=>({ok:true,buildRuns:{}}),getDeveloperGridWindowsE2E:async()=>({ok:true}),getDeveloperGridEvidence:async()=>({ok:true,evidence:[]}),getDeveloperGridReviewGate:async()=>({ok:true,gate:{ready:false}}),getDeveloperGridConversationMemory:async()=>({ok:true,memory:{taskId:"armin-task"}})}};
- vm.createContext(context);vm.runInContext(refreshFn+";globalThis.run=refresh;",context);return context;
+ automaticWorkflowVm(vm).createContext(context);vm.runInContext(refreshFn+";globalThis.run=refresh;",context);return context;
 }
 await check("old worker refresh response cannot replace newly selected worker context",async()=>{
  const context=refreshFixture();let complete;
@@ -286,7 +287,7 @@ function ipcFixture(channel,activeWork){
  const marker='  ipcMain.handle("'+channel+'"';
  const start=main.indexOf(marker);const end=main.indexOf('\n  ipcMain.handle(',start+marker.length);
  assert.ok(start>=0&&end>start);
- vm.createContext(context);vm.runInContext(main.slice(start,end),context);
+ automaticWorkflowVm(vm).createContext(context);vm.runInContext(main.slice(start,end),context);
  return {context,calls,run:handlers[channel]};
 }
 await check("automatic recovery targets Benjamin and rejects a mismatched returned worker",async()=>{
@@ -307,4 +308,4 @@ await check("manual live launch sends the selected Benjamin identity instead of 
  const result=await f.run({}, {taskId:"ben-task",sessionId:"ben-session",workerCode:"BENJAMINAI"});
  assert.equal(result.ok,true);assert.equal(f.calls.length,1);assert.equal(f.calls[0].code,"BENJAMINAI");assert.equal(f.calls[0].taskId,"ben-task");assert.equal(f.calls[0].options.taskOverride.sessionId,"ben-session");
 });
-console.log("Developer Grid cell isolation/runtime v0.1.103 PASS "+n+"/"+n);
+console.log("Developer Grid cell isolation/runtime v0.1.104 PASS "+n+"/"+n);

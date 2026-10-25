@@ -11,7 +11,7 @@ check("automatic dispatch is the UI default",()=>assert.match(ui,/workLaunchDisp
 check("central manual send remains visible fallback",()=>{assert.match(ui,/KÉZI KÖZPONTI KÜLDÉS · FALLBACK/);assert.match(ui,/KÜLDÉS "\+activeWorkerLabel\+"-NAK/);});
 check("automatic dispatch is explicit default option",()=>{assert.match(ui,/AUTOMATIKUS KÜLDÉS · ALAPÉRTELMEZETT/);assert.match(ui,/value="AUTO"/);});
 check("dispatch preference is retained locally",()=>assert.match(ui,/benjadminWorkLaunchDispatchMode/));
-check("work creation forwards the explicit dispatch mode",()=>assert.match(ui,/launchDispatchMode:state\.workLaunchDispatchMode/));
+check("work creation forwards the explicit dispatch mode",()=>assert.match(ui,/launchDispatchMode:state\.navSection==="manual"\?"MANUAL":state\.workLaunchDispatchMode/));
 check("backend defaults missing dispatch mode to MANUAL",()=>assert.match(main,/payload\?\.launchDispatchMode \|\| "MANUAL"/));
 check("work creation only auto-sends in AUTO mode",()=>assert.match(main,/autoSend:launchDispatchMode === "AUTO"/));
 check("new-chat bind respects the recorded dispatch mode",()=>{assert.match(main,/record\.dispatchMode \|\| "MANUAL"/);assert.match(main,/autoSend:dispatchMode === "AUTO"/);});
@@ -23,4 +23,4 @@ check("stale owned draft is recovered without overwriting foreign user content",
 check("manual send is accepted only with verified send evidence",()=>{assert.match(main,/sendPreparedChatPrompt\(view, TASK_LAUNCH_PROMPT_MARKER\)/);assert.match(main,/sent\?\.sent !== true \|\| sent\?\.verified !== true/);assert.match(main,/MANUAL_LAUNCH_SEND_NOT_VERIFIED/);});
 check("verified manual send starts BOOT ACK monitoring",()=>{assert.match(main,/manualDispatchAt:now/);assert.match(main,/monitorWorkerBootAck\(\{ view, task:launchTask/);});
 check("AUTO recovery path is still available",()=>assert.match(ui,/resumeDeveloperGridTaskLaunch/));
-console.log("Developer Grid v0.1.103 manual central launch contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.104 manual central launch contract PASS · "+n+"/"+n);

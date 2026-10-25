@@ -1,3 +1,4 @@
+import {automaticWorkflowVm} from "./automatic-workflow-test-context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -14,7 +15,7 @@ function runDom(script, rows, generating = false) {
     matches: () => true, querySelectorAll: () => [], querySelector: () => null,
     getAttribute: (key) => key === "data-message-author-role" ? row.role : key === "data-testid" ? "conversation-turn-" + index : "",
   }));
-  return vm.runInNewContext(script, {
+  return automaticWorkflowVm(vm).runInNewContext(script, {
     URL, location: { href: "https://chatgpt.com/c/test-conversation" },
     getComputedStyle: () => ({ visibility: "visible" }),
     document: {
@@ -99,7 +100,7 @@ await check("handoff save blocks streaming before recovery or persistence", asyn
     captureLatestAssistantMarkdown:async()=>({ok:false,generating:true}),prepareWorkerHandoff:()=>{saves++;},
     saveHandoff:()=>{saves++;},
   };
-  vm.createContext(sandbox);
+  automaticWorkflowVm(vm).createContext(sandbox);
   vm.runInContext(fn+"; globalThis.run=captureAndSaveWorkerHandoff;",sandbox);
   const result=await sandbox.run("BENJAMINAI");
   assert.equal(result.ok,false); assert.equal(result.code,"HANDOFF_RESPONSE_NOT_READY"); assert.equal(saves,0);
@@ -129,7 +130,7 @@ function runSearchDom(script, rows, generating = false) {
     selector===adapter.CHATGPT_SELECTORS.conversationTurn ? rows[index].legacy :
     selector===adapter.CHATGPT_SELECTORS.messageRole ? Boolean(rows[index].legacy||rows[index].directRole) :
     selector===adapter.CHATGPT_SELECTORS.searchMessage ? !rows[index].legacy : false)};
-  return vm.runInNewContext(script,{
+  return automaticWorkflowVm(vm).runInNewContext(script,{
     URL,location:{href:"https://chatgpt.com/c/modern-test"},
     getComputedStyle:()=>({visibility:"visible"}),
     document:{

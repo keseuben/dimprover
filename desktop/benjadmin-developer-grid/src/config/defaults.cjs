@@ -4,7 +4,7 @@ const { DEFAULT_USAGE_GUIDE } = require("../guide/default-guide.cjs");
 const { normalizeWorkerSurfaceType, safeWorkerSurfaceUrl } = require("../surfaces/worker-surface.cjs");
 
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
-const CONFIG_VERSION = 14;
+const CONFIG_VERSION = 15;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
@@ -12,6 +12,7 @@ const CHAT_CELL_IDS = ["cell-1", "cell-2", "cell-3", "cell-4"];
 
 const DEFAULT_CONFIG = Object.freeze({
   version: CONFIG_VERSION,
+  workflowControlModes: { ARMINAI:"MANUAL", OUTMINAI:"MANUAL", BENAI:"MANUAL", JAZMINAI:"MANUAL" },
   appearance: "dark",
   microphoneEnabled: true,
   showAvatars: true,
@@ -127,6 +128,10 @@ function sanitizeConfig(input) {
 
   const sourceVersion = Number.isFinite(Number(input.version)) ? Number(input.version) : 1;
   next.version = CONFIG_VERSION;
+  for (const code of WORKER_OPTIONS) {
+    const value = input.workflowControlModes?.[code] || (code === "BENAI" ? input.workflowControlModes?.BENJAMINAI : null);
+    next.workflowControlModes[code] = value === "AUTO" ? "AUTO" : "MANUAL";
+  }
   if (["dark", "light"].includes(String(input.appearance))) next.appearance = String(input.appearance);
   if (typeof input.microphoneEnabled === "boolean") next.microphoneEnabled = input.microphoneEnabled;
   if (typeof input.showAvatars === "boolean") next.showAvatars = input.showAvatars;

@@ -10,7 +10,7 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"manual", manualControl:null, manualNotice:"", manualBusy:false, manualTaskId:"", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
   try {
@@ -34,7 +34,7 @@
   function uploadReady() { return ["resourceModule","resourceTitle","resourceVersion","resourceDescription","resourceTags","resourceDocumentType"].every(id => String(root.querySelector(`#${id}`)?.value || "").trim()); }
   function cardNavView() {
     const items=[
-      ["work","MUNKA"],["memory","MEMÓRIA"],["evidence","EVIDENCE"],["build","BUILD"],["context","CONTEXT"],["handoffs","ÁTADÁSOK"]
+      ["manual","KÉZI VEZÉRLÉS"],["work","MUNKA"],["memory","MEMÓRIA"],["evidence","EVIDENCE"],["build","BUILD"],["context","CONTEXT"],["handoffs","ÁTADÁSOK"]
     ];
     return `<nav class="cw-card-nav" aria-label="Central Core kártyanavigáció">${items.map(([id,label])=>`<button type="button" data-cw-jump="${id}" data-active="${state.navSection===id}">${label}</button>`).join("")}</nav>`;
   }
@@ -46,6 +46,7 @@
       : (state.activeWork?.sessions || []).map(session => ({ task:state.activeWork?.task, session }));
     const candidates = pairs.filter(pair => pair?.task && pair?.session?.endedAt == null
       && pair.session.taskId === pair.task.id && workerUiCode(pair.session.workerCode) === worker);
+    if (state.manualTaskId && state.navSection === "manual") return candidates.find(pair=>pair.task.id===state.manualTaskId) || null;
     const cell = (state.config?.cells || []).find(item => workerUiCode(item.workerCode) === worker);
     const conversationId = String(cell?.url || "").match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/)?.[1] || "";
     const exact = candidates.filter(pair => {
@@ -122,7 +123,7 @@
       const bridge=result.taskBridge?.bridge||{};state.workStartNotice=`Codex Task Bridge READY_FOR_WORKER. Branch: ${bridge.branchName||"—"}. TASK.md: ${bridge.taskMarkdownPath||"—"}`;state.workStartNoticeTone="success";render();return;
     }
     state.workStartBusy=true;state.workStartStatus="ELŐKÉSZÍTÉS";state.workStartNotice="A Central Core létrehozza vagy újrapróbálja a taskot és ellenőrzi a worker rendelkezésre állását…";state.workStartNoticeTone="info";render();
-    const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,launchDispatchMode:state.workLaunchDispatchMode,surfaceType,idempotencyKey:ensureWorkStartKey()});
+    const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,launchDispatchMode:state.navSection==="manual"?"MANUAL":state.workLaunchDispatchMode,workflowControlMode:state.navSection==="manual"?"MANUAL":undefined,surfaceType,idempotencyKey:ensureWorkStartKey()});
     state.workStartBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A munkaindítás sikertelen.");state.workStartNoticeTone="error";render();return;}
     if(result.work?.routingState==="WAITING_FOR_WORKER"){
@@ -348,14 +349,70 @@
   }
   function groupHandoffs(items) { const map=new Map(); for (const x of items) { const key=state.group==="project"?`${x.mainProject} / ${x.project}`:state.group==="worker"?x.workerCode:state.group==="chat"?`${x.chatSessionId} · ${x.chatTitle}`:state.group==="status"?x.status:state.group==="date"?new Date(x.finishedAt).toLocaleDateString("hu-HU"):`${x.module}${x.contextModule?` / ${x.contextModule}`:""}`; const k=key||"Nincs besorolás"; if(!map.has(k))map.set(k,[]); map.get(k).push(x); } return [...map.entries()]; }
   function handoffsView() { const groups=groupHandoffs(filteredHandoffs()); return `<div class="cw-filters cw-filters-handoff"><label class="cw-search">⌕<input id="cwQuery" value="${esc(state.query)}" placeholder="Keresés csevegésben, workerben, modulban, taskban…"></label><select id="cwWorker"><option value="all">Minden worker</option>${WORKERS.map(w=>`<option ${state.worker===w?"selected":""}>${w}</option>`).join("")}</select><select id="cwStatus"><option value="all">Minden állapot</option>${["COMPLETED","PARTIAL","BLOCKED","FAILED"].map(v=>`<option ${state.status===v?"selected":""}>${v}</option>`).join("")}</select><select id="cwGroup"><option value="module" ${state.group==="module"?"selected":""}>Csoport: modul</option><option value="project" ${state.group==="project"?"selected":""}>Csoport: projekt</option><option value="worker" ${state.group==="worker"?"selected":""}>Csoport: worker</option><option value="chat" ${state.group==="chat"?"selected":""}>Csoport: csevegés</option><option value="date" ${state.group==="date"?"selected":""}>Csoport: dátum</option><option value="status" ${state.group==="status"?"selected":""}>Csoport: állapot</option></select></div><div class="cw-groups">${groups.map(([k,list])=>`<section><header><strong>${esc(k)}</strong><span>${list.length} átadó</span></header>${list.map(handoffCard).join("")}</section>`).join("")||'<div class="cw-empty">Még nincs a szűrésnek megfelelő átadó.</div>'}</div>`; }
-  function render() { root.innerHTML=`${cardNavView()}${workStartView()}${memoryView()}${diagnosticsView()}${runnerPoolView()}${packView()}<div data-cw-section="handoffs"><nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav></div><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
+  function manualSelection(){const pair=selectedWorkLaunchPair();return {workerCode:state.workStartWorkerCode,taskId:pair?.task?.id||"",sessionId:pair?.session?.id||""};}
+  function manualControlView(){
+    const code=workerUiCode(state.workStartWorkerCode),pair=selectedWorkLaunchPair(),m=state.manualControl;
+    const mode=state.config?.workflowControlModes?.[code]==="AUTO"?"AUTO":"MANUAL";
+    const same=Boolean(m&&m.taskId===pair?.task?.id&&m.sessionId===pair?.session?.id&&workerUiCode(m.workerCode)===code);
+    const disabled=state.manualBusy||!same||!m.conversationBound;
+    const btn=(action,label,off=disabled)=>`<button type="button" data-manual-action="${action}" ${off?"disabled":""}>${label}</button>`;
+    const pairs=(state.activeWork?.selectableSessionTasks||state.activeWork?.activeSessionTasks||[]).filter(p=>p?.session?.endedAt==null&&workerUiCode(p?.session?.workerCode)===code);
+    return `<section class="cw-manual" data-cw-section="manual">
+      <header><strong>KÉZI INDÍTÁS ÉS FOLYTATÁS</strong><b>${mode==="AUTO"?"AUTOMATIKUS MÓD":"KÉZI MÓD"}</b></header>
+      <p>Kézi módban a Grid megfigyeli a csevegést, de új taskot, fázisutasítást és helyreállítási üzenetet csak a gombjaiddal indít. A beállítás kódmérnökönként megmarad.</p>
+      <label>Kódmérnök<select id="workStartWorkerCode"><option value="">Válassz kódmérnököt…</option>${["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].map(w=>`<option value="${w}" ${workerUiCode(w)===code?"selected":""}>${workerDisplayName(w)} · ${state.config?.workflowControlModes?.[workerUiCode(w)]==="AUTO"?"AUTO":"KÉZI"}</option>`).join("")}</select></label>
+      <div class="cw-manual-actions">${btn("pause","KÉZI MÓD / SZÜNET",!code||state.manualBusy)}${btn("auto","AUTOMATIKUS MÓD",!code||state.manualBusy||mode==="AUTO")}<button id="manualRefresh" type="button" ${state.manualBusy?"disabled":""}>ÁLLAPOT FRISSÍTÉSE</button></div>
+      ${pairs.length?`<label>Meglévő feladat<select id="manualTaskId"><option value="">Válassz feladatot…</option>${pairs.map(p=>`<option value="${esc(p.task.id)}" ${p.task.id===pair?.task?.id?"selected":""}>${esc(p.task.title||p.task.id)} · ${esc(p.task.id)}</option>`).join("")}</select></label>`:"<p>Nincs kiválasztott aktív feladat. Újat alább indíthatsz.</p>"}
+      ${same?`<dl class="cw-manual-status"><dt>Task</dt><dd>${esc(m.taskId)}</dd><dt>Session</dt><dd>${esc(m.sessionId)}</dd><dt>Csevegés</dt><dd>${m.conversationBound?"A kijelölt taskhoz kötve":"MÁSIK CSEVEGÉS VAN NYITVA"}</dd><dt>BOOT ACK</dt><dd>${esc(m.bootAck)} · a pillanatnyi végrehajtási kapcsolatot külön kell ellenőrizni</dd><dt>HEAD</dt><dd>${esc(m.sourceHead)}</dd><dt>Source proof</dt><dd>${esc(m.sourceProofSha256)}</dd><dt>Végrehajtás</dt><dd>${esc(m.executionAccess)} · ${esc(m.executionState)} ${esc(m.executionCode)}</dd></dl>
+      <div class="cw-manual-actions">${btn("bind","ÚJ CSEVEGÉS RÖGZÍTÉSE",state.manualBusy||mode!=="MANUAL"||m.conversationBound)}${btn("recover","KAPCSOLAT HELYREÁLLÍTÁSA",disabled||mode!=="MANUAL"||m.resultPending)}${btn("prepare","FOLYTATÁS ELŐNÉZETE",disabled||mode!=="MANUAL")}${btn("allow-read","OLVASÁS ENGEDÉLYEZÉSE",disabled||mode!=="MANUAL")}${btn("allow-dev","DEV FEJLESZTÉS ENGEDÉLYEZÉSE",disabled||mode!=="MANUAL")}</div>
+      <small>Az engedély kizárólag ehhez a taskhoz, sessionhöz, source proofhoz és csevegéshez tartozik. A forrásutasítás korlátait és a szerver kapuit nem bővíti. Fázislépéshez külön kattintás kell.</small>
+      ${m.resultPending?`<p>Megőrzött végrehajtási válasz vár kézbesítésre.</p>${btn("retry-result","MEGŐRZÖTT VÁLASZ KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
+      ${m.preview?`<details open><summary>Előkészített folytatás · még nincs elküldve</summary><pre>${esc(m.preview.text)}</pre></details>${btn("send-preview","ELŐNÉZET ELKÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
+      ${m.draft?.text?`<details open><summary>A csevegés jelenlegi piszkozata · még nincs elküldve</summary><pre>${esc(m.draft.text)}</pre></details>${btn("send-draft","ELLENŐRZÖTT GÉPI PISZKOZAT KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
+      ${m.stageReport?`<p>Elfogadásra vár: ${esc(m.stageReport.stage)}/6 · ${esc(m.stageReport.result)} · ${esc(m.stageReport.summary)}</p>${btn("accept-report","JELENTÉS ELFOGADÁSA",disabled||mode!=="MANUAL")}`:""}
+      <div class="cw-manual-actions">${btn("stage","FÁZISUTASÍTÁS KÜLDÉSE",disabled||mode!=="MANUAL"||m.resultPending||m.bootAck!=="VALIDATED")}${btn("handoff","ÁTADÓ ELŐKÉSZÍTÉSE",disabled||mode!=="MANUAL"||m.resultPending)}</div>`:pair?"<p>A kiválasztott task állapotának lekérése folyamatban.</p>":""}
+      <div role="status" class="cw-notice">${esc(state.manualNotice||"")}</div>
+      <details class="cw-manual-new"><summary>ÚJ FEJLESZTÉSI FELADAT KÉZI INDÍTÁSA</summary><p>Meglévő munkához a fenti folytatást használd. Itt új task jön létre a kiválasztott kódmérnöknek.</p>
+      <label>Új feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a feladatot és korlátait…">${esc(state.workStartDraft)}</textarea></label>
+      <div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}"></label></div>
+      <label><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${state.workStartChatMode!=="NEW_PROJECT_CHAT"?"checked":""}> Meglévő csevegés</label><label><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${state.workStartChatMode==="NEW_PROJECT_CHAT"?"checked":""}> Új projektcsevegés</label>
+      <button id="workStartButton" type="button" ${!code||state.workStartBusy||state.workStartDraft.trim().length<12?"disabled":""}>${state.workStartBusy?"ELŐKÉSZÍTÉS…":"TASK ÉS LAUNCH PACKET ELŐKÉSZÍTÉSE"}</button><p role="status">${esc(state.workStartNotice)}</p></details>
+    </section>`;
+  }
+  async function refreshManualControl(){
+    const selection=manualSelection();
+    if(!selection.taskId){state.manualControl=null;return;}
+    const result=await api.getDeveloperGridManualControl?.(selection);
+    const latest=manualSelection();
+    if(latest.taskId!==selection.taskId||latest.sessionId!==selection.sessionId||latest.workerCode!==selection.workerCode)return;
+    state.manualControl=result?.ok?result.control:null;
+    if(!result?.ok)state.manualNotice=result?.error||"A kézi állapot nem olvasható.";
+  }
+  async function manualAction(action){
+    if(state.manualBusy)return;
+    const selection=manualSelection(),m=state.manualControl;
+    const sha256=action==="send-preview"?m?.preview?.sha256:action==="send-draft"?m?.draft?.sha256:action==="accept-report"?m?.stageReport?.sha256:"";
+    state.manualBusy=true;state.manualNotice="Művelet folyamatban…";render();
+    try{
+      const result=action==="handoff"?await api.prepareHandoff?.(workerUiCode(selection.workerCode)):await api.runDeveloperGridManualControl?.({...selection,action,sha256});
+      state.manualNotice=result?.ok?(result.message||"A kézi művelet befejeződött."):(result?.error||"A művelet blokkolva maradt.");
+      const cfg=await api.getConfig?.();if(cfg?.ok)state.config=cfg.config;
+      await refresh(false);
+    }catch(error){state.manualNotice=error.message;}finally{state.manualBusy=false;render();}
+  }
+
+
+  function render() { if(state.navSection==="manual"){root.innerHTML=cardNavView()+manualControlView();bindRenderedUi();return;} root.innerHTML=`${cardNavView()}${workStartView()}${memoryView()}${diagnosticsView()}${runnerPoolView()}${packView()}<div data-cw-section="handoffs"><nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav></div><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
   function bindRenderedUi() {
+    root.querySelectorAll("[data-manual-action]").forEach(b=>b.addEventListener("click",()=>void manualAction(b.dataset.manualAction)));
+    root.querySelector("#manualRefresh")?.addEventListener("click",()=>void refresh(false));
+    root.querySelector("#manualTaskId")?.addEventListener("change",e=>{state.manualTaskId=e.target.value;state.manualControl=null;render();void refresh(false);});
     const workPrompt=root.querySelector("#workStartPrompt");
     workPrompt?.addEventListener("input",()=>{state.workStartDraft=workPrompt.value;state.workStartKey="";state.workStartNotice="";const b=root.querySelector("#workStartButton");if(b)b.disabled=state.workStartBusy||state.workStartDraft.trim().length<12;});
     workPrompt?.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.ctrlKey){e.preventDefault();void startWork();}});
     root.querySelector("#workStartProjectId")?.addEventListener("input",e=>{state.workStartProjectId=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelector("#workStartModuleName")?.addEventListener("input",e=>{state.workStartModuleName=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;state.memory=null;state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();else void refresh(false);});
+    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.manualTaskId="";state.manualControl=null;state.manualNotice="";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;state.memory=null;state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();else void refresh(false);});
     root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";render();}));
     root.querySelectorAll('input[name="workLaunchDispatchMode"]').forEach(r=>r.addEventListener("change",e=>{state.workLaunchDispatchMode=e.target.value==="AUTO"?"AUTO":"MANUAL";try{localStorage.setItem("benjadminWorkLaunchDispatchMode",state.workLaunchDispatchMode);}catch{}state.workStartKey="";state.workStartNotice="";render();}));
@@ -372,7 +429,8 @@
     root.querySelector("#fullBuildButton")?.addEventListener("click",()=>void requestFullBuild());
     root.querySelector("#vguardReviewButton")?.addEventListener("click",()=>void requestVGuardReview());
     root.querySelectorAll("[data-cw-jump]").forEach(b=>b.addEventListener("click",()=>{
-      const target=String(b.dataset.cwJump||"work");state.navSection=target;
+      const wasManual=state.navSection==="manual";const target=String(b.dataset.cwJump||"work");state.navSection=target;
+      if(target==="manual"||wasManual){render();if(target==="manual")void refresh(false);return;}
       root.querySelectorAll("[data-cw-jump]").forEach(x=>x.dataset.active=String(x===b));
       if(target==="handoffs"&&state.tab!=="handoffs"){state.tab="handoffs";state.query="";render();setTimeout(()=>root.querySelector('[data-cw-section="handoffs"]')?.scrollIntoView({behavior:"smooth",block:"start"}),0);return;}
       root.querySelector(`[data-cw-section="${target}"]`)?.scrollIntoView({behavior:"smooth",block:"start"});
@@ -407,6 +465,8 @@
     if(buildResult?.ok&&buildResult.buildRuns)state.buildRuns=buildResult.buildRuns;
     if(selectedWorkerSurface()==="CODEX"&&state.workStartWorkerCode){const bridgeResult=await api.getDeveloperGridTaskBridge?.({workerCode:state.workStartWorkerCode});if(bridgeResult?.ok)state.taskBridge=bridgeResult.taskBridge||null;}
     if(windowsResult?.ok)state.windowsE2E=windowsResult.windowsE2E||null;
+    if(state.navSection==="manual")await refreshManualControl();
+    if(workerAtStart!==state.workStartWorkerCode||refreshRevision!==state.refreshRevision)return;
     const selectedPair=selectedWorkLaunchPair();
     const taskId=selectedPair?.task?.id||"";
     if(taskId){

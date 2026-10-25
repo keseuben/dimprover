@@ -1,3 +1,4 @@
+import {automaticWorkflowVm} from "./automatic-workflow-test-context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -21,7 +22,7 @@ function health(composerSelector){
  const root={querySelectorAll:()=>[],querySelector:()=>null,getClientRects:()=>[1]};
  const composer={getClientRects:()=>[1]};
  const document={querySelector:s=>s===adapter.CHATGPT_SELECTORS.main?root:s===composerSelector?composer:null};
- return vm.runInNewContext(adapter.DOM_HEALTH_SCRIPT,{document,location:{href:"https://chatgpt.com/c/new"},URL,Date,getComputedStyle:()=>({visibility:"visible"})});
+ return automaticWorkflowVm(vm).runInNewContext(adapter.DOM_HEALTH_SCRIPT,{document,location:{href:"https://chatgpt.com/c/new"},URL,Date,getComputedStyle:()=>({visibility:"visible"})});
 }
 await check("semantic textbox is a healthy composer without legacy IDs or form ancestry",()=>{
  const state=health('[role="textbox"][contenteditable="true"]');
@@ -36,7 +37,7 @@ const handler=main.slice(main.indexOf("function handleLargePasteShortcut("),main
 await check("large paste uses native focused-field fallback for missing composer once",async()=>{
  let pastes=0,prevented=0;const ids=new Set();
  const context={largePasteNativeFallbackIds:ids,LARGE_PASTE_THRESHOLD:6000,clipboard:{readText:()=>"x".repeat(7000)},insertLargeClipboardText:async()=>({ok:false,reason:"composer-not-found"}),send:()=>{throw Error("Should use native fallback");}};
- vm.createContext(context);vm.runInContext(handler+";globalThis.handle=handleLargePasteShortcut",context);
+ automaticWorkflowVm(vm).createContext(context);vm.runInContext(handler+";globalThis.handle=handleLargePasteShortcut",context);
  const view={webContents:{id:3,paste:()=>pastes++}};
  assert.equal(context.handle({preventDefault:()=>prevented++},{type:"keyDown",control:true,key:"v"},view,{id:"cell-3"}),true);
  await new Promise(resolve=>setImmediate(resolve));assert.equal(pastes,1);assert.equal(prevented,1);

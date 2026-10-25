@@ -3105,3 +3105,19 @@ body.has-health-drawer .central-panel {
   .footer-disk-track { min-width:27px; height:5px; }
   .footer-disk-value { min-width:32px; font-size:10px; }
 }
+
+/* Central Core: persistent manual controls. */
+.cw-card-nav { flex-wrap:wrap; }
+.cw-manual {padding:12px;border:1px solid #41bda3;border-radius:10px;display:grid;gap:12px;}
+.cw-manual header,.cw-manual-actions {display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.cw-manual header {justify-content:space-between;}
+.cw-manual p {margin:0;line-height:1.5;}
+.cw-manual label {display:grid;gap:5px;}
+.cw-manual select,.cw-manual input:not([type=radio]),.cw-manual textarea {width:100%;box-sizing:border-box;}
+.cw-manual-actions button {flex:1 1 180px;min-height:36px;}
+.cw-manual-status {display:grid;grid-template-columns:95px minmax(0,1fr);gap:7px;margin:0;}
+.cw-manual-status dd {margin:0;overflow-wrap:anywhere;}
+.cw-manual-status dt {font-weight:600;}
+.cw-manual pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;padding:10px;background:rgba(100,140,160,.1);font:12px/1.5 monospace;}
+.cw-manual details>summary {cursor:pointer;font-weight:600;}
+.cw-manual-new {display:grid;gap:10px;border-top:1px solid #41bda3;padding-top:12px;}
