@@ -38,6 +38,7 @@ function load(data) {
     return {stdout:args.includes("ls-files")?(data.tracked||""):data.gitError?"invalid":args.includes("rev-parse")?data.head:data.branch,stderr:""};
   };
   const stubs={
+    "./module-source":{resolveDeveloperGridModuleSource:async()=>{if(data.moduleSourceError)throw Object.assign(new Error("wrong module baseline"),{code:data.moduleSourceError});return {head:data.head};}},
     "./reviewed-write-scope":{normalizeReviewedWritePaths:()=>[],boundReviewedWritePaths:()=>[]},
     "@/config/developer-grid-module-sources.json":data.catalog||{sources:[]},
     "./task-operation-lock":{withDeveloperGridTaskOperation:async(_id,fn)=>fn()},
@@ -135,4 +136,7 @@ await check("reviewed file approval never overrides RED denial",async()=>{
  const data=fixture();data.policy=()=>({decision:"DENIED",riskLevel:"RED",reasons:[]});const bridge=load(data),rel="app/lib/drive/.env";
  await assert.rejects(()=>bridge.assertWritablePath(data.root,rel,{writablePaths:[],reviewedWritePaths:[rel]}),e=>e.code==="EXECUTION_RED_PATH_DENIED");
 });
+await blocked("WRITE_FILE on old module baseline is denied",d=>{d.input.action="WRITE_FILE";d.moduleSourceError="MODULE_SOURCE_BASELINE_MISMATCH";},"MODULE_SOURCE_BASELINE_MISMATCH");
+await blocked("test command on old module baseline is denied",d=>{d.input.action="RUN_DEV_COMMAND";d.moduleSourceError="MODULE_SOURCE_BASELINE_MISMATCH";},"MODULE_SOURCE_BASELINE_MISMATCH");
+await check("read-only Git status remains available for diagnosing an old baseline",async()=>{const d=fixture();d.moduleSourceError="MODULE_SOURCE_BASELINE_MISMATCH";assert.equal((await load(d).validateContext(d.input)).action,"GIT_STATUS");});
 console.log("Execution Bridge runtime security PASS · "+count+"/"+count);

@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.105-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.106-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -55,6 +55,7 @@ export type DevelopmentContext = {
   workStageIndex?: number | null;
   taskId: string;
   reviewedWriteApproval?: import("./reviewed-write-scope").ReviewedWriteApproval | null;
+  workReplacementAuthorization?: {planSha256:string;nextTaskId:string;authorizedAt:string} | null;
   moduleSourceBinding?: import("./module-source").ModuleSourceBinding | null;
   sourcePrompt?: string | null;
   chatLaunchMode?: ChatLaunchMode | null;

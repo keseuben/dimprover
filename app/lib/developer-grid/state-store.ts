@@ -202,6 +202,25 @@ export async function getActiveWorkerSession(workerCode: WorkerSession["workerCo
   return (await readGridState(root)).sessions.find((session) => session.workerCode === workerCode && session.endedAt === null) || null;
 }
 
+// Unlike materialization, a patch must preserve every other session, including a
+// newer task on the same worker. Re-read under the state lock before merging.
+export async function patchGridWorkerSession(input: {
+  sessionId:string;taskId:string;workerCode:WorkerSession["workerCode"];
+  expectedSourceProofSha256:string;
+  endedAt?:string;
+  developmentContext?:Partial<WorkerSession["developmentContext"]>;
+},root=DEFAULT_DEVELOPER_GRID_STATE_ROOT):Promise<WorkerSession>{
+  return serializeMutation(root,async()=>{
+    const target=files(root),state=await readGridState(root);
+    const existing=state.sessions.find(s=>s.id===input.sessionId&&s.taskId===input.taskId&&s.workerCode===input.workerCode);
+    if(!existing||existing.developmentContext.sourceExecutionProof?.sha256!==input.expectedSourceProofSha256)
+      throw Object.assign(new Error("A session kötése vagy forrásigazolása mentés közben megváltozott."),{code:"WORK_REPLACEMENT_SESSION_CHANGED",status:409});
+    const session={...existing,...(input.endedAt?{endedAt:input.endedAt}:{}),developmentContext:{...existing.developmentContext,...input.developmentContext}};
+    const next=bumpStateChange({...state,sessions:state.sessions.map(s=>s.id===session.id?session:s)},"session-upsert",session.id,session.taskId);
+    await atomic(target.state,next);return session;
+  });
+}
+
 export async function getGridStateDelta(input: { after?: number; limit?: number; root?: string } = {}): Promise<GridStateDelta> {
   const state = await readGridState(input.root || DEFAULT_DEVELOPER_GRID_STATE_ROOT);
   const after = Math.max(0, Math.trunc(Number(input.after) || 0));

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const source=fs.readFileSync('desktop/benjadmin-developer-grid/src/renderer/context-workspace.js','utf8');
+const pending=source.slice(source.indexOf('  function readPendingReplacement('),source.indexOf('  function manualSelection('));
+const action=source.slice(source.indexOf('  async function replacementAction('),source.indexOf('  async function manualAction('));
+const storage=new Map(),calls=[];
+const state={manualBusy:false,workStartWorkerCode:'BENJAMINAI',workStartDraft:'Implement the scoped DEV task',workStartProjectId:'project_dimprover',workStartModuleName:'Developer Grid V1',reviewedWritePaths:'app/lib/developer-grid/work-start.ts',manualControl:{taskId:'task-old',sessionId:'session-old',sourceProofSha256:'a'.repeat(64)},replacementPreview:{planSha256:'b'.repeat(64),plan:{targetSource:{head:'c'.repeat(40)}}}};
+let outcome='unknown';
+const box={state,workerUiCode:code=>code==='BENJAMINAI'?'BENAI':code,manualSelection:()=>({workerCode:state.workStartWorkerCode,taskId:state.manualControl?.taskId,sessionId:state.manualControl?.sessionId}),localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},render(){},refresh:async()=>{},api:{replaceDeveloperGridWork:async input=>{calls.push(JSON.parse(JSON.stringify(input)));if(outcome==='unknown')throw Error('network outcome unknown');return {ok:true,work:{routingState:outcome,task:{id:'new-task'}}};}}};
+vm.runInNewContext(pending+action+';globalThis.run=replacementAction;',box);
+await box.run(true);assert.equal(calls.length,1);const saved=JSON.parse(storage.get('gridPendingReplacementV106:BENAI'));assert.equal(saved.planSha256,'b'.repeat(64));assert.equal(state.manualBusy,false);
+state.manualControl=null;outcome='WAITING_FOR_WORKER';await box.run(true,true);assert.equal(calls.length,2);assert.equal(JSON.stringify(calls[0]),JSON.stringify(calls[1]));assert(storage.has('gridPendingReplacementV106:BENAI'));
+storage.set('gridPendingReplacementV106:OUTMINAI',JSON.stringify({...saved,workerCode:'OUTMINAI'}));outcome='ROUTED';await box.run(true,true);assert.equal(storage.has('gridPendingReplacementV106:BENAI'),false);assert.equal(storage.has('gridPendingReplacementV106:OUTMINAI'),true);
+state.workStartWorkerCode='ARMINAI';const before=calls.length;await box.run(true,true);assert.equal(calls.length,before);
+console.log(JSON.stringify({ok:true,tests:4,scope:'replacement-UI-persistence-and-worker-isolation',liveMutation:false}));

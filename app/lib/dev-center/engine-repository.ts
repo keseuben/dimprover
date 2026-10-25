@@ -1332,6 +1332,34 @@ export async function setDevEngineTaskTesting(taskId: string) {
   return { ok: true as const, task: mapTask(data as JsonRecord) };
 }
 
+export async function retireDevEngineTaskForReplacement(input:{taskId:string;sessionId:string;workerCode:string;nextTaskId:string}){
+  const client=await requireClient();
+  const task=await getTaskForConsoleControl(client,input.taskId);
+  if(["completed","cancelled","testing"].includes(task.status))throw new DevCenterEngineError("A task jelenlegi állapotában nem váltható le.","WORK_REPLACEMENT_ENGINE_STATE_DENIED",409);
+  const row=await client.from("dev_center_worker_sessions").select("*").eq("id",input.sessionId).maybeSingle();
+  if(row.error)databaseError("A leváltandó session nem olvasható.",row.error);
+  if(!row.data||text(row.data.task_id)!==task.id||!text(row.data.worker_id)||task.requestedWorkerId!==text(row.data.worker_id))throw new DevCenterEngineError("Eltérő engine task/session/worker kötés.","WORK_REPLACEMENT_ENGINE_IDENTITY_MISMATCH",409);
+  const worker=await client.from("dev_center_workers").select("id,code").eq("id",text(row.data.worker_id)).maybeSingle();
+  if(worker.error)databaseError("A leváltandó worker nem olvasható.",worker.error);
+  const code=(value:unknown)=>text(value).toUpperCase().replace(/^BENAI$/,"BENJAMINAI");
+  if(!worker.data||code(worker.data.code)!==code(input.workerCode)||(task.claimedBySessionId&&task.claimedBySessionId!==input.sessionId))throw new DevCenterEngineError("A task már más végrehajtóhoz tartozik.","WORK_REPLACEMENT_ENGINE_OWNER_CHANGED",409);
+  const others=await client.from("dev_center_worker_sessions").select("id").eq("task_id",task.id).neq("status","closed").neq("id",input.sessionId);
+  if(others.error)databaseError("A task további sessionjei nem ellenőrizhetők.",others.error);
+  if(others.data?.length)throw new DevCenterEngineError("A taskhoz másik aktív session tartozik.","WORK_REPLACEMENT_ENGINE_OWNER_CHANGED",409);
+  if(text(row.data.status)!=="closed"){
+    const released=await client.rpc("dev_center_release_session_atomic",{p_session_id:input.sessionId,p_reason:`SOURCE_REPLACED_BY:${input.nextTaskId}`,p_requeue_task:false});
+    if(released.error)databaseError("A régi session erőforrásai nem szabadíthatók fel.",released.error,409);
+  }
+  // Older console close paths did not release leases. Cleanup is limited to this
+  // verified old session and never resets the worker or another session's lease.
+  const now=nowIso();
+  for(const table of ["dev_center_scope_locks","dev_center_worktree_leases"]){
+    const released=await client.from(table).update({status:"released",released_at:now}).eq("session_id",input.sessionId).eq("status","active");
+    if(released.error)databaseError("A régi session megmaradt erőforrása nem oldható fel.",released.error,409);
+  }
+  return finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${input.nextTaskId}; korábbi task nem készre jelentve.`,rebalance:false});
+}
+
 export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null; rebalance?: boolean }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);

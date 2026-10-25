@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import vm from 'node:vm';
+import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),ts=require('typescript');
+const code=ts.transpileModule(await fs.readFile('app/lib/developer-grid/task-operation-lock.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+const root=await fs.mkdtemp(path.join(os.tmpdir(),'grid-process-lock-106-'));
+const sandbox={exports:{},require,process:{pid:process.pid,env:{BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT:root}}};vm.runInNewContext(code,sandbox);
+const childCode=`const vm=require('node:vm');const box={exports:{},require,process:{pid:process.pid,env:{BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT:${JSON.stringify(root)}}}};vm.runInNewContext(${JSON.stringify(code)},box);(async()=>{try{await box.exports.withDeveloperGridTaskOperation('same-task',async()=>{throw Error('must not enter');});process.exit(2);}catch(e){if(e.code!=='EXECUTION_TASK_OPERATION_BUSY')throw e;}await box.exports.withDeveloperGridTaskOperation('different-task',async()=>{});console.log('CHILD_CONCURRENCY_PASS');})().catch(e=>{console.error(e);process.exit(3);});`;
+const result=await sandbox.exports.withDeveloperGridTaskOperation('same-task',async()=>{const child=spawnSync(process.execPath,['-e',childCode],{encoding:'utf8',timeout:15000});assert.equal(child.status,0,child.stderr);assert.match(child.stdout,/CHILD_CONCURRENCY_PASS/);return 42;});
+assert.equal(result,42);assert.equal((await fs.readdir(path.join(root,'task-operation-locks'))).length,0);
+console.log(JSON.stringify({ok:true,tests:3,scope:'real-cross-process-task-lock',artifactRoot:root,liveMutation:false}));

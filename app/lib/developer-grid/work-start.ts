@@ -553,12 +553,19 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   let reused = Boolean(engineTask);
   if (engineTask) {
     const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
-    if (String(metadata.sourcePrompt || "") !== input.sourcePrompt
+    if (engineTask.projectId !== input.projectId || String(metadata.moduleName || "") !== input.moduleName
+      || String(metadata.sourcePrompt || "") !== input.sourcePrompt
       || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
       || String(metadata.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")) {
       const error = new Error("Az idempotencyKey már más tartalmú munkaindításhoz tartozik.");
       Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT", status: 409 });
       throw error;
+    }
+    if(existingSession){
+      if(existingSession.workerCode!==input.preferredWorkerCode||["completed","cancelled","blocked"].includes(String(engineTask.status).toLowerCase()))
+        throw Object.assign(new Error("A meglévő task lezárult vagy más workerhez tartozik; új feladat szükséges."),{code:"DEVELOPER_GRID_WORK_REUSE_DENIED",status:409});
+      await verifyCurrentSourceExecutionState(existingSession.sourceProvenance);
+      return {task:gridTaskFromEngine(engineTask as unknown as Record<string,unknown>),session:existingSession,stateRevision:existingGrid.revision,reused:true,sourcePrompt:input.sourcePrompt,chatLaunchMode:input.chatLaunchMode,surfaceType:input.surfaceType,preferredWorkerCode:input.preferredWorkerCode,routingState:"ROUTED" as const,stalePreBootRetirement,productionAccess:"DENY" as const};
     }
   } else {
     const repositoryId = await resolveDeveloperConsoleRepositoryId(input.projectId);

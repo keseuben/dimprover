@@ -1,4 +1,5 @@
 "server-only";
+import {resolveDeveloperGridModuleSource} from "./module-source";
 import {boundReviewedWritePaths} from "./reviewed-write-scope";
 import moduleCatalog from "@/config/developer-grid-module-sources.json";
 import {withDeveloperGridTaskOperation} from "./task-operation-lock";
@@ -300,6 +301,7 @@ async function validateContext(input: Input) {
     throw new DeveloperGridExecutionError("A task Git provenance execution előtt eltért.", "EXECUTION_SOURCE_STALE", 409);
   }
 
+  if(action==="WRITE_FILE"||action==="RUN_DEV_COMMAND")await resolveDeveloperGridModuleSource({projectId:task.projectId,moduleName:text(context.moduleName,180),fallbackHead:head,pinnedHead:context.moduleSourceBinding?.head||head});
   const scopePlan = await buildScopePlan({
     root: rootReal,
     projectId:task.projectId,

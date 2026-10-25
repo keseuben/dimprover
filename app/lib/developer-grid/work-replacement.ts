@@ -4,13 +4,11 @@ import {withDeveloperGridTaskOperation} from "./task-operation-lock";
 import {createHash} from "node:crypto";
 import {readFile,stat} from "node:fs/promises";
 import path from "node:path";
-import {finalizeDevEngineTask} from "@/app/lib/dev-center/engine-repository";
-import {releaseSessionAtomic} from "@/app/lib/dev-center/orchestration-repository";
+import {retireDevEngineTaskForReplacement} from "@/app/lib/dev-center/engine-repository";
 import {getDeveloperGridFoundation} from "./foundation";
 import {resolveDeveloperGridModuleSource} from "./module-source";
 import {verifyCurrentSourceExecutionState} from "./source-provenance";
-import {appendGridEvent,listGridEvents,readGridState,upsertWorkerSession} from "./state-store";
-import {encodeEventCursor} from "./events";
+import {appendGridEvent,readGridState,patchGridWorkerSession} from "./state-store";
 import {getDeveloperGridTaskById,normalizeWorkStartInput,startDeveloperGridWork,workStartTaskId} from "./work-start";
 
 const processing=new Set<string>();
@@ -59,22 +57,27 @@ async function replaceDeveloperGridWorkLocked(raw:Record<string,unknown>){
  const key=String(raw.taskId||"");if(processing.has(key))fail("WORK_REPLACEMENT_BUSY","Az átállítás folyamatban van.");processing.add(key);
  try{
   const state=await readGridState();
-  const events=await listGridEvents({cursor:encodeEventCursor(Math.max(0,Number(state.lastSequence||0)-200)),limit:200});
-  const authorized=events.events.some(e=>e.origin==="LIVE"&&e.taskId===raw.taskId&&e.delta?.eventType==="WORK_REPLACEMENT_AUTHORIZED"&&e.delta?.planSha256===expected&&e.delta?.sessionId===raw.sessionId);
+  const previous=state.sessions.find(s=>s.id===raw.sessionId&&s.taskId===raw.taskId);
+  const authorization=previous?.developmentContext.workReplacementAuthorization;
+  if(authorization&&authorization.planSha256!==expected)fail("WORK_REPLACEMENT_ALREADY_AUTHORIZED","Ehhez a régi taskhoz másik átállítás már elindult. A megőrzött kérést folytasd.");
+  const authorized=authorization?.planSha256===expected;
   const {plan,planSha256,task,session,input}=await replacementPlan(raw,authorized);
   if(planSha256!==expected)fail("WORK_REPLACEMENT_PLAN_CHANGED","Az átállítás forrása vagy utasítása megváltozott. Új előnézet szükséges.");
-  const idempotencyKey=`replace:${session.id}:${expected}`.slice(0,160),nextTaskId=workStartTaskId(idempotencyKey);
+  const idempotencyKey=`replace:${hash([session.id,expected])}`,nextTaskId=workStartTaskId(idempotencyKey);
+  if(!authorized){
+   session.developmentContext.workReplacementAuthorization={planSha256,nextTaskId,authorizedAt:new Date().toISOString()};
+   await patchGridWorkerSession({sessionId:session.id,taskId:session.taskId,workerCode:session.workerCode,expectedSourceProofSha256:plan.previousSourceProofSha256,developmentContext:{workReplacementAuthorization:session.developmentContext.workReplacementAuthorization}});
+  }
   if(!authorized)await appendGridEvent({kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:task.id,projectId:task.projectId,productionAccess:"DENY",delta:{eventType:"WORK_REPLACEMENT_AUTHORIZED",sessionId:session.id,planSha256,nextTaskId,previousHead:plan.previousHead,targetHead:plan.targetSource.head,summary:"Explicit új fejlesztési kör; régi forrás és audit megőrizve."}});
   if(!session.endedAt){
-   const engine=String(session.developmentContext.engineSessionId||"");if(engine)await releaseSessionAtomic(engine,"Explicit source replacement",false);
-   await finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${nextTaskId}; korábbi task nem készre jelentve.`,rebalance:false});
+   await retireDevEngineTaskForReplacement({taskId:task.id,sessionId:String(session.developmentContext.engineSessionId||""),workerCode:session.workerCode,nextTaskId});
    await assertNoPendingExecution(task.id);
-   await upsertWorkerSession({...session,endedAt:new Date().toISOString()});
+   await patchGridWorkerSession({sessionId:session.id,taskId:session.taskId,workerCode:session.workerCode,expectedSourceProofSha256:plan.previousSourceProofSha256,endedAt:new Date().toISOString()});
   }
   const work=await startDeveloperGridWork({...input,idempotencyKey,sourceCommit:plan.targetSource.head,autoRetireStalePreBoot:false});
   if(work.session&&plan.reviewedWritePaths.length){
    const updated={...work.session,developmentContext:{...work.session.developmentContext,reviewedWriteApproval:{authority:"MANUAL_REPLACEMENT_PLAN" as const,taskId:nextTaskId,sessionId:work.session.id,workerCode:work.session.workerCode,head:plan.targetSource.head,proofSha256:String(work.session.developmentContext.sourceExecutionProof?.sha256||""),planSha256,paths:plan.reviewedWritePaths}}};
-   await upsertWorkerSession(updated);work.session=updated;
+   work.session=await patchGridWorkerSession({sessionId:updated.id,taskId:nextTaskId,workerCode:updated.workerCode,expectedSourceProofSha256:updated.developmentContext.sourceExecutionProof?.sha256||"",developmentContext:{reviewedWriteApproval:updated.developmentContext.reviewedWriteApproval}});
   }
   await appendGridEvent({kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:nextTaskId,projectId:task.projectId,productionAccess:"DENY",delta:{eventType:"WORK_REPLACEMENT_CREATED",sessionId:work.session?.id||null,previousTaskId:task.id,previousSessionId:session.id,targetHead:plan.targetSource.head,routingState:work.routingState,summary:"Új fejlesztési task új BOOT ACK-kal; korábbi tiltások a korábbi taskhoz kötve maradnak."}});
   return {work,previousTaskId:task.id,previousSessionId:session.id,planSha256};
