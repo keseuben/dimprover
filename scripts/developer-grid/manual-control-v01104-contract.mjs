@@ -99,7 +99,7 @@ await check('native send fallback retains its marker outside the injected browse
  const result=await sandbox.run(view,'UNIQUE_MARKER');assert.equal(result.verified,true);assert.equal(events,2);
 });
 await check('old execution-result marker is insufficient without the exact result text',async()=>{
- const sandbox={captureConversationTranscript:async()=>({ok:true,messages:[{role:'USER',text:'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 old request'}]})};
+ const sandbox={require:id=>require('../../'+source+id.replace(/^\.\//,'')),captureConversationTranscript:async()=>({ok:true,messages:[{role:'USER',text:'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 old request'}]})};
  vm.createContext(sandbox);vm.runInContext(extract('executionResultTranscriptProof')+';globalThis.run=executionResultTranscriptProof',sandbox);
  assert.equal((await sandbox.run({},'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 new request')).verified,false);
  assert.equal((await sandbox.run({},'BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1 old request')).verified,true);

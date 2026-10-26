@@ -3833,7 +3833,7 @@ async function executionResultTranscriptProof(view,prompt) {
   const capture=await captureConversationTranscript(view).catch(()=>null);
   const normalize=value=>String(value || "").replace(/\s+/g," ").trim();
   const expected=normalize(prompt);
-  const found=capture?.ok && capture.messages?.find(item=>item.role === "USER" && normalize(item.text) === expected);
+  const found=capture?.ok && capture.messages?.find(item=>item.role === "USER" && require("./workflow/result-transcript.cjs").matchesExecutionResultTranscript(item.text,prompt));
   return {verified:Boolean(found),messageId:found?.messageId || null,generating:capture?.generating === true};
 }
 

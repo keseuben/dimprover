@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const require=createRequire(import.meta.url);
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+const {matchesExecutionResultTranscript:match}=require(path.join(root,'desktop/benjadmin-developer-grid/src/workflow/result-transcript.cjs'));
+const expected='BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1\nBENJADMIN_EXECUTION_RESULT_V1\n{"requestId":"req-2","taskId":"task-a","status":"PASS","data":{"content":"árvíz\\n"}}\nBENJADMIN_EXECUTION_RESULT_END\nFolytasd ugyanazt a taskot.';
+assert(match(expected,expected));
+assert(match(expected+'\n…\nTöbb mutatása',expected));
+assert(match(expected+'\n…\nShow more',expected));
+assert(match(expected+'\nKevesebb mutatása',expected));
+for(const actual of [expected.replace('req-2','req-3'),expected.replace('task-a','task-b'),expected.replace('PASS','FAIL'),expected.replace('árvíz','más'),expected.slice(0,-8),expected+' folytasd máshol', 'quoted '+expected,expected+'\n…\nTöbb mutatása\nextra'])assert(!match(actual,expected));
+assert(!match('',''));
+console.log('Execution result exact transcript / observed disclosure chrome PASS');
