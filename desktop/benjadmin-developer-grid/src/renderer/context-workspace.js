@@ -10,7 +10,7 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"manual", manualControl:null, manualNotice:"", manualBusy:false, manualTaskId:"", replacementPreview:null, replacementPending:null, reviewedWritePaths:"", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"manual", manualControl:null, manualNotice:"", manualBusy:false, manualTaskId:"", manualNewOpen:false, replacementPreview:null, replacementPending:null, reviewedWritePaths:"", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
 
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
@@ -365,7 +365,7 @@
       <label>Kódmérnök<select id="workStartWorkerCode"><option value="">Válassz kódmérnököt…</option>${["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].map(w=>`<option value="${w}" ${workerUiCode(w)===code?"selected":""}>${workerDisplayName(w)} · ${state.config?.workflowControlModes?.[workerUiCode(w)]==="AUTO"?"AUTO":"KÉZI"}</option>`).join("")}</select></label>
       <div class="cw-manual-actions">${btn("pause","KÉZI MÓD / SZÜNET",!code||state.manualBusy)}${btn("auto","AUTOMATIKUS MÓD",!code||state.manualBusy||mode==="AUTO")}<button id="manualRefresh" type="button" ${state.manualBusy?"disabled":""}>ÁLLAPOT FRISSÍTÉSE</button></div>
       ${pairs.length?`<label>Meglévő feladat<select id="manualTaskId"><option value="">Válassz feladatot…</option>${pairs.map(p=>`<option value="${esc(p.task.id)}" ${p.task.id===pair?.task?.id?"selected":""}>${esc(p.task.title||p.task.id)} · ${esc(p.task.id)}</option>`).join("")}</select></label>`:"<p>Nincs kiválasztott aktív feladat. Újat alább indíthatsz.</p>"}
-      ${same?`<dl class="cw-manual-status"><dt>Task</dt><dd>${esc(m.taskId)}</dd><dt>Session</dt><dd>${esc(m.sessionId)}</dd><dt>Csevegés</dt><dd>${m.conversationBound?"A kijelölt taskhoz kötve":"MÁSIK CSEVEGÉS VAN NYITVA"}</dd><dt>BOOT ACK</dt><dd>${esc(m.bootAck)} · a pillanatnyi végrehajtási kapcsolatot külön kell ellenőrizni</dd><dt>HEAD</dt><dd>${esc(m.sourceHead)}</dd><dt>Source proof</dt><dd>${esc(m.sourceProofSha256)}</dd><dt>Végrehajtás</dt><dd>${esc(m.executionAccess)} · ${esc(m.executionState)} ${esc(m.executionCode)}</dd></dl>
+      ${same?`${m.sourceAuthorityReady===false?"<p class=\"cw-notice\">A végrehajtási kapcsolat lejárt vagy helyreállításra vár. A korábbi BOOT ACK és source proof önmagában nem igazol aktív kapcsolatot. Használd a KAPCSOLAT HELYREÁLLÍTÁSA gombot.</p>":""}<dl class="cw-manual-status"><dt>Task</dt><dd>${esc(m.taskId)}</dd><dt>Session</dt><dd>${esc(m.sessionId)}</dd><dt>Csevegés</dt><dd>${m.conversationBound?"A kijelölt taskhoz kötve":"MÁSIK CSEVEGÉS VAN NYITVA"}</dd><dt>BOOT ACK</dt><dd>${esc(m.bootAck)} · a pillanatnyi végrehajtási kapcsolatot külön kell ellenőrizni</dd><dt>HEAD</dt><dd>${esc(m.sourceHead)}</dd><dt>Source proof</dt><dd>${esc(m.sourceProofSha256)}</dd><dt>Végrehajtás</dt><dd>${esc(m.executionAccess)} · ${esc(m.executionState)} ${esc(m.executionCode)}</dd></dl>
       <div class="cw-manual-actions">${btn("bind","ÚJ CSEVEGÉS RÖGZÍTÉSE",state.manualBusy||mode!=="MANUAL"||m.conversationBound)}${btn("recover","KAPCSOLAT HELYREÁLLÍTÁSA",disabled||mode!=="MANUAL"||m.resultPending)}${btn("prepare","FOLYTATÁS ELŐNÉZETE",disabled||mode!=="MANUAL")}${btn("allow-read","OLVASÁS ENGEDÉLYEZÉSE",disabled||mode!=="MANUAL")}${btn("allow-dev","DEV FEJLESZTÉS ENGEDÉLYEZÉSE",disabled||mode!=="MANUAL")}</div>
       <small>Az engedély kizárólag ehhez a taskhoz, sessionhöz, source proofhoz és csevegéshez tartozik. A forrásutasítás korlátait és a szerver kapuit nem bővíti. Fázislépéshez külön kattintás kell.</small>
       ${m.resultPending?`<p>Megőrzött végrehajtási válasz vár kézbesítésre.</p>${btn("retry-result","MEGŐRZÖTT VÁLASZ KÜLDÉSE",disabled||mode!=="MANUAL")}`:""}
@@ -375,7 +375,7 @@
       <div class="cw-manual-actions">${btn("stage","FÁZISUTASÍTÁS KÜLDÉSE",disabled||mode!=="MANUAL"||m.resultPending||m.bootAck!=="VALIDATED")}${btn("handoff","ÁTADÓ ELŐKÉSZÍTÉSE",disabled||mode!=="MANUAL"||m.resultPending)}</div>`:pair?"<p>A kiválasztott task állapotának lekérése folyamatban.</p>":""}
       ${readPendingReplacement(code)?`<p>Korábbi átállítás eredménye még nem igazolt. Azonos kéréssel folytatható, új task duplikálása nélkül.</p><button id="replacementRetry" type="button" ${state.manualBusy?"disabled":""}>ÁTÁLLÍTÁS ÁLLAPOTÁNAK ELLENŐRZÉSE / FOLYTATÁSA</button>`:""}
       <div role="status" class="cw-notice">${esc(state.manualNotice||"")}</div>
-      <details class="cw-manual-new" ${state.workStartDraft.trim()||state.replacementPreview?"open":""}><summary>ÚJ FEJLESZTÉSI FELADAT KÉZI INDÍTÁSA</summary><p>A folytatás megőrzi a korábbi feladat korlátait. Új fejlesztési megbízáshoz írd le a munkát és engedélyezett műveleteit. Foglalt worker esetén a régi, tiszta 1/6-os feladat ellenőrzött leváltása szükséges.</p>
+      <details class="cw-manual-new" ${state.manualNewOpen||state.workStartDraft.trim()||state.replacementPreview?"open":""}><summary>ÚJ FEJLESZTÉSI FELADAT KÉZI INDÍTÁSA</summary><p>A folytatás megőrzi a korábbi feladat korlátait. Új fejlesztési megbízáshoz írd le a munkát és engedélyezett műveleteit. Foglalt worker esetén a régi, tiszta 1/6-os feladat ellenőrzött leváltása szükséges.</p>
       <label>Új feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a feladatot és korlátait…">${esc(state.workStartDraft)}</textarea></label>
       <div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}"></label></div>
       <label><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${state.workStartChatMode!=="NEW_PROJECT_CHAT"?"checked":""}> Meglévő csevegés</label><label><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${state.workStartChatMode==="NEW_PROJECT_CHAT"?"checked":""}> Új projektcsevegés</label>
@@ -426,8 +426,32 @@
   }
 
 
-  function render() { if(state.navSection==="manual"){root.innerHTML=cardNavView()+manualControlView();bindRenderedUi();return;} root.innerHTML=`${cardNavView()}${workStartView()}${memoryView()}${diagnosticsView()}${runnerPoolView()}${packView()}<div data-cw-section="handoffs"><nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav></div><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
+  function captureEditorState() {
+    const panel=root.querySelector(".cw-manual-new");
+    if(panel)state.manualNewOpen=panel.open;
+    const element=document.activeElement;
+    const editable=element&&root.contains(element)&&element.id&&["INPUT","TEXTAREA"].includes(element.tagName)&&!element.disabled;
+    return {id:editable?element.id:null,start:editable?element.selectionStart:null,end:editable?element.selectionEnd:null,direction:editable?element.selectionDirection:null,editorScroll:editable?element.scrollTop:0,rootScroll:root.scrollTop,parentScroll:root.parentElement?.scrollTop};
+  }
+  function restoreEditorState(saved) {
+    if(saved.id){
+      const element=[...root.querySelectorAll("[id]")].find(item=>item.id===saved.id);
+      if(element&&!element.disabled){
+        element.focus({preventScroll:true});
+        if(typeof saved.start==="number"&&typeof element.setSelectionRange==="function"){
+          try{element.setSelectionRange(saved.start,saved.end,saved.direction||"none");}catch{}
+        }
+        element.scrollTop=saved.editorScroll;
+      }
+    }
+    root.scrollTop=saved.rootScroll;
+    if(root.parentElement&&typeof saved.parentScroll==="number")root.parentElement.scrollTop=saved.parentScroll;
+  }
+  function render() { const saved=captureEditorState();renderContents();restoreEditorState(saved); }
+  function renderContents() { if(state.navSection==="manual"){root.innerHTML=cardNavView()+manualControlView();bindRenderedUi();return;} root.innerHTML=`${cardNavView()}${workStartView()}${memoryView()}${diagnosticsView()}${runnerPoolView()}${packView()}<div data-cw-section="handoffs"><nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav></div><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
   function bindRenderedUi() {
+    const newPanel=root.querySelector(".cw-manual-new");
+    newPanel?.addEventListener("toggle",()=>{if(root.contains(newPanel))state.manualNewOpen=newPanel.open;});
     root.querySelector("#replacementRetry")?.addEventListener("click",()=>void replacementAction(true,true));
     root.querySelector("#reviewedWritePaths")?.addEventListener("input",e=>{state.reviewedWritePaths=e.target.value;state.replacementPreview=null;root.querySelector("#replacementApply")?.setAttribute("disabled","");});
     root.querySelector("#replacementPrepare")?.addEventListener("click",()=>void replacementAction(false));

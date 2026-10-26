@@ -24,7 +24,7 @@ const end = workStart.indexOf("export async function recordDeveloperGridBootAck"
 assert.ok(start >= 0 && end > start);
 const recovery = workStart.slice(start,end);
 
-check("version is 0.1.70",()=>{ assert.equal(pkg.version,"0.1.107"); assert.match(types,/0\.1\.107-dev/); });
+check("version is 0.1.70",()=>{ assert.equal(pkg.version,"0.1.108"); assert.match(types,/0\.1\.108-dev/); });
 check("recovery requires explicit task session worker and proof",()=>{
   for (const token of ["rawInput.taskId","rawInput.sessionId","rawInput.workerCode","rawInput.sourceProofSha256"]) assert.ok(recovery.includes(token),token);
 });
@@ -124,8 +124,8 @@ check("recovery prompt carries fresh proof and exactly one GIT_STATUS request",(
   assert.ok(main.includes("EXECUTION_REQUEST_END"));
 });
 check("recovery prompt explicitly forbids new Grid task session worktree TASK_LAUNCH",()=>{
-  assert.ok(main.includes("No new Grid task, Grid session, worktree or TASK_LAUNCH was created."));
-  assert.ok(main.includes("Direct DIMPROVER VPS MCP, VPS shell or raw shell remains forbidden"));
+  assert.ok(main.includes("Nem jött létre új Grid-task, Grid-session, worktree vagy TASK_LAUNCH."));
+  assert.ok(main.includes("A DEV-forrás és forrásazonosság műveleteihez a közvetlen DIMPROVER VPS MCP, VPS-shell és nyers shell továbbra is tiltott."));
 });
 check("local fresh proof acceptance is narrowly bound to V0168 task session and source head",()=>{
   assert.ok(main.includes('executionAuthorityRecoveryVersion || "").toUpperCase() === "V0168"'));

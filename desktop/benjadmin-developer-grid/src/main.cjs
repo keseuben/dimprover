@@ -2702,7 +2702,7 @@ function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
   };
   return [
     marker,
-    "BENJADMIN CONTROL EVENT - EXECUTION AUTHORITY RECOVERED - SAME GRID TASK/SESSION",
+    "BENJADMIN VEZÉRLŐESEMÉNY – VÉGREHAJTÁSI KAPCSOLAT HELYREÁLLÍTVA – AZONOS GRID TASK/SESSION",
     "Worker: " + backendWorkerCode,
     "Task: " + String(task?.id || ""),
     "Session: " + String(task?.sessionId || ""),
@@ -2712,15 +2712,15 @@ function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
     "Fresh source proof: " + proofSha256,
     "DEV ONLY - PROD DENY.",
     "",
-    "The previous internal Dev Center engine session expired. Central Core created a fresh READY execution authority for the SAME existing Grid task/session/worktree identity.",
-    "No new Grid task, Grid session, worktree or TASK_LAUNCH was created.",
-    "Do not use the previous source proof again.",
-    "Direct DIMPROVER VPS MCP, VPS shell or raw shell remains forbidden for DEV source/provenance operations.",
-    "Reply with exactly ONE execution request block and no additional text:",
+    "A korábbi belső Dev Center munkamenet lejárt. A Central Core friss READY végrehajtási kapcsolatot hozott létre ugyanahhoz a meglévő Grid task/session/worktree azonossághoz.",
+    "Nem jött létre új Grid-task, Grid-session, worktree vagy TASK_LAUNCH.",
+    "A korábbi forrásigazolást ne használd újra.",
+    "A DEV-forrás és forrásazonosság műveleteihez a közvetlen DIMPROVER VPS MCP, VPS-shell és nyers shell továbbra is tiltott.",
+    "Pontosan EGY végrehajtási kérésblokkot adj vissza, kísérőszöveg nélkül:",
     EXECUTION_REQUEST_START,
     JSON.stringify(request),
     EXECUTION_REQUEST_END,
-    "Then wait for BENJADMIN_EXECUTION_RESULT_V1.",
+    "Ezután várd meg a BENJADMIN_EXECUTION_RESULT_V1 választ.",
   ].join("\n");
 }
 
@@ -5148,6 +5148,8 @@ function conversationMemoryTaskForWorker(workerCode) {
   const surfaceType = normalizeWorkerSurfaceType(task.surfaceType || "CHATGPT");
   if (surfaceType !== "CHATGPT") return null;
   const local = loadTaskLaunchRecords()[String(task.id)] || {};
+  // A new task must not capture the previous task's chat before its own launch.
+  if (!local.sentAt && String(task.bootAckState || "").toUpperCase() !== "VALIDATED") return null;
   const authoritativeConversationId = String(
     task.surfaceConversationId
     || task.chatConversationId
@@ -6979,7 +6981,7 @@ async function manualControlStatus(selection) {
   const record = loadTaskLaunchRecords()[ctx.task.id] || {};
   const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
   const text = String(draft?.text || "");
-  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:ctx.pair.selectionRecoveryRequired?"RECOVERY_REQUIRED":record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
 }
 
 async function runManualControl(input) {
