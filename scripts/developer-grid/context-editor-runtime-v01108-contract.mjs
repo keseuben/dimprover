@@ -3,6 +3,8 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+process.chdir(fileURLToPath(new URL('../../', import.meta.url)));
 const ui=fs.readFileSync('desktop/benjadmin-developer-grid/src/renderer/context-workspace.js','utf8');
 const main=fs.readFileSync('desktop/benjadmin-developer-grid/src/main.cjs','utf8');
 function fn(source,name){const ast=ts.createSourceFile('source.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);let found;function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text===name)found=n;ts.forEachChild(n,visit);}visit(ast);assert.ok(found,name);return found.getText(ast);}
