@@ -26,6 +26,18 @@ function executionPending(record) {
   // the operator from recovering the connection or sending fresh instructions.
   return Boolean(record?.pendingExecutionResult || record?.executionRequest || ["REQUEST_RUNNING", "RESULT_SEND_PENDING", "TRANSPORT_RETRY", "EXECUTION_UNCERTAIN"].includes(record?.executionBridgeState));
 }
+function recoverableReadFailure(record, running = false) {
+  const queued = record?.executionRequest;
+  const request = queued?.request;
+  // An operator may abandon a read attempt, but never an unknown write or a
+  // result which still needs delivery/ACK. Server-side recovery rechecks source,
+  // scope and ownership; this helper grants no execution authority.
+  return Boolean(!running && !record?.pendingExecutionResult && queued?.key
+    && request?.taskId && request?.sessionId && request?.requestId
+    && ["READ_FILE", "LIST_FILES", "SEARCH_FILES", "GIT_STATUS", "GIT_DIFF", "GIT_DIFF_CHECK"].includes(request.action)
+    && ["TRANSPORT_RETRY", "BLOCKED", "WAITING_MANUAL_EXECUTION", "RECOVERY_REQUIRED"].includes(record.executionBridgeState)
+    && !(record.executionHistory || []).some(item => item.key === queued.key && item.completedAt));
+}
 function requestKey(request, hash) {
   return `${request.taskId}:${request.sessionId}:${request.requestId}:${hash}`;
 }
@@ -53,4 +65,4 @@ function continuationPrompt(task, code, proof, protocolLines) {
     "Minden további művelet új requestId-t kapjon; korábbi req-001 azonosítót ne használj újra.",
   ].join("\n");
 }
-module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, requestKey, wasDelivered, continuationPrompt };
+module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, recoverableReadFailure, requestKey, wasDelivered, continuationPrompt };

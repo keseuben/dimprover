@@ -7050,7 +7050,14 @@ async function runManualControl(input) {
     const capture = await captureLatestAssistantText(view);
     if (!capture?.ok || capture.generating) throw new Error("A csevegés még választ ír vagy nem olvasható. Várd meg a válasz végét.");
     if (action === "recover") {
-      if (workflowControl.executionPending(record)) throw new Error("Előbb rendezd a függő végrehajtási választ; helyreállítás most nem forgathat source proofot.");
+      if (workflowControl.executionPending(record)) {
+        if (!workflowControl.recoverableReadFailure(record, executionRequestProcessingKeys.has(`${task.id}:${task.sessionId}`)))
+          throw new Error("Előbb rendezd a függő végrehajtási választ; helyreállítás most nem forgathat source proofot.");
+        saveTaskLaunchPatch(task,code,{
+          abandonedReadRequests:[...(record.abandonedReadRequests || []),{key:record.executionRequest.key,requestId:record.executionRequest.request.requestId,action:record.executionRequest.request.action,reason:"OPERATOR_CONNECTION_RECOVERY",at:new Date().toISOString()}].slice(-32),
+          executionRequest:null,executionRetryAt:null,executionBridgeState:"RECOVERY_REQUIRED",executionBridgeError:null,manualExecutionPermission:null,
+        });
+      }
       let recovered;
       if (pair.session.developmentContext?.bootAckState === "VALIDATED") recovered = await recoverConversationExecutionAuthority(task,code);
       else recovered = await recoverDeveloperGridLaunchExecution({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:task.sessionId,workerCode:normalizedProofWorkerCode(code)}});
