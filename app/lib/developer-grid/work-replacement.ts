@@ -44,7 +44,7 @@ async function replacementPlan(raw:Record<string,unknown>,allowAuthorizedReplay=
  const source=await resolveDeveloperGridModuleSource({projectId:input.projectId,moduleName:input.moduleName,fallbackHead:String(foundation.sourceProvenance.head||""),pinnedHead:input.sourceCommit});
  if(source.authority!=="MODULE_CATALOG")fail("WORK_REPLACEMENT_MODULE_SOURCE_REQUIRED","Új fejlesztési körhöz ellenőrzött modulforrás-kötés szükséges.");
  const reviewedWritePaths=normalizeReviewedWritePaths(raw.reviewedWritePaths,input.projectId,input.moduleName);
- const plan={reviewedWritePaths,schemaVersion:1,previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
+ const plan={...(input.sourceCheckpointMode==="SCOPED_GIT"?{sourceCheckpointMode:input.sourceCheckpointMode}:{}),reviewedWritePaths,schemaVersion:1,previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
  return {plan,planSha256:hash(plan),task,session,input};
 }
 export async function prepareDeveloperGridWorkReplacement(raw:Record<string,unknown>){const {plan,planSha256}=await replacementPlan(raw);return {plan,planSha256};}
@@ -75,7 +75,7 @@ async function replaceDeveloperGridWorkLocked(raw:Record<string,unknown>){
    await patchGridWorkerSession({sessionId:session.id,taskId:session.taskId,workerCode:session.workerCode,expectedSourceProofSha256:plan.previousSourceProofSha256,endedAt:new Date().toISOString()});
   }
   const work=await startDeveloperGridWork({...input,idempotencyKey,sourceCommit:plan.targetSource.head,autoRetireStalePreBoot:false,continuityMode:"NEW_WORK"});
-  if(work.session&&plan.reviewedWritePaths.length){
+  if(work.session&&plan.reviewedWritePaths.length&&input.sourceCheckpointMode!=="SCOPED_GIT"){
    const updated={...work.session,developmentContext:{...work.session.developmentContext,reviewedWriteApproval:{authority:"MANUAL_REPLACEMENT_PLAN" as const,taskId:nextTaskId,sessionId:work.session.id,workerCode:work.session.workerCode,head:plan.targetSource.head,proofSha256:String(work.session.developmentContext.sourceExecutionProof?.sha256||""),planSha256,paths:plan.reviewedWritePaths}}};
    work.session=await patchGridWorkerSession({sessionId:updated.id,taskId:nextTaskId,workerCode:updated.workerCode,expectedSourceProofSha256:updated.developmentContext.sourceExecutionProof?.sha256||"",developmentContext:{reviewedWriteApproval:updated.developmentContext.reviewedWriteApproval}});
   }

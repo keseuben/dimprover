@@ -1,5 +1,8 @@
 "server-only";
 
+import {withDeveloperGridTaskOperation} from "./task-operation-lock";
+import {checkpointDeveloperGridSource} from "./source-checkpoint";
+import {checkpointHash} from "./source-checkpoint-policy";
 import { appendGridEvidence } from "./evidence";
 import { setDevEngineTaskTesting } from "@/app/lib/dev-center/engine-repository";
 import { refreshDerivedConversationMemory } from "./conversation-memory";
@@ -20,6 +23,9 @@ function fail(code: string, message: string, status = 409): never {
 }
 
 export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string, unknown>) {
+  return withDeveloperGridTaskOperation(text(rawInput.taskId,220),()=>ingestWorkerEvidenceLocked(rawInput));
+}
+async function ingestWorkerEvidenceLocked(rawInput:Record<string,unknown>){
   const state = await readGridState();
   const taskId = text(rawInput.taskId, 220);
   const sessionId = text(rawInput.sessionId, 240);
@@ -45,7 +51,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   const task = await getDeveloperGridTaskById(taskId);
   if (!task) fail("DEVELOPER_GRID_EVIDENCE_TASK_MISMATCH", "A worker evidence task nem található a Central Core authoritative taskállapotában.");
   if (!workers.has(workerCode)) fail("DEVELOPER_GRID_EVIDENCE_WORKER_INVALID", "Ismeretlen Developer Grid evidence worker.", 400);
-  const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
+  let session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
   if (!session) fail("DEVELOPER_GRID_EVIDENCE_SESSION_MISMATCH", "Az evidence-hez tartozó aktív worker session nem található.");
   if (session.developmentContext.bootAckState !== "VALIDATED") fail("DEVELOPER_GRID_EVIDENCE_BOOT_ACK_REQUIRED", "Worker evidence csak validált BOOT ACK után rögzíthető.");
   if (session.sourceProvenance.sourceState !== "VERIFIED" || session.sourceProvenance.blockCode) fail("SOURCE_BASELINE_MISMATCH", "Az evidence source provenance nem VERIFIED.");
@@ -100,6 +106,12 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     fail("DEVELOPER_GRID_STAGE_BLOCKING_EVIDENCE", "FAIL/BLOCKED evidence mellett stage előrelépés tiltva.");
   }
 
+  let sourceCheckpoint = null;
+  const reportSha256=checkpointHash(rawInput);
+  if(session.developmentContext.sourceCheckpointPolicy && reportedStage===3 && reportedResult==="PASS" && (previousStage===2 || session.developmentContext.sourceCheckpointReceipt?.reportSha256===reportSha256)){
+    const checkpoint=await checkpointDeveloperGridSource(session,task,reportSha256,reportedHead);
+    session=checkpoint.session;sourceCheckpoint=checkpoint.receipt;
+  }
   const timingPatch = reportSchemaVersion === 2 ? {
     currentWorkUnit: workUnit,
     workUnitStartedAt,
@@ -117,7 +129,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     timeTrackingTimezone: "Europe/Budapest" as const,
   } : {};
   let authoritativeSession = { ...session, developmentContext: { ...session.developmentContext, ...timingPatch, workStageIndex: reportedStage, resolvedAt: new Date().toISOString() } };
-  if (reportedHead !== session.sourceProvenance.head.toLowerCase()) {
+  if (reportedHead !== session.sourceProvenance.head.toLowerCase() && !sourceCheckpoint) {
     const advanced = await verifySourceHeadAdvance(session.sourceProvenance, reportedHead);
     authoritativeSession = { ...authoritativeSession, sourceProvenance: advanced };
     await upsertWorkerSession(authoritativeSession);
@@ -135,7 +147,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     });
   }
 
-  if (previousStage < 3 && reportedStage >= 3) {
+  if (previousStage <= 3 && reportedStage === 3) {
     await setDevEngineTaskTesting(taskId).catch((error) => {
       fail(error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "DEV_CENTER_TASK_TESTING_SYNC_FAILED") : "DEV_CENTER_TASK_TESTING_SYNC_FAILED", error instanceof Error ? error.message : "A Central Core engine TESTING állapota nem szinkronizálható.");
     });
@@ -161,5 +173,5 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     }));
   }
   const memory = await refreshDerivedConversationMemory(taskId, sessionId).catch(() => null);
-  return { taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, memory, timing: reportSchemaVersion === 2 ? timingPatch : null, productionAccess: "DENY" as const };
+  return { sourceCheckpoint, ...(sourceCheckpoint?{session:authoritativeSession}:{}), taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, memory, timing: reportSchemaVersion === 2 ? timingPatch : null, productionAccess: "DENY" as const };
 }

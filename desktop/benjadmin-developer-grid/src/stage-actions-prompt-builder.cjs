@@ -106,6 +106,8 @@ function buildStageActionPrompt({ action, workerCode, workerLabel, task, presenc
     `INDULÓ/UTOLSÓ AUTHORITATIVE HEAD: ${clean(task?.sourceHead, 80) || "NINCS"}`,
     "",
     ...spec.body.map((line) => `- ${line}`),
+    ...(task?.sourceCheckpointPolicy?.mode==="SCOPED_GIT" ? [stage===2?"A sikeres 3-as stage report után a Central Core készíti el a kijelölt fájlok Git-mentését. Te ne commitolj/pusholj; a head mezőben a jelenlegi HEAD maradjon. A friss forrásigazolást tartalmazó következő fázisutasításig várj.":"A Git-mentést a Central Core kezeli. Az alábbi aktuális HEAD és forrásigazolás szerint dolgozz; közvetlen Git-commit/push tiltott.",`Gitbe menthető fájlok: ${task.sourceCheckpointPolicy.paths.join(", ")}`] : []),
+    ...(task?.sourceCheckpointReceipt ? [`A központi Git-mentés sikeres. Aktuális HEAD: ${task.sourceCheckpointReceipt.head}. Friss forrásigazolás: ${task.sourceCheckpointReceipt.proofSha256}. A következő végrehajtási kérések ezt a forrásigazolást használják.`] : []),
     "",
     "KÖTELEZŐ GÉPI STAGE REPORT",
     "A normál rövid összefoglaló után pontosan add vissza az alábbi két marker közötti EGYETLEN JSON objektumot. Markdown code fence tilos.",

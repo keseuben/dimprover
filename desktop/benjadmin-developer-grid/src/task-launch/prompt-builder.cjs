@@ -120,8 +120,10 @@ ${continuityContextSummary}`);
       "Production access: DENY"
     );
   }
+  const checkpoint=task?.sourceCheckpointPolicy;
+  if(checkpoint?.mode==="SCOPED_GIT")lines.push("KÖZPONTI GIT-MENTÉS: a 2/6 fejlesztési fázis sikeres lezárásakor a Central Core menti Gitbe az előre kijelölt fájlokat, majd friss HEAD-et és forrásigazolást küld. Közvetlen commitot/pusht ne indíts. A 3/6 tesztelési fázist a friss központi utasítás után kezdd.",`Gitbe menthető fájlok: ${checkpoint.paths.join(", ")}`);
   const review=task?.reviewedWriteApproval;
-  if(review?.authority==="MANUAL_REPLACEMENT_PLAN"&&review.taskId===task.id&&review.sessionId===sessionId&&review.head===sourceHead&&review.proofSha256===sourceProofSha256&&Array.isArray(review.paths)&&review.paths.length){
+  if(["MANUAL_REPLACEMENT_PLAN","TASK_START_APPROVAL"].includes(review?.authority)&&review.taskId===task.id&&review.sessionId===sessionId&&review.head===sourceHead&&review.proofSha256===sourceProofSha256&&Array.isArray(review.paths)&&review.paths.length){
     lines.push("KÉZZEL JÓVÁHAGYOTT PONTOS ÍRÁSI FÁJLOK · csak validált BOOT ACK és Grid végrehajtási engedély után:",...review.paths.map(p=>cleanText(p,1000)),`Approval plan SHA-256: ${cleanText(review.planSha256,64)}`);
   }
   lines.push(`ACCEPTANCE: ${acceptance}`);

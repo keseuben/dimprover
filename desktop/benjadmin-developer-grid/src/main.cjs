@@ -1,5 +1,6 @@
 "use strict";
 
+const {checkpointRecordPatch}=require("./source-checkpoint.cjs");
 const workflowControl = require("./workflow/control.cjs");
 
 const { app, BrowserWindow, WebContentsView, ipcMain, Notification, safeStorage, session, powerMonitor, nativeTheme, globalShortcut, shell, screen, clipboard, dialog } = require("electron");
@@ -2436,6 +2437,8 @@ function launchTaskFromWork(work, chatPlan = null) {
     sourceHead: session.sourceProvenance?.head || null,
     sourceProofSha256: session.developmentContext?.sourceExecutionProof?.sha256 || null,
     sourceExecutionProof: session.developmentContext?.sourceExecutionProof || null,
+    sourceCheckpointPolicy:session.developmentContext?.sourceCheckpointPolicy || null,
+    sourceCheckpointReceipt:session.developmentContext?.sourceCheckpointReceipt || null,
     reviewedWriteApproval: session.developmentContext?.reviewedWriteApproval || null,
     sessionId: session.id || null,
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
@@ -3967,6 +3970,14 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
     input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, result:report.result, summary:report.summary, schemaVersion:report.schemaVersion, workUnit:report.workUnit, startedAt:report.startedAt, reportedAt:report.reportedAt, finishedAt:report.finishedAt, timezone:report.timezone, elapsedSeconds:report.elapsedSeconds, estimatedSeconds:report.estimatedSeconds, estimatedTotalSeconds:report.estimatedTotalSeconds, estimateCreatedAt:report.estimateCreatedAt, estimateConfidence:report.estimateConfidence, revisedEstimatedSeconds:report.revisedEstimatedSeconds, remainingEstimateSeconds:report.remainingEstimateSeconds, actualElapsedSeconds:report.actualElapsedSeconds, estimateVarianceSeconds:report.estimateVarianceSeconds, entries:report.evidence },
   }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
+  if(!result?.error && result?.sourceCheckpoint){
+    try{
+      const cell=workerCellForCode(uiWorkerCode),view=cell&&chatViews.get(cell.id);
+      const conversationId=view&&!view.webContents.isDestroyed()?chatConversationIdFromUrl(view.webContents.getURL()):"";
+      const patch=checkpointRecordPatch({task,record:loadTaskLaunchRecords()[task.id]||{},response:result,workerCode:uiWorkerCode,conversationId});
+      saveTaskLaunchPatch(task,uiWorkerCode,patch);
+    }catch(error){result.error=error instanceof Error?error.message:"SOURCE_CHECKPOINT_RESPONSE_INVALID";}
+  }
   if (checkpointPending) {
     const negativeEvidence = report.evidence.some((item) => item.kind === "ERROR" || item.status === "FAIL" || item.status === "BLOCKED");
     const passed = !result?.error && report.result === "PASS" && !negativeEvidence;
@@ -5588,6 +5599,10 @@ function authoritativeAutopilotContext(activeWork, workerCode, taskId = "") {
       branchName:src.branch || "",
       worktreePath:src.worktree || "",
       sourceState:src.sourceState || "",
+      sourceExecutionProof:ctx.sourceExecutionProof || null,
+      sourceProofSha256:ctx.sourceExecutionProof?.sha256 || "",
+      sourceCheckpointPolicy:ctx.sourceCheckpointPolicy || null,
+      sourceCheckpointReceipt:ctx.sourceCheckpointReceipt || null,
       bootAckState:ctx.bootAckState || null,
       bootAckCodingAllowed:ctx.bootAckCodingAllowed === true,
       surfaceConversationId:ctx.surfaceConversationId || ctx.chatConversationId || null,
@@ -5894,7 +5909,8 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
     };
   }
 
-  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task, presence });
+  const sourceTask=(contextOverride?.session?.developmentContext)?{...task,sourceCheckpointPolicy:contextOverride.session.developmentContext.sourceCheckpointPolicy,sourceCheckpointReceipt:contextOverride.session.developmentContext.sourceCheckpointReceipt}:task;
+  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task:sourceTask, presence })+"\n"+executionBridgeProtocolLines(sourceTask,code).join("\n");
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {

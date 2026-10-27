@@ -208,6 +208,7 @@ export async function patchGridWorkerSession(input: {
   sessionId:string;taskId:string;workerCode:WorkerSession["workerCode"];
   expectedSourceProofSha256:string;
   endedAt?:string;
+  sourceProvenance?:WorkerSession["sourceProvenance"];
   developmentContext?:Partial<WorkerSession["developmentContext"]>;
 },root=DEFAULT_DEVELOPER_GRID_STATE_ROOT):Promise<WorkerSession>{
   return serializeMutation(root,async()=>{
@@ -215,7 +216,7 @@ export async function patchGridWorkerSession(input: {
     const existing=state.sessions.find(s=>s.id===input.sessionId&&s.taskId===input.taskId&&s.workerCode===input.workerCode);
     if(!existing||existing.developmentContext.sourceExecutionProof?.sha256!==input.expectedSourceProofSha256)
       throw Object.assign(new Error("A session kötése vagy forrásigazolása mentés közben megváltozott."),{code:"WORK_REPLACEMENT_SESSION_CHANGED",status:409});
-    const session={...existing,...(input.endedAt?{endedAt:input.endedAt}:{}),developmentContext:{...existing.developmentContext,...input.developmentContext}};
+    const session={...existing,...(input.sourceProvenance?{sourceProvenance:input.sourceProvenance}:{}),...(input.endedAt?{endedAt:input.endedAt}:{}),developmentContext:{...existing.developmentContext,...input.developmentContext}};
     const next=bumpStateChange({...state,sessions:state.sessions.map(s=>s.id===session.id?session:s)},"session-upsert",session.id,session.taskId);
     await atomic(target.state,next);return session;
   });

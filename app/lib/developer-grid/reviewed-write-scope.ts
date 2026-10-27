@@ -3,7 +3,7 @@ import {createHash} from "node:crypto";
 import type {SourceExecutionProof} from "./types";
 import catalog from "@/config/developer-grid-module-sources.json";
 import {classifyScopePath} from "@/app/lib/dev-center/ai-worker/scope-policy";
-export type ReviewedWriteApproval={authority:"MANUAL_REPLACEMENT_PLAN";taskId:string;sessionId:string;workerCode:string;head:string;proofSha256:string;planSha256:string;paths:string[]};
+export type ReviewedWriteApproval={authority:"MANUAL_REPLACEMENT_PLAN"|"TASK_START_APPROVAL";taskId:string;sessionId:string;workerCode:string;head:string;proofSha256:string;planSha256:string;paths:string[]};
 export function normalizeReviewedWritePaths(raw:unknown,projectId:string,moduleName:string):string[]{
  const paths=Array.isArray(raw)?raw:[];
  if(paths.length>32)throw Object.assign(new Error("Legfeljebb 32 fájl hagyható jóvá."),{code:"WRITE_REVIEW_PATH_LIMIT",status:400});
@@ -17,7 +17,7 @@ export function normalizeReviewedWritePaths(raw:unknown,projectId:string,moduleN
  }))].sort();
 }
 export function boundReviewedWritePaths(raw:ReviewedWriteApproval|null|undefined,identity:{taskId:string;sessionId:string;workerCode:string;head:string;proofSha256:string}):string[]{
- if(!raw||raw.authority!=="MANUAL_REPLACEMENT_PLAN"||!/^[0-9a-f]{64}$/.test(raw.planSha256))return [];
+ if(!raw||!["MANUAL_REPLACEMENT_PLAN","TASK_START_APPROVAL"].includes(raw.authority)||!/^[0-9a-f]{64}$/.test(raw.planSha256))return [];
  if(raw.taskId!==identity.taskId||raw.sessionId!==identity.sessionId||raw.workerCode!==identity.workerCode||raw.head!==identity.head||raw.proofSha256!==identity.proofSha256)return [];
  return Array.isArray(raw.paths)?raw.paths:[];
 }

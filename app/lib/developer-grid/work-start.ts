@@ -1,3 +1,5 @@
+import {makeSourceCheckpointPolicy,checkpointHash} from "./source-checkpoint-policy";
+import {normalizeReviewedWritePaths} from "./reviewed-write-scope";
 import {renewReviewedWriteApproval} from "./reviewed-write-scope";
 "server-only";
 
@@ -124,7 +126,12 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit, continuityMode: input.continuityMode === "NEW_WORK" ? "NEW_WORK" as const : "CONTINUE" as const };
+  const mode=String(input.sourceCheckpointMode||"DISABLED");
+  if(!["DISABLED","SCOPED_GIT"].includes(mode))throw Object.assign(new Error("Ismeretlen Git-mentési mód."),{code:"CHECKPOINT_MODE_INVALID",status:400});
+  const reviewedWritePaths=normalizeReviewedWritePaths(input.reviewedWritePaths,projectId,moduleName);
+  if(mode==="SCOPED_GIT"&&!reviewedWritePaths.length)throw Object.assign(new Error("A Git-mentéshez legalább egy pontos forrásfájlt jelölj ki."),{code:"CHECKPOINT_PATHS_REQUIRED",status:400});
+  const sourceCheckpointMode=mode as "DISABLED"|"SCOPED_GIT";
+  return { sourceCheckpointMode, reviewedWritePaths, sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit, continuityMode: input.continuityMode === "NEW_WORK" ? "NEW_WORK" as const : "CONTINUE" as const };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -568,7 +575,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     if (engineTask.projectId !== input.projectId || String(metadata.moduleName || "") !== input.moduleName
       || String(metadata.sourcePrompt || "") !== input.sourcePrompt
       || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
-      || String(metadata.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")) {
+      || String(metadata.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")
+      || String(metadata.sourceCheckpointMode || "DISABLED") !== input.sourceCheckpointMode
+      || JSON.stringify(metadata.reviewedWritePaths || []) !== JSON.stringify(input.reviewedWritePaths)) {
       const error = new Error("Az idempotencyKey már más tartalmú munkaindításhoz tartozik.");
       Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT", status: 409 });
       throw error;
@@ -600,6 +609,8 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
         metadata: {
           origin: "BENJADMIN_DEVELOPER_GRID_WORK_START",
           sourcePrompt: input.sourcePrompt,
+          sourceCheckpointMode:input.sourceCheckpointMode,
+          reviewedWritePaths:input.reviewedWritePaths,
           sourcePromptPreserved: true,
           moduleSourceBinding,
           chatLaunchMode: input.chatLaunchMode,
@@ -632,7 +643,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       const existingMeta = existing?.metadata && typeof existing.metadata === "object" ? existing.metadata as Record<string, unknown> : {};
       if (!existing || String(existingMeta.sourcePrompt || "") !== input.sourcePrompt
         || String(existingMeta.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
-        || String(existingMeta.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")) throw createError;
+        || String(existingMeta.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")
+        || String(existingMeta.sourceCheckpointMode || "DISABLED") !== input.sourceCheckpointMode
+        || JSON.stringify(existingMeta.reviewedWritePaths || []) !== JSON.stringify(input.reviewedWritePaths)) throw createError;
       engineTask = existing;
       reused = true;
     }
@@ -758,6 +771,11 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     };
   }
   if (!readyExecution) throw Object.assign(new Error("A routolt task READY execution proof nélkül nem materializálható."), { code:"DEVELOPER_GRID_READY_PROOF_REQUIRED", status:409 });
+  if(input.reviewedWritePaths.length){
+    const approvalHash=checkpointHash({taskId,gridSessionId,workerCode:routedCode,sourcePrompt:input.sourcePrompt,sourceCheckpointMode:input.sourceCheckpointMode,paths:input.reviewedWritePaths});
+    developmentContext.reviewedWriteApproval={authority:"TASK_START_APPROVAL",taskId,sessionId:gridSessionId,workerCode:routedCode,head:readyExecution.proof.head,proofSha256:readyExecution.proof.sha256,planSha256:approvalHash,paths:input.reviewedWritePaths};
+  }
+  if(input.sourceCheckpointMode==="SCOPED_GIT")developmentContext.sourceCheckpointPolicy=makeSourceCheckpointPolicy({taskId,sessionId:gridSessionId,workerCode:routedCode,initialHead:readyExecution.proof.head,sourcePromptSha256:checkpointHash(input.sourcePrompt),paths:input.reviewedWritePaths});
   const session: WorkerSession = {
     id: gridSessionId,
     workerCode: routedCode,

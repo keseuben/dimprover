@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.112-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.113-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -54,6 +54,8 @@ export type DevelopmentContext = {
   workItem: string;
   workStageIndex?: number | null;
   taskId: string;
+  sourceCheckpointPolicy?: import("./source-checkpoint-policy").SourceCheckpointPolicy | null;
+  sourceCheckpointReceipt?: import("./source-checkpoint-policy").SourceCheckpointReceipt | null;
   reviewedWriteApproval?: import("./reviewed-write-scope").ReviewedWriteApproval | null;
   workReplacementAuthorization?: {planSha256:string;nextTaskId:string;authorizedAt:string} | null;
   moduleSourceBinding?: import("./module-source").ModuleSourceBinding | null;
