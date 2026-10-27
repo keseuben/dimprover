@@ -16,9 +16,9 @@ const request={schemaVersion:1,requestId:'req-1',taskId:'task',sessionId:'sessio
 const permission={taskId:'task',sessionId:'session',workerCode:'OUTMINAI',sourceProofSha256:'b'.repeat(64),conversationId:'chat',access:'DEV'};
 const hash=value=>createHash('sha256').update(value).digest('hex');
 function fixture({manual=false,delivery=true,executeError=null}={}){
- let record=manual?{}:{manualExecutionPermission:{...permission}}, calls=0,sends=0,current='chat',clock=100000;
+ let record=manual?{}:{manualExecutionPermission:{...permission}}, calls=0,sends=0,current='chat',clock=100000,observed=false;
  const running=new Set(), config=sanitizeConfig({});
- const make=()=>createExecutionJournal({read:()=>record,patch:(_task,_code,patch)=>{record={...record,...patch};},execute:async()=>{calls++;if(executeError)throw executeError;return {requestId:request.requestId,execution:{status:'PASS',code:'FILE_WRITTEN'}};},deliver:async()=>{sends++;assert.ok(record.pendingExecutionResult,'result persisted before send');return {sent:delivery,verified:delivery};},conversation:()=>current,allowed:(code,t,r,p,c,a)=>control.executionAllowed(config,code,t,r,p,c,a),running,hash,now:()=>clock});
+ const make=()=>createExecutionJournal({read:()=>record,patch:(_task,_code,patch)=>{record={...record,...patch};},execute:async()=>{calls++;if(executeError)throw executeError;return {requestId:request.requestId,execution:{status:'PASS',code:'FILE_WRITTEN'}};},deliver:async()=>{sends++;assert.ok(record.pendingExecutionResult,'result persisted before send');observed=delivery;return {sent:delivery,verified:delivery};},observe:async(_view,pending)=>({delivered:observed,ack:observed?{schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,pending.payload.resultEnvelope[k]])),decision:'ACCEPTED'}:null}),receipt:async input=>({ok:true,stage:input.stage==='DELIVERED'?'DELIVERED':'COMPLETED',workflowContinue:true}),conversation:()=>current,allowed:(code,t,r,p,c,a)=>control.executionAllowed(config,code,t,r,p,c,a),running,hash,now:()=>clock});
  const input={view:{},task,workerCode:'OUTMINAI',request,expectedProof:request.sourceProofSha256,localMismatch:false};
  return {run:()=>make()(input),restart:()=>make()(input),input,get record(){return record;},set record(value){record=value;},get calls(){return calls;},get sends(){return sends;},set delivery(value){delivery=value;},set current(value){current=value;},set clock(value){clock=value;},config};
 }
@@ -47,9 +47,9 @@ await check('legacy pending-send label cannot become a replayable queue item or 
 await check('manual mode cannot execute or deliver before explicit task permission',async()=>{
  const f=fixture({manual:true});assert.equal((await f.run()).reason,'MANUAL_PERMISSION_REQUIRED');assert.equal(f.calls,0);assert.equal(f.sends,0);
 });
-await check('failed delivery persists result and restart delivers without repeating write',async()=>{
+await check('failed delivery persists result and explicit retry after restart delivers without repeating write',async()=>{
  const f=fixture({delivery:false});await f.run();assert.equal(f.calls,1);assert.ok(f.record.pendingExecutionResult);assert.equal(control.executionPending(f.record),true);
- f.delivery=true;assert.equal((await f.restart()).processed,true);assert.equal(f.calls,1);assert.equal(f.sends,2);assert.equal(control.executionPending(f.record),false);
+ f.delivery=true;f.input.manualRetry=true;assert.equal((await f.restart()).processed,true);assert.equal(f.calls,1);assert.equal(f.sends,2);assert.equal(control.executionPending(f.record),false);
  assert.equal((await f.restart()).duplicate,true);assert.equal(f.calls,1);
 });
 await check('a different request waits behind the pending result',async()=>{

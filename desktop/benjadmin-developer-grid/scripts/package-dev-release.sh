@@ -9,9 +9,10 @@ NEXT_ROOT="$(readlink -f "$REPO/.next")"
 case "$RELEASE_DIST" in "$NEXT_ROOT"|"$NEXT_ROOT"/*) ;; *) echo "BLOCKED · RELEASE_DIST_OUTSIDE_NEXT_DENIED" >&2; exit 48 ;; esac
 NAME="BENJADMIN-Developer-Grid-v${VERSION}-DEV"
 OUT_DIR="${1:-$ROOT/dist-dev}"
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-STAGE="$TMP/$NAME"
+PACKAGE_STAGE_ROOT="$(mktemp -d)"
+# Preserve this generated package stage for the approved guarded cleanup flow.
+# Packaging never performs an ad-hoc recursive deletion.
+STAGE="$PACKAGE_STAGE_ROOT/$NAME"
 mkdir -p "$STAGE/desktop/benjadmin-developer-grid" "$OUT_DIR"
 tar -C "$ROOT" --exclude=node_modules --exclude=dist --exclude=dist-dev --exclude='*.log' -cf - . | tar -C "$STAGE/desktop/benjadmin-developer-grid" -xf -
 for rel in app/admin/developer-grid app/api/dev/grid app/lib/developer-grid components/admin/developer-grid scripts/developer-grid ops/developer-grid; do

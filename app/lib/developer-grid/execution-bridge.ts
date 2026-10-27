@@ -37,6 +37,8 @@ type Input = {
   path?: unknown;
   query?: unknown;
   content?: unknown;
+  expectedContentSha256?:unknown;
+  expectedFileSha256?:unknown;
   startLine?: unknown;
   endLine?: unknown;
   depth?: unknown;
@@ -112,6 +114,8 @@ function publicRequestHash(input: Input) {
     path: text(input.path, 1000),
     query: text(input.query, 1000),
     contentSha256: typeof input.content === "string" ? sha(input.content) : null,
+    ...(text(input.expectedContentSha256,80)?{expectedContentSha256:text(input.expectedContentSha256,80).toLowerCase()}:{}),
+    ...(text(input.expectedFileSha256,80)?{expectedFileSha256:text(input.expectedFileSha256,80).toLowerCase()}:{}),
     startLine: Number(input.startLine) || null,
     endLine: Number(input.endLine) || null,
     depth: Number(input.depth) || null,
@@ -129,7 +133,7 @@ async function findAudit(taskId: string, requestId: string) {
   const file = path.join(EXECUTION_ROOT, `${taskId.replace(/[^A-Za-z0-9._-]/g, "_")}.jsonl`);
   let body = "";
   try { body = await readFile(file, "utf8"); } catch { return null; }
-  const lines = body.trim().split(/\r?\n/).slice(-800).reverse();
+  const lines = body.trim().split(/\r?\n/).reverse();
   for (const line of lines) {
     try {
       const row = JSON.parse(line);
@@ -341,7 +345,9 @@ async function readFileAction(root: string, scope: ScopePlan, input: Input): Pro
   const start = clampInt(input.startLine, 1, Math.max(1, lines.length), 1);
   const end = clampInt(input.endLine, start, Math.min(lines.length, start + 399), Math.min(lines.length, start + 199));
   const content = output(lines.slice(start - 1, end).map((line, index) => `${start + index}: ${line}`).join("\n"));
-  return { status: "PASS", code: "EXECUTION_READ_OK", summary: `${rel} · ${start}-${end}/${lines.length} sor.`, data: { path: rel, startLine: start, endLine: end, totalLines: lines.length, content } };
+  const decoded=buffer.toString("utf8"),lossless=Buffer.from(decoded,"utf8").equals(buffer);
+  const completeFile=start===1&&end===lines.length&&lossless&&buffer.length<=MAX_OUTPUT_BYTES;
+  return { status: "PASS", code: "EXECUTION_READ_OK", summary: `${rel} · ${start}-${end}/${lines.length} sor.`, data: { path: rel, startLine: start, endLine: end, totalLines: lines.length, content, fileSha256:sha(buffer), fileBytes:buffer.length, hasUtf8Bom:buffer.subarray(0,3).equals(Buffer.from([239,187,191])), encoding:"utf8", completeFile, ...(completeFile?{rawContent:decoded}:{}) } };
 }
 async function searchFiles(root: string, scope: ScopePlan, input: Input): Promise<Result> {
   const query = text(input.query, 500);
@@ -360,7 +366,11 @@ async function writeFileAction(root: string, scope: ScopePlan, input: Input): Pr
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > MAX_WRITE_BYTES) throw new DeveloperGridExecutionError("A WRITE_FILE tartalom túl nagy.", "EXECUTION_WRITE_TOO_LARGE", 413, { bytes });
   if (content.includes("\0")) throw new DeveloperGridExecutionError("Bináris tartalom írása tiltott.", "EXECUTION_BINARY_DENIED", 415);
+  const expectedContentSha256=text(input.expectedContentSha256,80).toLowerCase(),expectedFileSha256=text(input.expectedFileSha256,80).toLowerCase();
+  if([expectedContentSha256,expectedFileSha256].some(v=>v&&!/^[a-f0-9]{64}$/.test(v)))throw new DeveloperGridExecutionError("Érvénytelen SHA-256 előfeltétel.","EXECUTION_WRITE_HASH_INVALID",400);
+  if(expectedContentSha256&&sha(content)!==expectedContentSha256)throw new DeveloperGridExecutionError("A kapott tartalom SHA-256 értéke eltér; írás nem történt.","EXECUTION_WRITE_CONTENT_HASH_MISMATCH",409);
   const { target, policy } = await assertWritablePath(root, rel, scope);
+  if(expectedFileSha256){const before=await readFile(target).catch(()=>null);if(!before||sha(before)!==expectedFileSha256)throw new DeveloperGridExecutionError("A célfájl megváltozott; írás nem történt.","EXECUTION_WRITE_PRECONDITION_FAILED",409);}
   await mkdir(path.dirname(target), { recursive: true, mode: 0o755 });
   let mode = 0o644;
   try { mode = (await stat(target)).mode & 0o777; } catch { /* new file */ }
@@ -368,8 +378,10 @@ async function writeFileAction(root: string, scope: ScopePlan, input: Input): Pr
   await writeFile(temp, content, { encoding: "utf8", mode });
   await rename(temp, target);
   await chmod(target, mode).catch(() => undefined);
+  const written=await readFile(target);
+  if(sha(written)!==sha(content))throw new DeveloperGridExecutionError("Az írás utáni bájtpontos ellenőrzés eltért.","EXECUTION_WRITE_VERIFY_FAILED",409);
   const status = await git(root, ["status", "--short", "--", rel]);
-  return { status: "PASS", code: "EXECUTION_WRITE_OK", summary: `${rel} atomikusan frissítve.`, data: { path: rel, bytes, sha256: sha(content), riskLevel: policy.riskLevel, policyDecision: policy.decision, gitStatus: output(status.stdout, 4000) } };
+  return { status: "PASS", code: "EXECUTION_WRITE_OK", summary: `${rel} atomikusan frissítve.`, data: { path: rel, bytes:written.length, sha256:sha(written), fileSha256:sha(written), fileBytes:written.length, riskLevel: policy.riskLevel, policyDecision: policy.decision, gitStatus: output(status.stdout, 4000) } };
 }
 async function gitStatus(root: string, scope: ScopePlan): Promise<Result> {
   const result = await git(root, ["status", "--short", "--untracked-files=all"]);
@@ -436,6 +448,69 @@ async function perform(root: string, scope: ScopePlan, input: Input, action: Exe
   return runDevCommand(root, scope, input);
 }
 
+function canonicalResult(value:unknown):string {
+  if(value===null||typeof value!=="object")return JSON.stringify(value);
+  if(Array.isArray(value))return "["+value.map(canonicalResult).join(",")+"]";
+  const row=value as Record<string,unknown>;
+  return "{"+Object.keys(row).filter(k=>row[k]!==undefined).sort().map(k=>JSON.stringify(k)+":"+canonicalResult(row[k])).join(",")+"}";
+}
+function resultEnvelope(row:Record<string,unknown>) {
+  const result=(row.result||{}) as Result;
+  const body={schemaVersion:2,taskId:String(row.taskId||""),sessionId:String(row.sessionId||""),workerCode:workerCode(row.workerCode),requestId:String(row.requestId||""),sourceProofSha256:String(row.sourceProofSha256||""),action:String(row.action||"").toUpperCase(),status:String(result.status||"FAIL").toUpperCase(),code:String(result.code||""),summary:String(result.summary||""),data:result.data&&typeof result.data==="object"&&!Array.isArray(result.data)?result.data:{},productionAccess:"DENY"};
+  const resultSha256=sha(canonicalResult(body));return {...body,resultId:"res-"+resultSha256,resultSha256};
+}
+async function auditRows(taskId:string):Promise<Record<string,unknown>[]> {
+  try{return (await readFile(path.join(EXECUTION_ROOT,taskId.replace(/[^A-Za-z0-9._-]/g,"_")+".jsonl"),"utf8")).trim().split(/\r?\n/).flatMap(line=>{try{return [JSON.parse(line)];}catch{return [];}});}catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")return [];throw error;}
+}
+function envelopeFromAudit(row:Record<string,unknown>,rows:Record<string,unknown>[]) {
+  const request=rows.find(r=>r.event==="REQUEST"&&r.requestId===row.requestId&&r.requestHash===row.requestHash);
+  return resultEnvelope({...request,...row,sourceProofSha256:row.sourceProofSha256||request?.sourceProofSha256});
+}
+async function assertPriorExecutionSettled(context:{taskId:string;sessionId:string;proofSha:string;requestId:string}) {
+  const rows=await auditRows(context.taskId);
+  if(rows.some(r=>r.event==="REQUEST"&&r.sessionId===context.sessionId&&r.sourceProofSha256===context.proofSha&&!rows.some(done=>done.event==="RESULT"&&done.requestId===r.requestId&&done.requestHash===r.requestHash)))throw new DeveloperGridExecutionError("Egy korábbi végrehajtás kimenetele bizonytalan; új kérés nem indulhat.","EXECUTION_OUTCOME_UNCERTAIN",409);
+  for(const row of rows.filter(r=>r.event==="RESULT"&&r.protocolVersion===2&&r.sessionId===context.sessionId&&r.sourceProofSha256===context.proofSha&&r.requestId!==context.requestId)) {
+    const e=envelopeFromAudit(row,rows),completed=rows.find(r=>r.event==="COMPLETED"&&r.resultId===e.resultId);
+    if(!completed)throw new DeveloperGridExecutionError("Az előző eredmény worker ACK-ja még nincs elfogadva.","EXECUTION_PREVIOUS_ACK_REQUIRED",409);
+    if(completed.workflowContinue!==true)throw new DeveloperGridExecutionError("Az előző művelet hibával vagy elutasított ACK-val zárult; új művelet nem indulhat.","EXECUTION_PREVIOUS_RESULT_BLOCKED",409);
+  }
+}
+export async function recordDeveloperGridExecutionReceipt(raw:unknown) {
+  const input=(raw&&typeof raw==="object"&&!Array.isArray(raw)?raw:{}) as Record<string,unknown>;
+  const taskId=text(input.taskId,220);
+  return withDeveloperGridTaskOperation(taskId,async()=>{
+    const sessionId=text(input.sessionId,240),worker=workerCode(input.workerCode),requestId=safeRequestId(input.requestId),stage=text(input.stage,40);
+    if(!taskId||!sessionId||!INTERNAL_WORKERS.has(worker)||!["LOOKUP","DELIVERED","ACKNOWLEDGED"].includes(stage))throw new DeveloperGridExecutionError("Hiányos kézbesítési identity.","EXECUTION_RECEIPT_INVALID",400);
+    const state=await readGridState(),session=state.sessions.find(s=>s.id===sessionId&&s.taskId===taskId&&!s.endedAt);
+    const task=await getDeveloperGridTaskById(taskId);
+    const development=session?.developmentContext as unknown as Record<string,unknown>|undefined;
+    const bound=String((session as unknown as Record<string,unknown>)?.surfaceConversationId||(session as unknown as Record<string,unknown>)?.chatConversationId||development?.surfaceConversationId||development?.chatConversationId||"");
+    if(!session||!task||task.environment!=="DEV"||task.productionAccess!=="DENY"||workerCode(session.workerCode)!==worker||!bound||bound!==text(input.conversationId,240))throw new DeveloperGridExecutionError("A kézbesítési task/session/worker/csevegés kötése eltér.","EXECUTION_RECEIPT_BINDING_MISMATCH",409);
+    const rows=await auditRows(taskId),row=[...rows].reverse().find(r=>r.event==="RESULT"&&r.requestId===requestId&&r.sessionId===sessionId&&workerCode(r.workerCode)===worker);
+    if(!row)throw new DeveloperGridExecutionError("Nincs ilyen eltárolt szerveres eredmény.","EXECUTION_RESULT_NOT_FOUND",404);
+    const envelope=envelopeFromAudit(row,rows);
+    if(stage==="LOOKUP") {
+      if(envelope.sourceProofSha256!==text(input.sourceProofSha256,80))throw new DeveloperGridExecutionError("Az eltárolt eredmény source proofja eltér.","EXECUTION_RESULT_ACK_MISMATCH",409);
+      return {ok:true,stage:"EXECUTED",replayed:true,execution:row.result,resultEnvelope:envelope,requestId,taskId,sessionId,action:envelope.action,executedAt:row.at,productionAccess:"DENY"};
+    }
+    if(["taskId","sessionId","workerCode","requestId","resultId","resultSha256","sourceProofSha256"].some(k=>(k==="workerCode"?workerCode(input[k]):String(input[k]||""))!==String(envelope[k as keyof typeof envelope])))throw new DeveloperGridExecutionError("Az ACK nem a konkrét szerveres eredményhez tartozik.","EXECUTION_RESULT_ACK_MISMATCH",409);
+    const matching=rows.filter(r=>r.resultId===envelope.resultId);
+    const at=new Date().toISOString(),base={taskId,sessionId,workerCode:worker,requestId,resultId:envelope.resultId,resultSha256:envelope.resultSha256,sourceProofSha256:envelope.sourceProofSha256,conversationId:bound,environment:"DEV",productionAccess:"DENY"};
+    if(stage==="DELIVERED") {
+      const existing=matching.find(r=>r.event==="DELIVERED");
+      if(!existing)await appendAudit(taskId,{...base,event:"DELIVERED",at,transcriptMessageId:text(input.transcriptMessageId,220)});
+      return {ok:true,stage:"DELIVERED",resultId:envelope.resultId,replayed:Boolean(existing)};
+    }
+    if(!matching.some(r=>r.event==="DELIVERED"))throw new DeveloperGridExecutionError("Worker ACK csak igazolt kézbesítés után fogadható el.","EXECUTION_DELIVERY_REQUIRED",409);
+    const decision=text(input.decision,40);if(!["ACCEPTED","REJECTED"].includes(decision))throw new DeveloperGridExecutionError("Érvénytelen worker ACK döntés.","EXECUTION_ACK_DECISION_INVALID",400);
+    const previous=matching.find(r=>r.event==="ACKNOWLEDGED");if(previous&&previous.decision!==decision)throw new DeveloperGridExecutionError("Az eredmény korábbi ACK-ja eltér.","EXECUTION_ACK_CONFLICT",409);
+    if(!previous)await appendAudit(taskId,{...base,event:"ACKNOWLEDGED",at,decision,transcriptMessageId:text(input.transcriptMessageId,220)});
+    const workflowContinue=decision==="ACCEPTED"&&envelope.status==="PASS";
+    if(!matching.some(r=>r.event==="COMPLETED"))await appendAudit(taskId,{...base,event:"COMPLETED",at,decision,resultStatus:envelope.status,workflowContinue});
+    return {ok:true,stage:"COMPLETED",resultId:envelope.resultId,resultStatus:envelope.status,workflowContinue,replayed:Boolean(previous)};
+  });
+}
+
 export async function executeDeveloperGridRequest(raw: unknown) {
   const taskId=String((raw as Record<string,unknown>)?.taskId||"");
   return withDeveloperGridTaskOperation(taskId,()=>executeDeveloperGridRequestLocked(raw));
@@ -446,8 +521,12 @@ async function executeDeveloperGridRequestLocked(raw: unknown) {
   const existing = await findAudit(context.taskId, context.requestId);
   if (existing) {
     if (existing.requestHash !== context.requestHash) throw new DeveloperGridExecutionError("Ugyanaz a requestId más tartalommal érkezett.", "EXECUTION_REQUEST_ID_CONFLICT", 409);
-    return { ok: true as const, replayed: true, execution: existing.result as Result, requestId: context.requestId, taskId: context.taskId, sessionId: context.sessionId, action: context.action, productionAccess: "DENY" as const };
+    const rows=await auditRows(context.taskId);const envelope=envelopeFromAudit(existing,rows);
+    return { ok: true as const, resultEnvelope:envelope, replayed: true, execution: existing.result as Result, requestId: context.requestId, taskId: context.taskId, sessionId: context.sessionId, action: context.action, productionAccess: "DENY" as const };
   }
+  const priorRows=await auditRows(context.taskId);
+  if(priorRows.some(r=>r.event==="REQUEST"&&r.requestId===context.requestId))throw new DeveloperGridExecutionError("A korábbi művelet eredménye bizonytalan; automatikus újrafuttatás tiltva.","EXECUTION_OUTCOME_UNCERTAIN",409);
+  await assertPriorExecutionSettled(context);
   await appendAudit(context.taskId, {
     event: "REQUEST",
     at: new Date().toISOString(),
@@ -473,6 +552,7 @@ async function executeDeveloperGridRequestLocked(raw: unknown) {
     if (error instanceof DeveloperGridExecutionError) result = { status: "BLOCKED", code: error.code, summary: error.message, data: error.details };
     else result = { status: "FAIL", code: "EXECUTION_INTERNAL_ERROR", summary: error instanceof Error ? error.message : "Execution Bridge belső hiba." };
   }
-  await appendAudit(context.taskId, { event: "RESULT", at: new Date().toISOString(), requestId: context.requestId, requestHash: context.requestHash, taskId: context.taskId, sessionId: context.sessionId, workerCode: context.worker, action: context.action, result, environment: "DEV", productionAccess: "DENY" });
-  return { ok: true as const, replayed: false, execution: result, requestId: context.requestId, taskId: context.taskId, sessionId: context.sessionId, action: context.action, productionAccess: "DENY" as const };
+  const envelope=resultEnvelope({taskId:context.taskId,sessionId:context.sessionId,workerCode:context.worker,requestId:context.requestId,sourceProofSha256:context.proofSha,action:context.action,result});
+  await appendAudit(context.taskId, { event: "RESULT", protocolVersion:2, at: new Date().toISOString(), requestId: context.requestId, requestHash: context.requestHash, taskId: context.taskId, sessionId: context.sessionId, workerCode: context.worker, sourceProofSha256:context.proofSha, resultId:envelope.resultId,resultSha256:envelope.resultSha256, action: context.action, result, environment: "DEV", productionAccess: "DENY" });
+  return { ok: true as const, resultEnvelope:envelope, replayed: false, execution: result, requestId: context.requestId, taskId: context.taskId, sessionId: context.sessionId, action: context.action, productionAccess: "DENY" as const };
 }

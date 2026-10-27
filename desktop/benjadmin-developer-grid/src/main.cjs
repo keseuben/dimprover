@@ -12,7 +12,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { developerGridWorkReplacement, fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { recordDeveloperGridExecutionReceipt, developerGridWorkReplacement, fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -2538,10 +2538,13 @@ function executionBridgeProtocolLines(task, workerCode, sourceProofSha256Overrid
     "EXECUTION CHANNEL: CENTRAL_CORE_EXECUTION_BRIDGE_V1 · ACTIVE · DEV ONLY · PROD DENY.",
     "A közvetlen VPS/MCP/shell nem szükséges. A Central Core a requesteket az authoritative task-worktree-n hajtja végre, aktív scope-lock + worktree lease + source proof ellenőrzéssel.",
     "Egy assistant-válaszban pontosan EGY execution requestet adj ki, majd várd meg a BENJADMIN_EXECUTION_RESULT_V1 választ.",
+    "A teljes request marker+JSON+END blokkot egyetlen text kódblokkba tedd, hogy a forráskód backtick és egyéb karakterei szó szerint megmaradjanak.",
     "Request forma:",
+    String.fromCharCode(96).repeat(3)+"text",
     "BENJADMIN_EXECUTION_REQUEST_V1",
     JSON.stringify(example),
     "BENJADMIN_EXECUTION_REQUEST_END",
+    String.fromCharCode(96).repeat(3),
     "Engedélyezett action: LIST_FILES, READ_FILE, SEARCH_FILES, WRITE_FILE, GIT_STATUS, GIT_DIFF, GIT_DIFF_CHECK, RUN_DEV_COMMAND.",
     "READ_FILE: path + opcionális startLine/endLine. SEARCH_FILES: query + opcionális path. LIST_FILES: opcionális path/depth.",
     "WRITE_FILE: path + teljes UTF-8 content. RED/sensitive path, symlink, .git, .next, node_modules tiltott.",
@@ -3837,21 +3840,42 @@ async function executionResultTranscriptProof(view,prompt) {
   return {verified:Boolean(found),messageId:found?.messageId || null,generating:capture?.generating === true};
 }
 
-async function sendExecutionResultToWorker(view, payload, canSend = () => true) {
-  const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1";
-  const prompt = buildDeveloperGridExecutionResultPrompt(payload);
-  const previous = await executionResultTranscriptProof(view,prompt);
-  if(previous.verified) return {sent:true,verified:true,duplicate:true,transcriptProof:previous};
-  if(previous.generating || !canSend()) return {sent:false,verified:false,reason:previous.generating?"chat-generating":"send-permission-changed"};
-  const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
-  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason:insertion?.reason || "execution-result-not-inserted" };
-  if (!canSend()) return {sent:false,verified:false,reason:"send-permission-changed"};
-  const sent=await sendPreparedChatPrompt(view, marker,canSend);
-  const transcriptProof=await executionResultTranscriptProof(view,prompt);
-  return {...sent,verified:transcriptProof.verified,transcriptProof,reason:transcriptProof.verified?null:sent?.reason || "exact-execution-result-not-observed"};
+async function observeExecutionResult(view,pending) {
+  const protocol=require("./workflow/execution-result-protocol.cjs");
+  const capture=await captureConversationTranscript(view).catch(()=>null),envelope=pending.payload.resultEnvelope;
+  if(!capture?.ok||capture.generating||capture.conversationId!==pending.conversationId)return {delivered:false};
+  const messages=capture.messages||[];
+  let delivered=-1,mismatch=false;
+  for(let i=0;i<messages.length;i++)if(messages[i].role==="USER") {
+    const row=protocol.parseResult(messages[i].text);
+    if(row?.resultId===envelope.resultId){if(protocol.verifyEnvelope(row)&&protocol.canonical(row)===protocol.canonical(envelope))delivered=i;else mismatch=true;}
+  }
+  const observation={delivered:delivered>=0,deliveryMessageId:delivered>=0?messages[delivered].messageId:null,mismatch};
+  if(delivered<0&&!pending.deliveredAt)return observation;
+  for(let i=messages.length-1;i>delivered;i--)if(messages[i].role==="ASSISTANT") {
+    const ack=protocol.parseAck(messages[i].text);
+    if(ack?.requestId===envelope.requestId&&ack.taskId===envelope.taskId&&ack.sessionId===envelope.sessionId) {
+      return {...observation,ack:protocol.ackMatches(ack,envelope)?ack:null,ackMismatch:!protocol.ackMatches(ack,envelope),ackMessageId:messages[i].messageId};
+    }
+  }
+  return observation;
 }
 
-async function processCapturedExecutionRequest({ view, body, workerCode, task }) {
+async function sendExecutionResultToWorker(view,payload,canSend=()=>true) {
+  const prompt=buildDeveloperGridExecutionResultPrompt(payload);
+  const previous=await executionResultTranscriptProof(view,prompt);
+  if(previous.verified)return {sent:true,verified:true,duplicate:true,transcriptProof:previous};
+  if(previous.generating||!canSend())return {sent:false,verified:false,reason:previous.generating?"chat-generating":"send-permission-changed"};
+  const marker="BENJADMIN_EXECUTION_RESULT_ID: "+payload.resultEnvelope.resultId;
+  const insertion=await insertWorkerTaskPrompt(view,prompt,marker);
+  if(!insertion?.inserted||!insertion?.verifiedMarker)return {sent:false,reason:insertion?.reason||"execution-result-not-inserted"};
+  if(!canSend())return {sent:false,reason:"send-permission-changed"};
+  const sent=await sendPreparedChatPrompt(view,marker,canSend);
+  const proof=await executionResultTranscriptProof(view,prompt);
+  return {...sent,verified:proof.verified,transcriptProof:proof,reason:proof.verified?null:sent?.reason||"exact-execution-result-not-observed"};
+}
+
+async function processCapturedExecutionRequest({ view, body, workerCode, task, manualRetry = false }) {
   const textBody = String(body || "");
   if (!textBody.includes(EXECUTION_REQUEST_START) || !task?.id || !task?.sessionId || !view || view.webContents.isDestroyed()) return { processed:false };
   const parsed = parseDeveloperGridExecutionRequest(textBody);
@@ -3888,6 +3912,9 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
     patch:(target,code,patch)=>saveTaskLaunchPatch(target,code,patch),
     execute:input=>executeDeveloperGridRequest({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input}),
     deliver:sendExecutionResultToWorker,
+    observe:observeExecutionResult,
+    receipt:input=>recordDeveloperGridExecutionReceipt({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input}),
+    lookup:input=>recordDeveloperGridExecutionReceipt({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{...input,stage:"LOOKUP"}}),
     conversation:target=>chatConversationIdFromUrl(target.webContents.getURL()),
     allowed:(code,target,record,proof,conversationId,action)=> {
       const bound=String(target.surfaceConversationId || target.chatConversationId || "");
@@ -3898,7 +3925,7 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
   });
   const before=loadTaskLaunchRecords()[task.id] || {};
   const fingerprint=record=>JSON.stringify([record.executionBridgeState,record.executionBridgeError,record.lastExecutionRequestId,record.pendingExecutionResult?.key]);
-  const result=await process({view,task,workerCode,request,expectedProof,localMismatch});
+  const result=await process({view,task,workerCode,request,expectedProof,localMismatch,manualRetry});
   if(result?.processed || fingerprint(before)!==fingerprint(loadTaskLaunchRecords()[task.id] || {})) send("context:refresh",{reason:result?.processed ? "execution-result-sent" : "execution-result-pending",taskId:task.id,workerCode});
   return result;
 }
@@ -6981,7 +7008,7 @@ async function manualControlStatus(selection) {
   const record = loadTaskLaunchRecords()[ctx.task.id] || {};
   const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
   const text = String(draft?.text || "");
-  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionState:ctx.pair.selectionRecoveryRequired?"RECOVERY_REQUIRED":record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionResultStatus:record.executionResultStatus||null,executionState:ctx.pair.selectionRecoveryRequired?"RECOVERY_REQUIRED":record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
 }
 
 async function runManualControl(input) {
@@ -7073,9 +7100,9 @@ async function runManualControl(input) {
     if (action === "retry-result") {
       const request=record.executionRequest?.request;
       if (!request || !record.pendingExecutionResult) throw new Error("Nincs megőrzött, kézbesíthető végrehajtási válasz.");
-      const result=await processCapturedExecutionRequest({view,body:`${EXECUTION_REQUEST_START}\n${JSON.stringify(request)}\nBENJADMIN_EXECUTION_REQUEST_END`,workerCode:code,task});
-      if (!result?.processed) throw new Error(result?.reason || result?.sent?.reason || "A válasz kézbesítése továbbra is függőben van.");
-      return {ok:true,message:"A megőrzött végrehajtási válasz kézbesítve; a művelet nem futott újra."};
+      const result=await processCapturedExecutionRequest({view,body:`${EXECUTION_REQUEST_START}\n${JSON.stringify(request)}\nBENJADMIN_EXECUTION_REQUEST_END`,workerCode:code,task,manualRetry:true});
+      if (!result?.processed && !["WORKER_ACK_REQUIRED"].includes(result?.reason)) throw new Error(result?.reason || result?.sent?.reason || "A válasz kézbesítése továbbra is függőben van.");
+      return {ok:true,message:result?.processed?"A worker ACK-ját a Central Core elfogadta; a korábbi művelet nem futott újra.":"A megőrzött eredmény kézbesítése igazolt; a worker ACK-jára várunk. A művelet nem futott újra."};
     }
     throw new Error("Ismeretlen kézi művelet.");
   } finally {manualControlKeys.delete(code);send("context:refresh",{reason:"manual-control",taskId:task.id,workerCode:code});}
