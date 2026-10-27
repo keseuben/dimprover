@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import crypto from 'node:crypto';
+import {execFile,execFileSync} from 'node:child_process';
+import {promisify} from 'node:util';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+process.chdir(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'));
+const require=createRequire(import.meta.url),ts=require('typescript'),asyncExec=promisify(execFile);
+const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+let count=0;async function test(name,fn){await fn();console.log('PASS',++count,name);}
+const fixtureRoot=fs.mkdtempSync(path.join(os.tmpdir(),'grid-recovery-112-')),repository=path.join(fixtureRoot,'repository.git'),seed=path.join(fixtureRoot,'seed'),trees=path.join(fixtureRoot,'worktrees');
+const git=(...args)=>execFileSync('/usr/bin/git',args,{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+git('init','--bare',repository);git('init',seed);git('-C',seed,'config','user.name','Grid QA');git('-C',seed,'config','user.email','grid-qa@localhost');
+fs.writeFileSync(path.join(seed,'owned.txt'),Buffer.from('\ufefforiginal\r\n'));git('-C',seed,'add','owned.txt');git('-C',seed,'commit','-m','fixture');const head=git('-C',seed,'rev-parse','HEAD');git('-C',seed,'push',repository,'HEAD:refs/heads/main');fs.mkdirSync(trees);
+let readsOnly=false;const commands=[];
+const wrappedExec=Object.assign(function(){},{[promisify.custom]:async(...args)=>{const argv=args[1];commands.push(argv);if(readsOnly)assert((argv[0]==='-C'&&(['rev-parse','status'].includes(argv[2])||(argv[2]==='branch'&&argv[3]==='--show-current')))||(argv[0]==='--git-dir'&&argv[2]==='rev-parse'&&argv[3]==='--verify'),'recovery must never run git writes');return asyncExec(...args);}});
+const workspaceModule={exports:{}};
+let workspaceSource=fs.readFileSync('app/lib/developer-grid/worker-workspace.ts','utf8').replace('"/srv/dimpro-dev/repositories/dimprover.git"',JSON.stringify(repository)).replace('"/srv/dimpro-dev/worktrees"',JSON.stringify(trees));
+vm.runInNewContext(compile(workspaceSource),{module:workspaceModule,exports:workspaceModule.exports,require:id=>id==='node:child_process'?{execFile:wrappedExec}:require(id)});
+const workspaceApi=workspaceModule.exports,identity={workerCode:'OUTMINAI',taskId:'task-owned',baseCommit:head};
+const workspace=await workspaceApi.ensureDeveloperWorkerWorkspace(identity),file=path.join(workspace.worktreePath,'owned.txt');
+fs.appendFileSync(file,Buffer.from('// uncommitted work\n'));const saved=fs.readFileSync(file),expected={repository,worktree:workspace.worktreePath,branch:workspace.branchName,head};readsOnly=true;
+await test('existing task recovery preserves dirty file bytes, BOM and line endings',async()=>{const r=await workspaceApi.verifyExistingDeveloperWorkerWorkspace({...identity,expected});assert.equal(r.dirty,true);assert.equal(r.head,head);assert.deepEqual(fs.readFileSync(file),saved);});
+await test('new-task workspace admission still rejects dirty trees',async()=>{await assert.rejects(workspaceApi.ensureDeveloperWorkerWorkspace(identity),e=>e.code==='DEVELOPER_WORKSPACE_EXISTING_MISMATCH');assert.deepEqual(fs.readFileSync(file),saved);});
+for(const [name,changed]of [['worker worktree',{worktree:path.join(trees,'other')}],['branch',{branch:'worker/other/task-owned'}],['repository',{repository:seed}],['HEAD',{head:'0'.repeat(40)}]])await test(name+' mismatch blocks without changing bytes',async()=>{await assert.rejects(workspaceApi.verifyExistingDeveloperWorkerWorkspace({...identity,expected:{...expected,...changed}}));assert.deepEqual(fs.readFileSync(file),saved);});
+await test('recovery never creates a missing workspace',async()=>{const taskId='missing',worktree=workspaceApi.developerWorkerWorktreePath(identity.workerCode,taskId),branch=workspaceApi.developerWorkerBranchName(identity.workerCode,taskId);await assert.rejects(workspaceApi.verifyExistingDeveloperWorkerWorkspace({...identity,taskId,expected:{...expected,worktree,branch}}),e=>e.code==='DEVELOPER_WORKSPACE_RECOVERY_MISSING');assert.equal(fs.existsSync(worktree),false);});
+const progressModule={exports:{}};vm.runInNewContext(compile(fs.readFileSync('app/lib/developer-grid/execution-authority-recovery.ts','utf8')),{module:progressModule,exports:progressModule.exports});
+const select=progressModule.exports.interruptedAuthorityRecoverySession;
+function progress(){const previous={id:'old',taskId:'task',workerId:'worker_outminai',projectId:'project',status:'closed'},candidate={...previous,id:'recovery',status:'open'};return {previous,task:{id:'task',projectId:'project',status:'claimed',requestedWorkerId:'worker_outminai',assignedWorkerId:'worker_outminai',claimedBySessionId:'recovery',metadata:{activeSessionId:'recovery',manualBridgeRecoveredFromSessionId:'old'}},sessions:[previous,candidate]};}
+await test('same-task interrupted open recovery is reused',async()=>{assert.equal(select(progress()),'recovery');});
+await test('expired intermediate recovery can itself be recovered',async()=>{const f=progress();f.sessions[1].status='closed';f.task.claimedBySessionId=null;f.task.assignedWorkerId=null;f.task.status='ready';assert.equal(select(f),'recovery');});
+for(const [name,change]of [['foreign worker',f=>f.sessions[1].workerId='other'],['foreign task',f=>f.sessions[1].taskId='other'],['foreign project',f=>f.sessions[1].projectId='other'],['unrelated lineage',f=>f.task.metadata.manualBridgeRecoveredFromSessionId='other'],['changed claim',f=>f.task.claimedBySessionId='other'],['parallel task session',f=>f.sessions.push({...f.sessions[1],id:'second'})],['missing candidate',f=>f.sessions.pop()],['terminal task',f=>f.task.status='completed']])await test(name+' denies recovery adoption',async()=>{const f=progress();change(f);assert.throws(()=>select(f),e=>e.code==='DEVELOPER_GRID_RECOVERY_PROGRESS_MISMATCH');});
+const workStart=fs.readFileSync('app/lib/developer-grid/work-start.ts','utf8'),begin=workStart.indexOf('export async function recoverDeveloperGridExecutionAuthority('),end=workStart.indexOf('export async function retargetDeveloperGridPreBootSource(',begin),fragment=compile(workStart.slice(begin,end));
+function readyFixture(){
+ const session={id:'ready',taskId:identity.taskId,workerId:'worker_outminai',status:'active',handshakeStage:'READY',branchName:workspace.branchName,worktreePath:workspace.worktreePath},task={id:identity.taskId,claimedBySessionId:'ready',assignedWorkerId:'worker_outminai'},data={writes:0};
+ const sandbox={exports:{},Date,getDevCenterEngineState:async()=>({sessions:[session],tasks:[task]}),ensureDeveloperWorkerWorkspace:workspaceApi.ensureDeveloperWorkerWorkspace,verifyExistingDeveloperWorkerWorkspace:workspaceApi.verifyExistingDeveloperWorkerWorkspace,assertDevEngineOperation:async()=>{data.writes++;return {activeScopeLockCount:1,activeWorktreeLeaseCount:1};},verifySourceProvenance:async e=>{assert.equal(e.expectedHead,head);return {repository,worktree:workspace.worktreePath,branch:workspace.branchName,head,sourceState:'VERIFIED',blockCode:null};},sourceExecutionProofSha256:b=>crypto.createHash('sha256').update(JSON.stringify(b)).digest('hex'),advanceDevEngineSession:async()=>{throw Error('unexpected handshake mutation');}};
+ const a=workStart.indexOf('async function ensureDeveloperGridReadyExecution('),b=workStart.indexOf('function strictCoreWorkerCode(',a);
+ vm.runInNewContext(compile(workStart.slice(a,b)+'\nexports.ready=ensureDeveloperGridReadyExecution;'),sandbox);
+ const input={taskId:identity.taskId,workerCode:'OUTMINAI',engineSessionId:'ready',baseHead:head,scope:[{type:'module',key:'DIMPRO Drive'}],gridSessionId:'grid-session',resumeWorkspace:expected};
+ return {data,session,input,run:()=>sandbox.exports.ready(input)};
+}
+await test('production READY preflight resumes the dirty owned Git workspace',async()=>{const f=readyFixture(),r=await f.run();assert.equal(r.workspace.dirty,true);assert.equal(r.proof.head,head);assert.deepEqual(fs.readFileSync(file),saved);});
+await test('production new-task READY path keeps clean admission',async()=>{const f=readyFixture();delete f.input.resumeWorkspace;await assert.rejects(f.run(),e=>e.code==='DEVELOPER_WORKSPACE_EXISTING_MISMATCH');assert.equal(f.data.writes,0);});
+await test('partial handshake branch mismatch fails before advancing or authorizing',async()=>{const f=readyFixture();f.session.handshakeStage='BRANCH_BOUND';f.session.branchName='worker/foreign/task';await assert.rejects(f.run(),e=>e.code==='DEVELOPER_GRID_READY_BINDING_MISMATCH');assert.equal(f.data.writes,0);});
+function recoveryFixture(){
+ const f=progress(),data={opened:0,verified:0,saved:0,events:[],failSource:false};
+ const p={schemaVersion:1,state:'VERIFIED',authority:'CENTRAL_CORE',verifiedAt:'2026-10-27T00:00:00Z',repository,worktree:workspace.worktreePath,branch:workspace.branchName,head,engineSessionId:'old',handshakeStage:'READY',activeScopeLockCount:1,activeWorktreeLeaseCount:1,productionAccess:'DENY'};
+ const sha=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');p.sha256=sha(p);
+ let session={id:'grid-session',taskId:'task',workerCode:'OUTMINAI',endedAt:null,sourceProvenance:{repository,worktree:workspace.worktreePath,branch:workspace.branchName,head,sourceState:'VERIFIED',blockCode:null},developmentContext:{engineSessionId:'old',bootAckState:'VALIDATED',bootAckCodingAllowed:true,sourceExecutionProof:p,moduleName:'DIMPRO Drive'}};
+ const sandbox={exports:{},Date,text:v=>String(v||'').trim(),routableWorkerCode:v=>v==='OUTMINAI'?v:null,sourceExecutionProofSha256:sha,readGridState:async()=>({sessions:[session],task:{id:'task',projectId:'project'}}),verifyCurrentSourceExecutionState:async(_p,options)=>{assert.equal(options.requireClean,false);},verifyExistingDeveloperWorkerWorkspace:async()=>{data.verified++;if(data.failSource)throw Error('source mismatch');},getDevCenterEngineState:async()=>({tasks:[f.task],sessions:f.sessions}),interruptedAuthorityRecoverySession:select,recoverClosedDevEngineTaskManualBridgeSession:async()=>{data.opened++;throw Error('duplicate session creation');},ensureDeveloperGridReadyExecution:async input=>{assert.equal(input.engineSessionId,'recovery');assert.equal(input.resumeWorkspace,session.sourceProvenance);f.sessions[1].status='active';const b={...p,engineSessionId:'recovery'};delete b.sha256;return {proof:{...b,sha256:sha(b)},provenance:session.sourceProvenance};},syncEngineBridgeTarget:async()=>{},renewReviewedWriteApproval:()=>null,upsertWorkerSession:async next=>{session=next;data.saved++;return {revision:1};},appendGridEvent:async event=>data.events.push(event)};
+ vm.runInNewContext(fragment,sandbox);return {data,run:()=>sandbox.exports.recoverDeveloperGridExecutionAuthority({taskId:'task',sessionId:'grid-session',workerCode:'OUTMINAI',sourceProofSha256:session.developmentContext.sourceExecutionProof.sha256})};
+}
+await test('production recovery resumes partial session with dirty-source verification and no new session',async()=>{const f=recoveryFixture(),first=await f.run();assert.equal(first.engineSessionId,'recovery');assert.equal(first.resumedInterruptedEngineSessionId,'recovery');assert.equal(f.data.opened,0);assert.equal(f.data.verified,1);await f.run();assert.equal(f.data.opened,0);assert.equal(f.data.saved,2);});
+await test('source mismatch fails before engine mutation or proof publication',async()=>{const f=recoveryFixture();f.data.failSource=true;await assert.rejects(f.run(),/source mismatch/);assert.equal(f.data.opened,0);assert.equal(f.data.saved,0);});
+console.log(JSON.stringify({ok:true,tests:count,scope:'real temporary Git byte preservation plus simulated authority lifecycle',liveMutation:false,fixtureRoot}));

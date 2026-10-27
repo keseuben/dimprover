@@ -27,6 +27,34 @@ export function developerWorkerWorktreePath(workerCode: string, taskId: string) 
   return path.join(DEVELOPER_WORKER_WORKTREE_ROOT, developerWorkerBranchName(workerCode, taskId).replaceAll("/", "-"));
 }
 
+// Recovery reopens authority for an existing, verified task; it must preserve
+// that task's uncommitted work. New task creation still requires a clean tree.
+export async function verifyExistingDeveloperWorkerWorkspace(input: {
+  workerCode: string; taskId: string;
+  expected: { repository: string; worktree: string; branch: string; head: string };
+}) {
+  const branchName = developerWorkerBranchName(input.workerCode, input.taskId);
+  const worktreePath = developerWorkerWorktreePath(input.workerCode, input.taskId);
+  const expected = input.expected;
+  if (expected.repository !== DEVELOPER_WORKER_REPOSITORY || expected.worktree !== worktreePath
+      || expected.branch !== branchName || !/^[a-f0-9]{40}$/.test(expected.head)) {
+    throw Object.assign(new Error("A helyreállítás forrása nem a kijelölt task saját munkakönyvtára."), {code:"DEVELOPER_WORKSPACE_RECOVERY_IDENTITY_MISMATCH",status:409});
+  }
+  if (!(await exists(worktreePath))) throw Object.assign(new Error("A helyreállítandó task munkakönyvtára hiányzik."), {code:"DEVELOPER_WORKSPACE_RECOVERY_MISSING",status:409});
+  const [branch, head, top, common, dirty] = await Promise.all([
+    git(["-C",worktreePath,"branch","--show-current"]),
+    git(["-C",worktreePath,"rev-parse","HEAD"]),
+    git(["-C",worktreePath,"rev-parse","--show-toplevel"]),
+    git(["-C",worktreePath,"rev-parse","--git-common-dir"]),
+    git(["-C",worktreePath,"status","--porcelain","--untracked-files=normal"]),
+  ]);
+  if (branch !== branchName || head !== expected.head || path.resolve(top) !== worktreePath
+      || path.resolve(worktreePath,common) !== DEVELOPER_WORKER_REPOSITORY) {
+    throw Object.assign(new Error("A helyreállítandó munkakönyvtár branch/HEAD/repository kötése eltér."), {code:"DEVELOPER_WORKSPACE_RECOVERY_SOURCE_MISMATCH",status:409});
+  }
+  return {ok:true as const,repository:DEVELOPER_WORKER_REPOSITORY,branchName,worktreePath,head,reused:true,dirty:Boolean(dirty.trim())};
+}
+
 export async function retargetDeveloperWorkerWorkspace(input: { workerCode: string; taskId: string; expectedCurrentHead: string; targetCommit: string }) {
   const expectedCurrentHead = String(input.expectedCurrentHead || "").toLowerCase();
   const targetCommit = String(input.targetCommit || "").toLowerCase();

@@ -12,9 +12,10 @@ import { encodeEventCursor } from "./events";
 import { resolveDeveloperGridModuleSource } from "./module-source";
 import { findLatestContinuationContext } from "./conversation-memory";
 import { verifyCurrentSourceExecutionState, verifySourceProvenance } from "./source-provenance";
-import { ensureDeveloperWorkerWorkspace, retargetDeveloperWorkerWorkspace } from "./worker-workspace";
+import { ensureDeveloperWorkerWorkspace, retargetDeveloperWorkerWorkspace, verifyExistingDeveloperWorkerWorkspace } from "./worker-workspace";
+import { interruptedAuthorityRecoverySession } from "./execution-authority-recovery";
 import { appendGridEvent, listGridEvents, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
-import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, SourceExecutionProof, WorkerSession, WorkerSurfaceType } from "./types";
+import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, SourceExecutionProof, SourceProvenance, WorkerSession, WorkerSurfaceType } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
 export const WORK_START_MAX_LENGTH = 12000;
@@ -258,6 +259,7 @@ async function ensureDeveloperGridReadyExecution(input: {
   baseHead: string;
   scope: Array<{ type: "module"; key: string }>;
   gridSessionId: string;
+  resumeWorkspace?: SourceProvenance;
 }) {
   if (!input.engineSessionId) throw Object.assign(new Error("A Developer Grid READY preflighthoz Dev Center engine session szükséges."), { code:"DEVELOPER_GRID_ENGINE_SESSION_REQUIRED", status:409 });
 
@@ -266,7 +268,14 @@ async function ensureDeveloperGridReadyExecution(input: {
   if (!engineSession) throw Object.assign(new Error("A Developer Grid Dev Center session nem található."), { code:"DEVELOPER_GRID_ENGINE_SESSION_MISSING", status:409 });
   if (engineSession.taskId !== input.taskId) throw Object.assign(new Error("A Dev Center session más taskhoz tartozik."), { code:"DEVELOPER_GRID_ENGINE_SESSION_TASK_MISMATCH", status:409 });
 
-  const workspace = await ensureDeveloperWorkerWorkspace({ workerCode:input.workerCode, taskId:input.taskId, baseCommit:input.baseHead });
+  const workspace = input.resumeWorkspace
+    ? await verifyExistingDeveloperWorkerWorkspace({workerCode:input.workerCode,taskId:input.taskId,expected:input.resumeWorkspace})
+    : await ensureDeveloperWorkerWorkspace({workerCode:input.workerCode,taskId:input.taskId,baseCommit:input.baseHead});
+  const pathNormalize=(value:string)=>String(value).replace(/\\/g,"/").replace(/\/+$/g,"");
+  if ((engineSession.branchName && engineSession.branchName !== workspace.branchName)
+      || (engineSession.worktreePath && pathNormalize(engineSession.worktreePath) !== pathNormalize(workspace.worktreePath))) {
+    throw Object.assign(new Error("A helyreállítás engine branch/worktree kötése eltér."),{code:"DEVELOPER_GRID_READY_BINDING_MISMATCH",status:409});
+  }
   if (engineSession.handshakeStage === "READY") {
     const boundWorktree = String(engineSession.worktreePath || "").replace(/\\/g,"/").replace(/\/+$/g,"");
     const expectedWorktree = String(workspace.worktreePath || "").replace(/\\/g,"/").replace(/\/+$/g,"");
@@ -912,6 +921,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
     throw Object.assign(new Error("Az execution authority recovery source provenance allapota nem VERIFIED."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_SOURCE_NOT_VERIFIED", status:409 });
   }
   await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:false });
+  await verifyExistingDeveloperWorkerWorkspace({workerCode,taskId,expected:session.sourceProvenance});
 
   const engineState = await getDevCenterEngineState();
   const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
@@ -930,7 +940,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
     throw Object.assign(new Error("Az execution authority recovery engine session/proof kotese elter."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_BINDING_MISMATCH", status:409 });
   }
 
-  const previousEngineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+  let previousEngineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
   if (!previousEngineSession) {
     throw Object.assign(new Error("Az execution authority Dev Center engine session nem talalhato."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_SESSION_NOT_FOUND", status:409 });
   }
@@ -939,6 +949,16 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
   }
 
   let recoveredFromEngineSessionId: string | null = null;
+  let resumedInterruptedEngineSessionId:string|null=null;
+  if(previousEngineSession.status==="closed"){
+    resumedInterruptedEngineSessionId=interruptedAuthorityRecoverySession({task:engineTask,previous:previousEngineSession,sessions:engineState.sessions});
+    if(resumedInterruptedEngineSessionId){
+      engineSessionId=resumedInterruptedEngineSessionId;
+      previousEngineSession=engineState.sessions.find(item=>item.id===engineSessionId)!;
+      recoveredFromEngineSessionId=previousProof.engineSessionId;
+    }
+  }
+
   if (previousEngineSession.status === "closed") {
     const closedSessionId = engineSessionId;
     const fresh = await recoverClosedDevEngineTaskManualBridgeSession({
@@ -951,7 +971,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
       throw Object.assign(new Error("A fresh execution authority Dev Center session nem jott letre."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_FRESH_SESSION_MISSING", status:409 });
     }
     recoveredFromEngineSessionId = closedSessionId;
-  } else if (previousEngineSession.status !== "active") {
+  } else if (previousEngineSession.status !== "active" && !(resumedInterruptedEngineSessionId && previousEngineSession.status === "open")) {
     throw Object.assign(new Error("Az execution authority engine session allapota nem recoverelheto."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_STATE_DENIED", status:409 });
   }
 
@@ -962,6 +982,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
     baseHead:sourceHead,
     scope:[{ type:"module", key:moduleName }],
     gridSessionId,
+    resumeWorkspace:session.sourceProvenance,
   });
   const expected = session.sourceProvenance;
   if (ready.provenance.repository !== expected.repository
@@ -1007,6 +1028,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
         : "Existing READY execution authority proof refreshed.",
       status:"PASS", severity:"INFO", sessionId:gridSessionId, engineSessionId,
       recoveredFromEngineSessionId,
+      resumedInterruptedEngineSessionId,
       previousSourceProofSha256:expectedPreviousProofSha256,
       sourceProofSha256:ready.proof.sha256,
       activeScopeLockCount:ready.proof.activeScopeLockCount,
@@ -1020,6 +1042,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
     previousSourceProofSha256:expectedPreviousProofSha256,
     recovered:Boolean(recoveredFromEngineSessionId),
     recoveredFromEngineSessionId,
+    resumedInterruptedEngineSessionId,
     engineSessionId,
     revision:next.revision,
     productionAccess:"DENY" as const,
