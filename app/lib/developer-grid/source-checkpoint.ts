@@ -17,13 +17,20 @@ export async function assertCheckpointExecutionSettled(taskId:string){
  const root=process.env.BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT?.trim()||"/srv/dimpro-dev/coordination/developer-grid/execution";
  const file=path.join(root,`${taskId}.jsonl`);let body="";
  try{if((await stat(file)).size>8*1024*1024)fail("CHECKPOINT_AUDIT_TOO_LARGE","A végrehajtási napló külön ellenőrzést igényel.");body=await readFile(file,"utf8");}catch(e){if((e as NodeJS.ErrnoException).code!=="ENOENT")throw e;}
- const pending=new Set<string>();
- for(const line of body.split(/\r?\n/).filter(Boolean)){let r;try{r=JSON.parse(line);}catch{fail("CHECKPOINT_AUDIT_INVALID","Sérült végrehajtási napló mellett Git-mentés nem indul.");}
-  if(r.taskId!==taskId)fail("CHECKPOINT_AUDIT_IDENTITY_INVALID","A napló feladata eltér.");
-  const key=`${r.sessionId}:${r.requestId}:${r.requestHash}`;
-  if(r.event==="REQUEST")pending.add(key);if(r.event==="COMPLETED")pending.delete(key);
+ const rows:Record<string,unknown>[]=[];
+ for(const line of body.split(/\r?\n/).filter(Boolean)){let row;try{row=JSON.parse(line);}catch{fail("CHECKPOINT_AUDIT_INVALID","Sérült végrehajtási napló mellett Git-mentés nem indul.");}
+  if(row.taskId!==taskId)fail("CHECKPOINT_AUDIT_IDENTITY_INVALID","A napló feladata eltér.");rows.push(row);
  }
- if(pending.size)fail("CHECKPOINT_EXECUTION_PENDING","A Git-mentéshez minden művelet eredményének feldolgozását vissza kell igazolni.");
+ for(const request of rows.filter(r=>r.event==="REQUEST")){
+  const sameRequest=(r:Record<string,unknown>)=>r.taskId===request.taskId&&r.sessionId===request.sessionId&&r.workerCode===request.workerCode&&r.requestId===request.requestId;
+  // REQUEST/RESULT carry requestHash. Receipt events deliberately bind the
+  // concrete resultId + resultSha256 instead; never require an absent field.
+  const result=rows.find(r=>r.event==="RESULT"&&sameRequest(r)&&r.requestHash===request.requestHash);
+  const validResult=result&&typeof result.resultSha256==="string"&&/^[a-f0-9]{64}$/.test(result.resultSha256)&&result.resultId==="res-"+result.resultSha256;
+  const sameResult=(r:Record<string,unknown>)=>validResult&&sameRequest(r)&&r.resultId===result!.resultId&&r.resultSha256===result!.resultSha256&&r.sourceProofSha256===request.sourceProofSha256;
+  if(!validResult||!rows.some(r=>r.event==="DELIVERED"&&sameResult(r))||!rows.some(r=>r.event==="ACKNOWLEDGED"&&sameResult(r)&&r.decision==="ACCEPTED")||!rows.some(r=>r.event==="COMPLETED"&&sameResult(r)&&r.workflowContinue===true))
+   fail("CHECKPOINT_EXECUTION_PENDING","A Git-mentéshez minden művelet eredményének feldolgozását vissza kell igazolni.");
+ }
 }
 // Called under the same task operation lock as execution and replacement.
 export async function checkpointDeveloperGridSource(session:WorkerSession,task:DeveloperGridTask,reportSha256:string,reportedHead:string){
