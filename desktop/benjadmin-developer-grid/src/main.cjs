@@ -5597,6 +5597,7 @@ function authoritativeAutopilotContext(activeWork, workerCode, taskId = "") {
     presence:{ ...ctx, branch:src.branch || null, worktree:src.worktree || null, workStageIndex:Number(ctx.workStageIndex)||1 },
     task:{
       ...pair.task,
+      sourcePrompt:String(ctx.sourcePrompt || pair.task.sourcePrompt || pair.task.description || "").trim(),
       sessionId:session.id,
       assignedWorkerId:session.workerCode,
       sourceHead:src.head || "",
@@ -5703,7 +5704,15 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
     const record=loadTaskLaunchRecords()[String(task.id)] || {};
     if (workflowControl.executionPending(record)) return {ok:false,reason:"EXECUTION_RESULT_PENDING"};
     if (record.executionWorkflowBlocked) return {ok:false,reason:"EXECUTION_WORKFLOW_BLOCKED"};
-    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return prepareAutomaticExecutionPreflight(uiCode,context);
+    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) {
+      try { return await prepareAutomaticExecutionPreflight(uiCode,context); }
+      catch(error) {
+        const code=error?.code === "PREFLIGHT_ORIGINAL_INSTRUCTION_REQUIRED" ? error.code : "AUTOMATIC_PREFLIGHT_FAILED";
+        const message=code === "PREFLIGHT_ORIGINAL_INSTRUCTION_REQUIRED" ? "Az eredeti feladatutasítás hiányzik; automatikus művelet nem indult." : "Az automatikus forrásellenőrzés előkészítése sikertelen; művelet nem indult.";
+        publishTaskLaunchPatch(task,uiCode,{autopilotState:"BLOCKED",autopilotError:message,autopilotErrorCode:code,autopilotAt:new Date().toISOString()},"autopilot-preflight-blocked");
+        return {ok:false,state:"BLOCKED",error:code};
+      }
+    }
     const head=String(task.sourceHead || "");
 
     if(stage>=1 && stage<=3) {
@@ -7056,7 +7065,7 @@ async function manualControlStatus(selection) {
   const record = loadTaskLaunchRecords()[ctx.task.id] || {};
   const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
   const text = String(draft?.text || "");
-  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",...workflowControl.executionSummary(record,ctx.pair.selectionRecoveryRequired),resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",autopilotState:record.autopilotState || null,autopilotError:record.autopilotError || null,executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",...workflowControl.executionSummary(record,ctx.pair.selectionRecoveryRequired),resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
 }
 
 async function runManualControl(input) {

@@ -38,8 +38,8 @@ function createStageDispatch({read,patch,verify,capture,insert,send,allowed,hash
   };
 }
 function automaticPreflightPrompt(task,workerCode,proof,protocolLines,requestId) {
-  const source=String(task.description||task.sourcePrompt||"").trim();
-  if(!source)throw Error("PREFLIGHT_ORIGINAL_INSTRUCTION_REQUIRED");
+  const source=String(task.sourcePrompt||task.description||"").trim();
+  if(!source)throw Object.assign(new Error("Az eredeti feladatutasítás hiányzik."),{code:"PREFLIGHT_ORIGINAL_INSTRUCTION_REQUIRED"});
   return ["BENJADMIN_PROMPT_KIND: EXECUTION_PREFLIGHT_V1","AUTOMATIKUS FORRÁSELLENŐRZÉS · UGYANAZ A FELADAT · DEV ONLY · PROD DENY",
     `Worker: ${String(workerCode).replace(/^BENAI$/,"BENJAMINAI")}`,`Task: ${task.id}`,`Session: ${task.sessionId}`,`HEAD: ${task.sourceHead}`,`Source proof: ${proof}`,
     "EREDETI FELHASZNÁLÓI UTASÍTÁS ÉS KORLÁTAI:",source,
