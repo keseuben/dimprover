@@ -106,6 +106,7 @@ const pendingChatRefreshReasons = new Map();
 const stageReportMonitorKeys = new Set();
 const internalReviewMonitorKeys = new Set();
 const developerGridAutopilotKeys = new Set();
+const stageActionDispatchKeys = new Set();
 const autoWorkStartProcessingKeys = new Set();
 const autoWorkStartProcessedTurns = new Set();
 const autoWorkStartObservationGuard = createAutoWorkStartObservationGuard();
@@ -3891,6 +3892,9 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task, m
   }
   const request = parsed.request;
   const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  // Earlier tasks can share this chat. Their requests are history, never an
+  // execution attempt or a blocker belonging to the newly selected task.
+  if(request.workerCode!==backendWorkerCode||request.taskId!==String(task.id)||request.sessionId!==String(task.sessionId))return {processed:false,historical:true,reason:"EXECUTION_FOREIGN_TASK"};
   const launchRecord = loadTaskLaunchRecords()[task.id] || {};
   const rolloverState = String(launchRecord.conversationRolloverState || task?.conversationRolloverState || task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
   if (rolloverPendingState(rolloverState) || rolloverState === ROLLOVER_STATES.BLOCKED) {
@@ -5541,7 +5545,7 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
     }).catch(() => undefined);
   }
   const queuedExecution = loadTaskLaunchRecords()[live.task.id]?.executionRequest?.request;
-  const bodyWithExecutionRequest = queuedExecution ? {text:EXECUTION_REQUEST_START+"\n"+JSON.stringify(queuedExecution)+"\nBENJADMIN_EXECUTION_REQUEST_END"} : [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(EXECUTION_REQUEST_START));
+  const bodyWithExecutionRequest = queuedExecution ? {text:EXECUTION_REQUEST_START+"\n"+JSON.stringify(queuedExecution)+"\nBENJADMIN_EXECUTION_REQUEST_END"} : require("./task-launch/execution-request.cjs").selectTaskExecutionRequest(capture.messages,live.task,code);
   if (bodyWithExecutionRequest) await processCapturedExecutionRequest({ view, body:bodyWithExecutionRequest.text, workerCode:code, task:live.task }).catch(() => undefined);
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
@@ -5684,8 +5688,8 @@ async function monitorInternalReviewReport({view,workerCode,task,baselineRespons
 async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
   if (workflowControl.isManual(config, workerCode)) return { ok:false, processed:false, recovered:false, attempted:false, reason:"MANUAL_CONTROL" };
   if (!unlocked || !readDeviceToken()) return {ok:false,reason:"locked"};
-  const uiCode=String(workerCode || "").toUpperCase();
-  const key=`${uiCode}:${taskId || "*"}`;
+  const uiCode=workflowControl.worker(workerCode);
+  const key=uiCode;
   if(developerGridAutopilotKeys.has(key)) return {ok:false,reason:"busy"};
   developerGridAutopilotKeys.add(key);
   try {
@@ -5698,7 +5702,8 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
     const stage=Number(presence.workStageIndex || 1);
     const record=loadTaskLaunchRecords()[String(task.id)] || {};
     if (workflowControl.executionPending(record)) return {ok:false,reason:"EXECUTION_RESULT_PENDING"};
-    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return {ok:false,reason:"GIT_STATUS_RESULT_REQUIRED"};
+    if (record.executionWorkflowBlocked) return {ok:false,reason:"EXECUTION_WORKFLOW_BLOCKED"};
+    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return prepareAutomaticExecutionPreflight(uiCode,context);
     const head=String(task.sourceHead || "");
 
     if(stage>=1 && stage<=3) {
@@ -5824,6 +5829,33 @@ function checkpointGuard(task, workerCode, view) {
   return { ok:blockers.length === 0, blockers, proofSha, expectedConversationId, currentConversationId };
 }
 
+async function dispatchBoundStagePrompt({view,task,presence,code,action,prompt,automatic}) {
+  const proof=resolvedExecutionProofSha256(task);
+  const conversationId=String(task.surfaceConversationId||task.chatConversationId||task.chatLaunch?.surfaceConversationId||task.chatLaunch?.chatSessionId||"");
+  const allowed=()=>{
+    if(!unlocked||view.webContents.isDestroyed()||!conversationId||chatConversationIdFromUrl(view.webContents.getURL())!==conversationId||(automatic&&workflowControl.isManual(config,code)))return false;
+    const current=liveContextForWorker(code),record=loadTaskLaunchRecords()[task.id]||{};
+    return current.task?.id===task.id&&current.task?.sessionId===task.sessionId&&resolvedExecutionProofSha256(current.task)===proof&&Number(current.presence?.workStageIndex||1)===Number(presence?.workStageIndex||1)&&!workflowControl.executionPending(record)&&!record.executionWorkflowBlocked;
+  };
+  const dispatch=require("./workflow/stage-dispatch.cjs").createStageDispatch({
+    read:id=>loadTaskLaunchRecords()[id]||{},patch:saveTaskLaunchPatch,running:stageActionDispatchKeys,
+    hash:value=>createHash("sha256").update(value).digest("hex"),allowed,
+    capture:()=>captureLatestAssistantText(view),insert:(text,marker)=>insertWorkerTaskPrompt(view,text,marker),
+    send:(marker,guard)=>sendPreparedChatPrompt(view,marker,guard),
+    verify:async(marker,wait=false)=>{const result=await verifyPromptMarkerInTranscript(view,marker,wait?12000:1000);return {...result,verified:result?.verified===true&&result.conversationId===conversationId};},
+  });
+  const result=await dispatch({task,workerCode:code,action,stage:Number(presence?.workStageIndex||1),prompt,conversationId,proof});
+  return {...result,message:result.ok?"A fázisutasítás elküldése a kötött csevegés USER üzenetében igazolt.":"A fázisutasítás küldése nem igazolt; új beillesztés és ismételt küldés nem történt."};
+}
+
+async function prepareAutomaticExecutionPreflight(code,context) {
+  const {task,presence}=context,cell=workerCellForCode(code),view=cell&&chatViews.get(cell.id);
+  if(!view||workflowControl.isManual(config,code))return {ok:false,reason:"PREFLIGHT_SURFACE_OR_MODE_UNAVAILABLE"};
+  const proof=resolvedExecutionProofSha256(task),requestId="req-preflight-"+createHash("sha256").update(JSON.stringify([task.id,task.sessionId,proof])).digest("hex").slice(0,24);
+  const prompt=require("./workflow/stage-dispatch.cjs").automaticPreflightPrompt(task,code,proof,executionBridgeProtocolLines(task,code,proof),requestId);
+  return dispatchBoundStagePrompt({view,task,presence,code,action:"execution-preflight",prompt,automatic:true});
+}
+
 async function prepareWorkerStageAction(workerCode, action, contextOverride = null, { automatic = false } = {}) {
   if (automatic && workflowControl.isManual(config, workerCode)) return {ok:false, error:"MANUAL_CONTROL"};
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
@@ -5846,6 +5878,7 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
   }
   const baselineCapture = await captureLatestAssistantText(view);
   if (action === "advance-stage" && loadTaskLaunchRecords()[task.id]?.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) return {ok:false,error:"Először a jelenlegi source proofhoz tartozó GIT_STATUS PASS válasz szükséges."};
+  if (loadTaskLaunchRecords()[task.id]?.executionWorkflowBlocked) return {ok:false,error:"EXECUTION_WORKFLOW_BLOCKED"};
   if (baselineCapture?.generating || workflowControl.executionPending(loadTaskLaunchRecords()[task.id])) return {ok:false, error:"CHAT_BUSY_OR_EXECUTION_RESULT_PENDING"};
   if (automatic && workflowControl.isManual(config, workerCode)) return {ok:false, error:"MANUAL_CONTROL"};
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
@@ -5911,15 +5944,14 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
 
   const sourceTask=(contextOverride?.session?.developmentContext)?{...task,sourceCheckpointPolicy:contextOverride.session.developmentContext.sourceCheckpointPolicy,sourceCheckpointReceipt:contextOverride.session.developmentContext.sourceCheckpointReceipt}:task;
   const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task:sourceTask, presence })+"\n"+executionBridgeProtocolLines(sourceTask,code).join("\n");
+  if (["advance-stage","review-rework","build-rework"].includes(action)) {
+    const sent=await dispatchBoundStagePrompt({view,task,presence,code,action,prompt,automatic});
+    if(sent.ok)void monitorWorkerStageReport({view,workerCode:code,task,baselineResponseSha256}).catch(()=>undefined);
+    return sent;
+  }
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {
-    if (action === "advance-stage" || action === "review-rework" || action === "build-rework") {
-      const sent = await sendPreparedChatPrompt(view, marker);
-      if (sent?.sent !== true || sent?.verified !== true) return { ok:false, code:"STAGE_PROMPT_SEND_NOT_VERIFIED", error:"A fázislépési prompt a ChatGPT mezőben van, de az automatikus elküldés nem volt igazolható. Ellenőrizd és küldd el kézzel." };
-      void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
-      return { ok:true, mode:"sent", message:"A fázislépési prompt elküldve. A BENJADMIN_STAGE_REPORT_V1 választ a desktop automatikusan validálja és a Central Core állapotot frissíti." };
-    }
     void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
     return { ok: true, mode: "inserted", message: "A stage action prompt a worker ChatGPT mezőjében van. Küldés után a BENJADMIN_STAGE_REPORT_V1 választ a desktop automatikusan evidence-ként rögzíti." };
   }
@@ -7024,7 +7056,7 @@ async function manualControlStatus(selection) {
   const record = loadTaskLaunchRecords()[ctx.task.id] || {};
   const draft = ctx.conversationBound ? await captureComposerDraftText(ctx.view) : null;
   const text = String(draft?.text || "");
-  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",executionResultStatus:record.executionResultStatus||null,executionState:ctx.pair.selectionRecoveryRequired?"RECOVERY_REQUIRED":record.executionBridgeState || "WAITING",executionCode:record.executionBridgeError || record.executionBridgeCode || "",resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
+  return {ok:true, control:{taskId:ctx.task.id,sessionId:ctx.task.sessionId,workerCode:ctx.code,mode:workflowControl.mode(config,ctx.code),conversationBound:ctx.conversationBound,sourceAuthorityReady:!ctx.pair.selectionRecoveryRequired,sourceHead:ctx.task.sourceHead,sourceProofSha256:ctx.proof,bootAck:ctx.pair.session.developmentContext?.bootAckState || "WAITING",executionAccess:workflowControl.mode(config,ctx.code)==="AUTO"?"AUTO":workflowControl.executionAllowed(config,ctx.code,ctx.task,record,ctx.proof,ctx.conversationId,"GIT_STATUS")?(record.manualExecutionPermission?.access || "PAUSED"):"PAUSED",...workflowControl.executionSummary(record,ctx.pair.selectionRecoveryRequired),resultPending:Boolean(record.pendingExecutionResult),stageReport:record.pendingStageReport ? {sha256:record.pendingStageReport.sha256,summary:record.pendingStageReport.summary,result:record.pendingStageReport.result,stage:record.pendingStageReport.stage} : null,draft:{text,sha256:createHash("sha256").update(text).digest("hex")},preview:record.manualContinuationPreview?.protocolVersion === 2 ? record.manualContinuationPreview : null}};
 }
 
 async function runManualControl(input) {

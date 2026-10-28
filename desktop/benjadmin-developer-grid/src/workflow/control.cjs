@@ -26,6 +26,12 @@ function executionPending(record) {
   // the operator from recovering the connection or sending fresh instructions.
   return Boolean(record?.pendingExecutionResult || record?.executionRequest || ["REQUEST_RUNNING", "RESULT_SEND_PENDING", "TRANSPORT_RETRY", "EXECUTION_UNCERTAIN"].includes(record?.executionBridgeState));
 }
+function executionSummary(record={},recoveryRequired=false) {
+  const envelope=record.pendingExecutionResult?.payload?.resultEnvelope||record.pendingExecutionResult?.payload?.execution;
+  const status=envelope?.status||(record.executionRequest?null:record.executionResultStatus)||null;
+  const state=record.executionBridgeState||"WAITING";
+  return {executionResultStatus:status,executionState:recoveryRequired&&!record.pendingExecutionResult&&state!=="COMPLETED"?"RECOVERY_REQUIRED":state,executionCode:record.executionBridgeError||envelope?.code||record.executionBridgeCode||""};
+}
 function recoverableReadFailure(record, running = false) {
   const queued = record?.executionRequest;
   const request = queued?.request;
@@ -65,4 +71,4 @@ function continuationPrompt(task, code, proof, protocolLines) {
     "Minden további művelet új requestId-t kapjon; korábbi req-001 azonosítót ne használj újra.",
   ].join("\n");
 }
-module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, recoverableReadFailure, requestKey, wasDelivered, continuationPrompt };
+module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, executionSummary, recoverableReadFailure, requestKey, wasDelivered, continuationPrompt };

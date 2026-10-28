@@ -32,4 +32,18 @@ function buildDeveloperGridExecutionResultPrompt(payload){
     "Scope és korábbi tiltások változatlanok. PROD/deploy/restart/migration továbbra is tiltott."
   ].join("\n");
 }
-module.exports={EXECUTION_REQUEST_START,EXECUTION_REQUEST_END,EXECUTION_RESULT_START,EXECUTION_RESULT_END,parseDeveloperGridExecutionRequest,buildDeveloperGridExecutionResultPrompt};
+function selectTaskExecutionRequest(messages,task,workerCode) {
+  const worker=String(workerCode||"").toUpperCase().replace(/^BENAI$/,"BENJAMINAI");
+  let launch=-1;
+  const boundary=/BENJADMIN_PROMPT_KIND: (TASK_LAUNCH_V3|EXECUTION_PREFLIGHT_V1|EXECUTION_AUTHORITY_RECOVERED_V1|MANUAL_CONTINUE_V1|DEVELOPER_GRID_STAGE_ACTION_V1|CONVERSATION_ROLLOVER_READY_V1)\b/;
+  for(let i=0;i<messages.length;i++)if(messages[i].role==="USER"&&boundary.test(String(messages[i].text||""))&&String(messages[i].text).includes(task.id)&&String(messages[i].text).includes(task.sessionId))launch=i;
+  for(let i=messages.length-1;i>launch;i--){
+    const item=messages[i],body=String(item.text||"");
+    if(item.role!=="ASSISTANT"||!body.includes(EXECUTION_REQUEST_START))continue;
+    const parsed=parseDeveloperGridExecutionRequest(body);
+    if(parsed.ok){const r=parsed.request;if(r.taskId===task.id&&r.sessionId===task.sessionId&&r.workerCode===worker)return item;}
+    else if(launch>=0&&i>launch&&body.includes(task.id)&&body.includes(task.sessionId))return item;
+  }
+  return null;
+}
+module.exports={EXECUTION_REQUEST_START,EXECUTION_REQUEST_END,EXECUTION_RESULT_START,EXECUTION_RESULT_END,parseDeveloperGridExecutionRequest,buildDeveloperGridExecutionResultPrompt,selectTaskExecutionRequest};

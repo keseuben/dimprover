@@ -30,7 +30,7 @@ function createExecutionJournal({read,patch,execute,deliver,observe,receipt,look
           else {save({executionBridgeState:"EXECUTION_UNCERTAIN",executionBridgeError:"A korábbi művelet eredménye még nem igazolt. Új írás nem indult.",executionRetryAt:now()+30000});return {processed:false,pending:true,reason:"EXECUTION_OUTCOME_UNCERTAIN"};}
         }
         if(!payload) {
-          save({executionBridgeState:"REQUEST_RUNNING",executionRequest:{key,request,conversationId:conversation(view),sourceProofSha256:expectedProof}});
+          save({executionBridgeState:"REQUEST_RUNNING",executionResultStatus:null,executionBridgeCode:null,executionRequest:{key,request,conversationId:conversation(view),sourceProofSha256:expectedProof}});
           try{payload=await execute(request);}
           catch(error){
             if(error?.status&&error.status<500&&![408,429].includes(error.status)){save({executionRequest:null,executionBridgeState:"BLOCKED",executionBridgeError:error.code||"EXECUTION_HTTP_"+error.status,executionBridgeCode:error.code||"EXECUTION_HTTP_"+error.status});return {processed:false,blocked:true,payload:{execution:{status:"BLOCKED",code:error.code,summary:error.message}},reason:error.code};}
@@ -41,7 +41,7 @@ function createExecutionJournal({read,patch,execute,deliver,observe,receipt,look
         if(!protocol.verifyEnvelope(envelope)||["taskId","sessionId","requestId","action","sourceProofSha256"].some(k=>envelope[k]!==request[k])||envelope.workerCode!==protocol.worker(workerCode)){save({executionBridgeState:"BLOCKED",executionBridgeError:"EXECUTION_RESULT_IDENTITY_MISMATCH"});return {processed:false,blocked:true,reason:"EXECUTION_RESULT_IDENTITY_MISMATCH"};}
         payload={...payload,resultEnvelope:envelope};
         pending={key,payload,sourceProofSha256:request.sourceProofSha256,conversationId:conversation(view),workerCode:control.worker(workerCode),taskId:task.id,sessionId:task.sessionId,protocolVersion:2,phase:"EXECUTED",executedAt:new Date(now()).toISOString()};
-        save({pendingExecutionResult:pending,executionRetryAt:null,executionBridgeState:"EXECUTED",executionBridgeError:null});
+        save({pendingExecutionResult:pending,executionRetryAt:null,executionBridgeState:"EXECUTED",executionResultStatus:envelope.status,executionBridgeCode:envelope.code,executionBridgeError:null});
       }
       if(pending.taskId!==task.id||pending.sessionId!==task.sessionId||pending.conversationId!==conversation(view)||protocol.worker(pending.workerCode)!==protocol.worker(workerCode))return {processed:false,pending:true,reason:"DELIVERY_IDENTITY_OR_PERMISSION_CHANGED"};
       // A legacy stored result is upgraded from its original, already-bound
