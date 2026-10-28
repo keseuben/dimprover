@@ -430,12 +430,22 @@ async function runDevCommand(root: string, scope: ScopePlan, input: Input): Prom
   } else {
     throw new DeveloperGridExecutionError("RUN_DEV_COMMAND csak TSC, LINT vagy CONTRACT lehet.", "EXECUTION_COMMAND_DENIED", 403);
   }
-  try {
-    const result = await execFileAsync(file, args, { cwd: root, encoding: "utf8", maxBuffer: 2 * 1024 * 1024, timeout, env: { ...process.env, DIMPRO_PRODUCTION_ACCESS: "DENY" } });
+  const execute = async (): Promise<Result> => { try {
+    const result = await execFileAsync(command === "TSC" ? "/usr/bin/prlimit" : file, command === "TSC" ? ["--core=0","--",file,...args] : args, { cwd: root, encoding: "utf8", maxBuffer: 2 * 1024 * 1024, timeout, env: { ...process.env, ...(command === "TSC" ? {NODE_OPTIONS:"--max-old-space-size=4096"} : {}), DIMPRO_PRODUCTION_ACCESS: "DENY" } });
     return { status: "PASS", code: "EXECUTION_COMMAND_OK", summary: `${command} PASS.`, data: { command, exitCode: 0, output: output(`${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`) } };
   } catch (error) {
     const candidate = error as { code?: number | string; stdout?: string; stderr?: string; signal?: string };
     return { status: "FAIL", code: "EXECUTION_COMMAND_FAIL", summary: `${command} sikertelen.`, data: { command, exitCode: typeof candidate.code === "number" ? candidate.code : 1, signal: candidate.signal || null, output: output(`${candidate.stdout || ""}${candidate.stderr ? `\n${candidate.stderr}` : ""}`) } };
+  } };
+  if (command !== "TSC") return execute();
+  // The API's small heap must not be inherited by a full-project typecheck.
+  // One shared cross-process slot bounds aggregate memory across all workers.
+  try { return await withDeveloperGridTaskOperation("grid-tsc-memory-slot", async () => {
+    const available = (process as typeof process & {availableMemory?:()=>number}).availableMemory?.() || 0;
+    if (available < 6 * 1024 ** 3) return {status:"BLOCKED",code:"EXECUTION_TEST_MEMORY_UNAVAILABLE",summary:"A típusellenőrzéshez nincs igazolt 6 GiB szabad memóriakeret.",data:{command,availableBytes:available,requiredAvailableBytes:6*1024**3}};
+    return execute();
+  }); } catch(error) {
+    return {status:"BLOCKED",code:"EXECUTION_TEST_SLOT_UNAVAILABLE",summary:"A közös típusellenőrzési erőforrás nem foglalható. Új teszt nem indult.",data:{command,reason:(error as {code?:string}).code||"TEST_SLOT_FAILED"}};
   }
 }
 async function perform(root: string, scope: ScopePlan, input: Input, action: ExecutionAction) {
