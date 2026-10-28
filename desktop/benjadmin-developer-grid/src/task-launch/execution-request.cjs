@@ -46,4 +46,24 @@ function selectTaskExecutionRequest(messages,task,workerCode) {
   }
   return null;
 }
-module.exports={EXECUTION_REQUEST_START,EXECUTION_REQUEST_END,EXECUTION_RESULT_START,EXECUTION_RESULT_END,parseDeveloperGridExecutionRequest,buildDeveloperGridExecutionResultPrompt,selectTaskExecutionRequest};
+
+function recoverAcknowledgedNextRequest(messages,task,workerCode,record,proof) {
+  if(record?.pendingExecutionResult||record?.executionRequest||record?.queuedExecutionRequest||record?.executionWorkflowBlocked)return null;
+  const completed=(record?.executionHistory||[]).at(-1),worker=String(workerCode).toUpperCase().replace(/^BENAI$/,'BENJAMINAI');
+  if(!completed?.completedAt||completed.resultStatus!=='PASS'||completed.workflowContinue!==true)return null;
+  const protocol=require('../workflow/execution-result-protocol.cjs');
+  for(let i=messages.length-1;i>=0;i--){
+    const item=messages[i],body=String(item.text||'');
+    if(item.role==='USER'&&/BENJADMIN_PROMPT_KIND: (TASK_LAUNCH_V3|EXECUTION_PREFLIGHT_V1|EXECUTION_AUTHORITY_RECOVERED_V1|MANUAL_CONTINUE_V1|CONVERSATION_ROLLOVER_READY_V1)\b/.test(body)&&body.includes(task.id)&&body.includes(task.sessionId))return null;
+    if(item.role!=='ASSISTANT')continue;
+    const ack=protocol.parseAck(body);
+    if(!ack||ack.taskId!==task.id||ack.sessionId!==task.sessionId||ack.workerCode!==worker||ack.requestId!==completed.requestId||ack.resultId!==completed.resultId||ack.resultSha256!==completed.resultSha256||ack.sourceProofSha256!==proof||ack.decision!=='ACCEPTED')continue;
+    const next=parseDeveloperGridExecutionRequest(body);
+    if(!next.ok)return null;
+    const q=next.request;
+    if(q.taskId!==task.id||q.sessionId!==task.sessionId||q.workerCode!==worker||q.sourceProofSha256!==proof||q.requestId===ack.requestId||(record.executionHistory||[]).some(h=>h.requestId===q.requestId))return null;
+    return q;
+  }
+  return null;
+}
+module.exports={EXECUTION_REQUEST_START,EXECUTION_REQUEST_END,EXECUTION_RESULT_START,EXECUTION_RESULT_END,parseDeveloperGridExecutionRequest,buildDeveloperGridExecutionResultPrompt,selectTaskExecutionRequest,recoverAcknowledgedNextRequest};

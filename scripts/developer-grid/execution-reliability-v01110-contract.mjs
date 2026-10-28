@@ -41,14 +41,14 @@ await check('ACK binds exact task/session/worker/request/result ID/hash/proof an
   for(const k of ['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256','decision'])assert(!protocol.ackMatches({...ack,[k]:'WRONG'},e),k);
   assert(!protocol.parseAck(protocol.ACK+'\n{}'));assert(!protocol.parseAck(protocol.ACK+'\n{}\n'+protocol.ACK_END+'\n'+protocol.ACK+'\n{}\n'+protocol.ACK_END));
 });
-function fixture({delivery=true,ack=false,resultStatus='PASS',transport=false,action='READ_FILE'}={}){
+function fixture({delivery=true,ack=false,resultStatus='PASS',transport=false,action='READ_FILE',nextRequest=null}={}){
   let record={},calls=0,sends=0,current='chat-a',permission=true,clock=1000,receipts=[];
   const result={...payload,action,execution:{...payload.execution,status:resultStatus}};result.resultEnvelope=protocol.makeEnvelope(result);
   const req={...identity,action};
-  const observation=()=>({delivered:delivery,deliveryMessageId:'user-result',ack:ack===true?{schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,result.resultEnvelope[k]])),decision:'ACCEPTED'}:ack||null,ackMessageId:'assistant-ack'});
+  const observation=()=>({delivered:delivery,deliveryMessageId:'user-result',ack:ack===true?{schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,result.resultEnvelope[k]])),decision:'ACCEPTED'}:ack||null,ackMessageId:'assistant-ack',nextRequest});
   const deps={read:()=>record,patch:(_t,_w,p)=>{record={...record,...p};},execute:async()=>{calls++;if(transport)throw Error('timeout');return result;},deliver:async()=>{sends++;return {sent:delivery,verified:delivery};},observe:async()=>observation(),receipt:async input=>{receipts.push(input);return {ok:true,stage:input.stage==='DELIVERED'?'DELIVERED':'COMPLETED',workflowContinue:resultStatus==='PASS'&&input.decision==='ACCEPTED'};},lookup:async()=>transport===true?null:result,conversation:()=>current,allowed:()=>permission,running:new Set(),hash,now:()=>clock};
   const input={view:{},task:{id:identity.taskId,sessionId:identity.sessionId},workerCode:identity.workerCode,request:req,expectedProof:identity.sourceProofSha256,localMismatch:false};
-  return {run:()=>createExecutionJournal(deps)(input),restart:()=>createExecutionJournal(deps)(input),input,deps,get record(){return record;},set record(r){record=r;},get calls(){return calls;},get sends(){return sends;},receipts,set delivery(v){delivery=v;},set ack(v){ack=v;},set permission(v){permission=v;},set current(v){current=v;},set transport(v){transport=v;},set clock(v){clock=v;}};
+  return {run:()=>createExecutionJournal(deps)(input),restart:()=>createExecutionJournal(deps)(input),input,deps,get record(){return record;},set record(r){record=r;},get calls(){return calls;},get sends(){return sends;},receipts,set delivery(v){delivery=v;},set ack(v){ack=v;},set permission(v){permission=v;},set current(v){current=v;},set transport(v){transport=v;},set clock(v){clock=v;},set nextRequest(v){nextRequest=v;}};
 }
 await check('DELIVERED is not ACKNOWLEDGED or COMPLETED; a next operation waits',async()=>{
   const f=fixture();assert.equal((await f.run()).reason,'WORKER_ACK_REQUIRED');assert.equal(f.record.executionBridgeState,'WAITING_ACK');assert(f.record.pendingExecutionResult.deliveredAt);assert(!f.record.lastExecutionRequestId);
@@ -93,4 +93,35 @@ await check('worker ACK is observed only in a later ASSISTANT turn in the bound 
   assert(!(await ctx.run({},pending)).ack);capture.messages[1].role='ASSISTANT';assert((await ctx.run({},pending)).ack);
   capture.conversationId='other-chat';assert(!(await ctx.run({},pending)).delivered);
 });
+
+const next={...identity,requestId:'req-next',action:'READ_FILE',path:'components/drive/driveBuildInfo.ts'};
+await check('ACK and next request are persisted before completion and block the next phase',async()=>{
+ const f=fixture({ack:true,nextRequest:next});const receipt=f.deps.receipt;f.deps.receipt=async q=>{if(q.stage==='ACKNOWLEDGED')assert.equal(f.record.pendingExecutionResult.nextRequest.requestId,next.requestId);return receipt(q);};
+ assert.equal((await f.run()).processed,true);assert.equal(f.record.queuedExecutionRequest.requestId,next.requestId);assert.equal(f.record.executionRequest,null);assert(require(path.join(source,'workflow/control.cjs')).executionPending(f.record));
+});
+await check('restart after lost ACK receipt response retains the same next request without another operation',async()=>{
+ const f=fixture({ack:true,nextRequest:next});const real=f.deps.receipt;let lost=true;f.deps.receipt=async q=>{const r=await real(q);if(q.stage==='ACKNOWLEDGED'&&lost){lost=false;throw Error('lost acceptance');}return r;};
+ await f.run();assert(f.record.pendingExecutionResult.nextRequest);f.ack=false;f.nextRequest=null;assert.equal((await f.restart()).processed,true);assert.equal(f.record.queuedExecutionRequest.requestId,next.requestId);assert.equal(f.calls,1);
+});
+await check('an unstarted queued request is executed normally and only once after restart',async()=>{
+ const f=fixture({ack:true,nextRequest:next});await f.run();const g=fixture({ack:true});g.record=structuredClone(f.record);g.input.request=parseRequest('BENJADMIN_EXECUTION_REQUEST_V1\n'+JSON.stringify(next)+'\nBENJADMIN_EXECUTION_REQUEST_END').request;let calls=0;
+ const data={...next,execution:payload.execution},e=protocol.makeEnvelope(data);g.deps.execute=async()=>{calls++;return {...data,resultEnvelope:e};};g.deps.observe=async()=>({delivered:true,ack:{schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,e[k]])),decision:'ACCEPTED'}});
+ assert.equal((await g.restart()).processed,true);assert.equal(g.record.queuedExecutionRequest,null);assert.equal((await g.restart()).duplicate,true);assert.equal(calls,1);
+});
+await check('pause preserves a queued request without allowing a different request to overtake it',async()=>{
+ const f=fixture({ack:true,nextRequest:next});await f.run();f.input.request=parseRequest('BENJADMIN_EXECUTION_REQUEST_V1\n'+JSON.stringify(next)+'\nBENJADMIN_EXECUTION_REQUEST_END').request;f.permission=false;assert.equal((await f.restart()).reason,'MANUAL_PERMISSION_REQUIRED');assert(f.record.queuedExecutionRequest);assert.equal(f.calls,1);f.input.request={...next,requestId:'req-overtake'};assert.equal((await f.restart()).reason,'QUEUED_EXECUTION_REQUIRED');assert.equal(f.calls,1);
+});
+await check('foreign task/session/worker/proof or reused request ID in the ACK cannot authorize the next operation',async()=>{
+ for(const [field,value]of [['taskId','foreign'],['sessionId','foreign'],['workerCode','ARMINAI'],['sourceProofSha256','b'.repeat(64)],['requestId',identity.requestId]]){const f=fixture({ack:true,nextRequest:{...next,[field]:value}});assert.equal((await f.run()).reason,'EXECUTION_NEXT_REQUEST_IDENTITY_MISMATCH');assert(!f.record.queuedExecutionRequest);assert(!f.record.executionHistory?.length);assert.equal(f.calls,1);}
+});
+await check('a failed result is acknowledged without retaining or running a next request',async()=>{
+ const f=fixture({ack:true,resultStatus:'FAIL',nextRequest:next});assert.equal((await f.run()).workflowContinue,false);assert.equal(f.record.queuedExecutionRequest,null);assert.equal(f.record.executionWorkflowBlocked,true);assert.equal(f.calls,1);
+});
+
+const recover=require(path.join(source,'task-launch/execution-request.cjs')).recoverAcknowledgedNextRequest;
+function legacyMessages(extra={}){const e=protocol.makeEnvelope(payload),ack={schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,e[k]])),decision:'ACCEPTED',...extra};return [{role:'ASSISTANT',text:protocol.ACK+'\n'+JSON.stringify(ack)+'\n'+protocol.ACK_END+'\nBENJADMIN_EXECUTION_REQUEST_V1\n'+JSON.stringify(next)+'\nBENJADMIN_EXECUTION_REQUEST_END'},{role:'USER',text:'BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1 '+identity.taskId+' '+identity.sessionId},{role:'ASSISTANT',text:'BLOCKED – a már kért fájlolvasás eredményére várok.'}];}
+await check('an already accepted legacy ACK recovers its unsent next request across a later stage directive',async()=>{const f=fixture({ack:true});await f.run();assert.equal(recover(legacyMessages(),f.input.task,'OUTMINAI',f.record,identity.sourceProofSha256).requestId,next.requestId);});
+await check('legacy recovery requires the exact completed result, task, session, proof and ACCEPTED decision',async()=>{const f=fixture({ack:true});await f.run();for(const extra of [{resultSha256:'b'.repeat(64)},{resultId:'res-'+'b'.repeat(64)},{requestId:'req-wrong'},{taskId:'other'},{sessionId:'other'},{workerCode:'ARMINAI'},{sourceProofSha256:'b'.repeat(64)},{decision:'REJECTED'}])assert.equal(recover(legacyMessages(extra),f.input.task,'OUTMINAI',f.record,identity.sourceProofSha256),null);});
+await check('a later authoritative launch or recovery invalidates historical ACK chaining',async()=>{const f=fixture({ack:true});await f.run();for(const marker of ['TASK_LAUNCH_V3','EXECUTION_AUTHORITY_RECOVERED_V1','MANUAL_CONTINUE_V1','CONVERSATION_ROLLOVER_READY_V1']){const messages=[...legacyMessages(),{role:'USER',text:'BENJADMIN_PROMPT_KIND: '+marker+' '+identity.taskId+' '+identity.sessionId}];assert.equal(recover(messages,f.input.task,'OUTMINAI',f.record,identity.sourceProofSha256),null);}});
+await check('legacy recovery cannot overwrite a live queue or replay a completed next request',async()=>{const f=fixture({ack:true});await f.run();for(const record of [{...f.record,queuedExecutionRequest:next},{...f.record,pendingExecutionResult:{}},{...f.record,executionWorkflowBlocked:true},{...f.record,executionHistory:[...f.record.executionHistory,{requestId:next.requestId,completedAt:'done',resultStatus:'PASS',workflowContinue:true}]}])assert.equal(recover(legacyMessages(),f.input.task,'OUTMINAI',record,identity.sourceProofSha256),null);});
 console.log(JSON.stringify({ok:true,tests:count,scope:'V2 exact result, explicit ACK, durable restart and failure isolation',liveMutation:false}));

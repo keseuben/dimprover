@@ -18,6 +18,7 @@ function executionAllowed(config, code, task, record, proof, conversationId, act
     && (permission.access === "DEV" || ["LIST_FILES", "READ_FILE", "SEARCH_FILES", "GIT_STATUS", "GIT_DIFF", "GIT_DIFF_CHECK"].includes(action)));
 }
 function executionPending(record) {
+  if(record?.queuedExecutionRequest)return true;
   // Older clients could leave this label after a later successful send. They
   // stored neither the request nor its result; it cannot be a v104 queue item.
   // Keep the legacy label for inspection, and never reconstruct/re-run a write.

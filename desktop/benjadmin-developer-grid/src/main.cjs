@@ -3859,7 +3859,8 @@ async function observeExecutionResult(view,pending) {
   for(let i=messages.length-1;i>delivered;i--)if(messages[i].role==="ASSISTANT") {
     const ack=protocol.parseAck(messages[i].text);
     if(ack?.requestId===envelope.requestId&&ack.taskId===envelope.taskId&&ack.sessionId===envelope.sessionId) {
-      return {...observation,ack:protocol.ackMatches(ack,envelope)?ack:null,ackMismatch:!protocol.ackMatches(ack,envelope),ackMessageId:messages[i].messageId};
+      const next=require("./task-launch/execution-request.cjs").parseDeveloperGridExecutionRequest(messages[i].text);
+      return {...observation,ack:protocol.ackMatches(ack,envelope)?ack:null,ackMismatch:!protocol.ackMatches(ack,envelope),ackMessageId:messages[i].messageId,nextRequest:next.ok?next.request:null};
     }
   }
   return observation;
@@ -5544,7 +5545,9 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
       currentConversationUrl:currentConversationUrl,
     }).catch(() => undefined);
   }
-  const queuedExecution = loadTaskLaunchRecords()[live.task.id]?.executionRequest?.request;
+  const recoveredNext = require("./task-launch/execution-request.cjs").recoverAcknowledgedNextRequest(capture.messages,live.task,code,loadTaskLaunchRecords()[live.task.id]||{},resolvedExecutionProofSha256(live.task));
+  if(recoveredNext)saveTaskLaunchPatch(live.task,code,{queuedExecutionRequest:recoveredNext});
+  const queuedExecution = loadTaskLaunchRecords()[live.task.id]?.queuedExecutionRequest || loadTaskLaunchRecords()[live.task.id]?.executionRequest?.request;
   const bodyWithExecutionRequest = queuedExecution ? {text:EXECUTION_REQUEST_START+"\n"+JSON.stringify(queuedExecution)+"\nBENJADMIN_EXECUTION_REQUEST_END"} : require("./task-launch/execution-request.cjs").selectTaskExecutionRequest(capture.messages,live.task,code);
   if (bodyWithExecutionRequest) await processCapturedExecutionRequest({ view, body:bodyWithExecutionRequest.text, workerCode:code, task:live.task }).catch(() => undefined);
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));

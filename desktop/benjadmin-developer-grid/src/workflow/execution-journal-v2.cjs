@@ -10,6 +10,7 @@ function createExecutionJournal({read,patch,execute,deliver,observe,receipt,look
     const history=record.executionHistory||[];
     if(history.some(item=>item.key===key&&(item.completedAt||(!item.protocolVersion&&item.deliveredAt))))return {processed:false,duplicate:true};
     if(history.some(item=>item.requestId===request.requestId&&item.key!==key))return {processed:false,blocked:true,reason:"EXECUTION_REQUEST_ID_REUSED"};
+    if(record.queuedExecutionRequest&&JSON.stringify(record.queuedExecutionRequest)!==JSON.stringify(request))return {processed:false,pending:true,reason:"QUEUED_EXECUTION_REQUIRED"};
     if(running.has(lock))return {processed:false,pending:true};
     if(record.pendingExecutionResult&&record.pendingExecutionResult.key!==key)return {processed:false,pending:true,reason:"PREVIOUS_RESULT_PENDING"};
     if(record.executionWorkflowBlocked)return {processed:false,blocked:true,reason:"PREVIOUS_RESULT_BLOCKED"};
@@ -30,7 +31,7 @@ function createExecutionJournal({read,patch,execute,deliver,observe,receipt,look
           else {save({executionBridgeState:"EXECUTION_UNCERTAIN",executionBridgeError:"A korábbi művelet eredménye még nem igazolt. Új írás nem indult.",executionRetryAt:now()+30000});return {processed:false,pending:true,reason:"EXECUTION_OUTCOME_UNCERTAIN"};}
         }
         if(!payload) {
-          save({executionBridgeState:"REQUEST_RUNNING",executionResultStatus:null,executionBridgeCode:null,executionRequest:{key,request,conversationId:conversation(view),sourceProofSha256:expectedProof}});
+          save({queuedExecutionRequest:null,executionBridgeState:"REQUEST_RUNNING",executionResultStatus:null,executionBridgeCode:null,executionRequest:{key,request,conversationId:conversation(view),sourceProofSha256:expectedProof}});
           try{payload=await execute(request);}
           catch(error){
             if(error?.status&&error.status<500&&![408,429].includes(error.status)){save({executionRequest:null,executionBridgeState:"BLOCKED",executionBridgeError:error.code||"EXECUTION_HTTP_"+error.status,executionBridgeCode:error.code||"EXECUTION_HTTP_"+error.status});return {processed:false,blocked:true,payload:{execution:{status:"BLOCKED",code:error.code,summary:error.message}},reason:error.code};}
@@ -70,12 +71,19 @@ function createExecutionJournal({read,patch,execute,deliver,observe,receipt,look
       const acknowledged=pending.acknowledgedAt?pending.ack:observed.ack;
       if(!acknowledged){save({executionBridgeState:"WAITING_ACK",executionBridgeError:observed.ackMismatch?"EXECUTION_RESULT_ACK_MISMATCH":null});return {processed:false,pending:true,reason:"WORKER_ACK_REQUIRED"};}
       if(!protocol.ackMatches(acknowledged,envelope)){save({executionBridgeState:"WAITING_ACK",executionBridgeError:"EXECUTION_RESULT_ACK_MISMATCH"});return {processed:false,pending:true,reason:"EXECUTION_RESULT_ACK_MISMATCH"};}
-      if(!pending.acknowledgedAt){pending={...pending,phase:"ACKNOWLEDGED",acknowledgedAt:new Date(now()).toISOString(),ack:acknowledged,ackMessageId:observed.ackMessageId||""};save({pendingExecutionResult:pending,executionBridgeState:"ACKNOWLEDGED"});}
+      let nextRequest=pending.nextRequest||observed.nextRequest||null;
+      if(envelope.status!=="PASS"||acknowledged.decision!=="ACCEPTED")nextRequest=null;
+      if(nextRequest){
+        const parser=require("../task-launch/execution-request.cjs"),parsed=parser.parseDeveloperGridExecutionRequest(parser.EXECUTION_REQUEST_START+"\n"+JSON.stringify(nextRequest)+"\n"+parser.EXECUTION_REQUEST_END);
+        if(!parsed.ok||["taskId","sessionId","workerCode","sourceProofSha256"].some(k=>parsed.request[k]!==envelope[k])||parsed.request.requestId===request.requestId||(record.executionHistory||[]).some(h=>h.requestId===parsed.request.requestId))throw Object.assign(new Error("A következő kérés azonossága nem igazolt."),{code:"EXECUTION_NEXT_REQUEST_IDENTITY_MISMATCH"});
+        nextRequest=parsed.request;
+      }
+      if(!pending.acknowledgedAt){pending={...pending,nextRequest,phase:"ACKNOWLEDGED",acknowledgedAt:new Date(now()).toISOString(),ack:acknowledged,ackMessageId:observed.ackMessageId||""};save({pendingExecutionResult:pending,executionBridgeState:"ACKNOWLEDGED"});}
       const accepted=await receipt({...receiptInput,stage:"ACKNOWLEDGED",decision:pending.ack.decision,transcriptMessageId:pending.ackMessageId});
       if(!accepted?.ok||accepted.stage!=="COMPLETED")throw Error("Central Core ACK elfogadása még függőben van.");
       const completed={key,protocolVersion:2,requestId:request.requestId,action:request.action,resultId:envelope.resultId,resultSha256:envelope.resultSha256,executedAt:pending.executedAt,deliveredAt:pending.deliveredAt,acknowledgedAt:pending.acknowledgedAt,completedAt:new Date(now()).toISOString(),resultStatus:envelope.status,workflowContinue:accepted.workflowContinue===true};
       const history=[...(read(task.id).executionHistory||[]),completed].slice(-128);
-      save({pendingExecutionResult:null,executionRequest:null,executionHistory:history,lastExecutionRequestId:request.requestId,lastExecutionAction:request.action,executionBridgeState:"COMPLETED",executionResultStatus:envelope.status,executionBridgeCode:envelope.code,executionBridgeError:null,executionBridgeAt:new Date(now()).toISOString(),executionWorkflowBlocked:accepted.workflowContinue!==true,...(request.action==="GIT_STATUS"&&envelope.status==="PASS"?{executionPreflightProofSha256:envelope.sourceProofSha256}:{})});
+      save({queuedExecutionRequest:accepted.workflowContinue===true?nextRequest:null,pendingExecutionResult:null,executionRequest:null,executionHistory:history,lastExecutionRequestId:request.requestId,lastExecutionAction:request.action,executionBridgeState:"COMPLETED",executionResultStatus:envelope.status,executionBridgeCode:envelope.code,executionBridgeError:null,executionBridgeAt:new Date(now()).toISOString(),executionWorkflowBlocked:accepted.workflowContinue!==true,...(request.action==="GIT_STATUS"&&envelope.status==="PASS"?{executionPreflightProofSha256:envelope.sourceProofSha256}:{})});
       return {processed:true,payload:pending.payload,completed,workflowContinue:accepted.workflowContinue===true};
     } catch(error){save({executionBridgeError:error?.code||error.message||"EXECUTION_RECEIPT_FAILED"});return {processed:false,pending:true,reason:error?.code||"EXECUTION_RECEIPT_FAILED"};}
     finally{running.delete(lock);}
