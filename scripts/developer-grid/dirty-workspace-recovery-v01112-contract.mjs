@@ -22,6 +22,9 @@ const workspaceModule={exports:{}};
 let workspaceSource=fs.readFileSync('app/lib/developer-grid/worker-workspace.ts','utf8').replace('"/srv/dimpro-dev/repositories/dimprover.git"',JSON.stringify(repository)).replace('"/srv/dimpro-dev/worktrees"',JSON.stringify(trees));
 vm.runInNewContext(compile(workspaceSource),{module:workspaceModule,exports:workspaceModule.exports,require:id=>id==='node:child_process'?{execFile:wrappedExec}:require(id)});
 const workspaceApi=workspaceModule.exports,identity={workerCode:'OUTMINAI',taskId:'task-owned',baseCommit:head};
+// This fixture exercises recovery of pre-existing work. New workspace/toolchain
+// creation is covered separately by task-toolchain-v01115-contract.mjs.
+git('--git-dir',repository,'worktree','add','-b',workspaceApi.developerWorkerBranchName(identity.workerCode,identity.taskId),workspaceApi.developerWorkerWorktreePath(identity.workerCode,identity.taskId),head);
 const workspace=await workspaceApi.ensureDeveloperWorkerWorkspace(identity),file=path.join(workspace.worktreePath,'owned.txt');
 fs.appendFileSync(file,Buffer.from('// uncommitted work\n'));const saved=fs.readFileSync(file),expected={repository,worktree:workspace.worktreePath,branch:workspace.branchName,head};readsOnly=true;
 await test('existing task recovery preserves dirty file bytes, BOM and line endings',async()=>{const r=await workspaceApi.verifyExistingDeveloperWorkerWorkspace({...identity,expected});assert.equal(r.dirty,true);assert.equal(r.head,head);assert.deepEqual(fs.readFileSync(file),saved);});

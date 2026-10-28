@@ -410,7 +410,8 @@ async function runDevCommand(root: string, scope: ScopePlan, input: Input): Prom
   if (command === "TSC") {
     file = path.join(root, "node_modules/.bin/tsc");
     try { await stat(file); } catch { return { status: "BLOCKED", code: "EXECUTION_TOOLCHAIN_UNAVAILABLE", summary: "A task worktree-ben nincs helyi TypeScript toolchain; a Central Core tesztfázis futtatja később.", data: { command } }; }
-    args = ["--noEmit"];
+    args = ["--noEmit", "--incremental", "false"];
+    timeout = 240_000;
   } else if (command === "LINT") {
     file = "/usr/bin/npm";
     try { await stat(path.join(root, "node_modules")); } catch { return { status: "BLOCKED", code: "EXECUTION_TOOLCHAIN_UNAVAILABLE", summary: "A task worktree-ben nincs helyi node_modules; lint a Central Core tesztfázisban fut.", data: { command } }; }

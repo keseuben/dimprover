@@ -120,8 +120,17 @@ export async function ensureDeveloperWorkerWorkspace(input: { workerCode: string
   if (existingBranchCommit && existingBranchCommit !== baseCommit) {
     throw Object.assign(new Error("A determinisztikus worker branch már létezik eltérő commiton."), { code:"DEVELOPER_WORKSPACE_BRANCH_MISMATCH", details:{ branchName, existingBranchCommit, baseCommit } });
   }
-  if (existingBranchCommit) await git(["--git-dir", DEVELOPER_WORKER_REPOSITORY, "worktree", "add", worktreePath, branchName]);
-  else await git(["--git-dir", DEVELOPER_WORKER_REPOSITORY, "worktree", "add", "-b", branchName, worktreePath, baseCommit]);
+  // Use the canonical storage helper: exact-lock dependencies are hardlinked,
+  // including a prepared module toolchain when its lock differs from the Grid.
+  const operatorRoot = path.resolve(process.env.DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE || "/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2");
+  const common = await git(["-C", operatorRoot, "rev-parse", "--git-common-dir"]);
+  if (path.resolve(operatorRoot, common) !== DEVELOPER_WORKER_REPOSITORY) {
+    throw Object.assign(new Error("A worktree-segéd forrása nem a canonical DEV repository."), {code:"DEVELOPER_WORKSPACE_HELPER_SOURCE_MISMATCH"});
+  }
+  await execFileAsync("/bin/bash", [path.join(operatorRoot,"scripts/dimpro-create-dev-worktree.sh"),branchName,path.basename(worktreePath),baseCommit], {
+    encoding:"utf8",timeout:60_000,maxBuffer:1024*1024,
+    env:{...process.env,DIMPRO_OPERATOR_ROOT:operatorRoot,DIMPRO_WORKTREES_ROOT:DEVELOPER_WORKER_WORKTREE_ROOT},
+  });
 
   const [branch, head, dirty] = await Promise.all([
     git(["-C", worktreePath, "branch", "--show-current"]),

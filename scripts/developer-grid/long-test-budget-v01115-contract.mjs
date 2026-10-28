@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+const require=createRequire(import.meta.url),ts=require('typescript'),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+const source=fs.readFileSync(path.join(root,'app/lib/developer-grid/execution-bridge.ts'),'utf8'),start=source.indexOf('async function runDevCommand('),end=source.indexOf('async function perform(',start);
+assert(start>0&&end>start);let captured;
+const sandbox={exports:{},path,process:{env:{}},text:v=>String(v||'').trim(),output:v=>v,stat:async()=>({}),execFileAsync:async(file,args,options)=>{captured={file,args,options};return {stdout:'actual command result',stderr:''};}};
+vm.runInNewContext(ts.transpileModule(source.slice(start,end)+'\nexports.run=runDevCommand;',{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,sandbox);
+const result=await sandbox.exports.run('/fixture/task',{}, {command:'TSC'});assert.equal(result.status,'PASS');assert.equal(captured.options.timeout>123000,true);assert.equal(captured.options.timeout<=240000,true);assert.equal(captured.options.env.DIMPRO_PRODUCTION_ACCESS,'DENY');assert.deepEqual(Array.from(captured.args),['--noEmit','--incremental','false']);console.log('PASS 1 measured 123-second typecheck fits execution budget without incremental writes');
+await sandbox.exports.run('/fixture/task',{}, {command:'LINT'});const commandBudget=captured.options.timeout;assert(commandBudget<=240000);console.log('PASS 2 lint retains bounded execution and DEV-only environment');
+const cjs=fs.readFileSync(path.join(root,'desktop/benjadmin-developer-grid/src/context-workspace/context-workspace-client.cjs'),'utf8');let clientBudget,aborted=false;
+const client={module:{exports:{}},exports:{},require,URL,AbortController,setTimeout:(_fn,ms)=>{clientBudget=ms;return 1;},clearTimeout:()=>{},fetch:async(_url,options)=>{aborted=options.signal.aborted;return {ok:true,status:200,json:async()=>({ok:true,result:{status:'PASS'}})};}};
+vm.runInNewContext(cjs,client);const payload=await client.module.exports.executeDeveloperGridRequest({baseUrl:'https://admin.dev.dimpro.hu',deviceToken:'fixture-device-token',input:{action:'RUN_DEV_COMMAND',command:'TSC'}});assert.equal(payload.result.status,'PASS');assert.equal(aborted,false);assert(clientBudget>commandBudget);assert(clientBudget>=300000);console.log('PASS 3 desktop transport outlives its longest permitted test command');
+sandbox.execFileAsync=async()=>{throw {code:124,signal:'SIGTERM',stdout:'partial',stderr:'timeout'};};const failed=await sandbox.exports.run('/fixture/task',{}, {command:'TSC'});assert.equal(failed.status,'FAIL');assert.equal(failed.data.exitCode,124);assert.equal(failed.data.signal,'SIGTERM');console.log('PASS 4 real timeout stays FAIL and cannot become a success result');
+console.log(JSON.stringify({ok:true,tests:4,scope:'actual execution function and desktop transport with virtual timeout boundary',liveMutation:false}));

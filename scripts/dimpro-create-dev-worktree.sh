@@ -56,6 +56,10 @@ for CANDIDATE_ROOT in "$OPERATOR_ROOT" "/srv/dimpro-dev/worktrees/benjadmin-oper
   DEPENDENCY_SOURCE_ROOT="$CANDIDATE_ROOT"
 done
 
+if [[ -z "$DEPENDENCY_SOURCE_ROOT" && -f "$OPERATOR_ROOT/scripts/developer-grid/task-toolchain.mjs" ]]; then
+  DEPENDENCY_SOURCE_ROOT="$(node "$OPERATOR_ROOT/scripts/developer-grid/task-toolchain.mjs" --find-only "$TARGET")"
+fi
+
 if [[ -n "$DEPENDENCY_SOURCE_ROOT" ]]; then
   if [[ ! -e "$TARGET/node_modules" && ! -L "$TARGET/node_modules" ]]; then
     cp -al "$DEPENDENCY_SOURCE_ROOT/node_modules" "$TARGET/node_modules"
