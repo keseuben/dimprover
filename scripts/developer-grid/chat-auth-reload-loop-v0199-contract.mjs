@@ -15,9 +15,9 @@ function check(label, fn) {
   console.log(`PASS ${String(n).padStart(2, "0")} ${label}`);
 }
 
-check("desktop/backend version is v0.1.115", () => {
-  assert.equal(pkg.version, "0.1.115");
-  assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.115-dev"'));
+check("desktop/backend version is v0.1.116", () => {
+  assert.equal(pkg.version, "0.1.116");
+  assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.116-dev"'));
 });
 check("shared ChatGPT OpenAI cookie propagation remains enabled", () => {
   assert.ok(main.includes("function isSharedChatAuthCookie(cookie)"));
@@ -63,4 +63,4 @@ check("cooldown state is cleared on quit", () => {
   assert.ok(main.includes("chatAuthRefreshLastReloadAt.clear()"));
 });
 
-console.log(`Developer Grid v0.1.115 ChatGPT auth reload-loop hotfix contract PASS · ${n}/${n}`);
+console.log(`Developer Grid v0.1.116 ChatGPT auth reload-loop hotfix contract PASS · ${n}/${n}`);

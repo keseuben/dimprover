@@ -8,6 +8,7 @@ import {retireDevEngineTaskForReplacement} from "@/app/lib/dev-center/engine-rep
 import {getDeveloperGridFoundation} from "./foundation";
 import {resolveDeveloperGridModuleSource} from "./module-source";
 import {verifyCurrentSourceExecutionState} from "./source-provenance";
+import {assertCheckpointExecutionSettled} from "./source-checkpoint";
 import {appendGridEvent,readGridState,patchGridWorkerSession} from "./state-store";
 import {getDeveloperGridTaskById,normalizeWorkStartInput,startDeveloperGridWork,workStartTaskId} from "./work-start";
 
@@ -36,16 +37,21 @@ async function replacementPlan(raw:Record<string,unknown>,allowAuthorizedReplay=
  if(!session||!task||task.projectId!==input.projectId)fail("WORK_REPLACEMENT_IDENTITY_MISMATCH","Eltérő task/session/worker/projekt.");
  const proof=String(session.developmentContext.sourceExecutionProof?.sha256||"");
  if(!proof||proof!==String(raw.expectedSourceProofSha256||""))fail("WORK_REPLACEMENT_PROOF_CHANGED","A forrásigazolás megváltozott. Új előnézet szükséges.");
- if(Number(session.developmentContext.workStageIndex||1)!==1)fail("WORK_REPLACEMENT_STAGE_DENIED","Ez az átállítás csak az 1/6 ELEMZÉS szakaszban használható.");
+ const previousStage=Number(session.developmentContext.workStageIndex||1);
+ const receipt=session.developmentContext.sourceCheckpointReceipt;
+ if(previousStage!==1&&previousStage!==3)fail("WORK_REPLACEMENT_STAGE_DENIED","Csak tiszta elemzési feladat vagy igazolt, megőrzött 3/6-os Git-mentés váltható le.");
+ if(previousStage===3&&(!receipt||receipt.schemaVersion!==1||!/^[a-f0-9]{64}$/.test(receipt.id)||receipt.head!==session.sourceProvenance.head||receipt.gitClean!==true||!receipt.files.length||receipt.files.some(f=>!f.path||!/^[a-f0-9]{64}$/.test(f.sha256)||!Number.isSafeInteger(f.bytes)||f.bytes<0)))fail("WORK_REPLACEMENT_CHECKPOINT_REQUIRED","A 3/6-os feladat leváltásához megőrzött, tiszta Git-mentési igazolás szükséges.");
  if(session.endedAt&&!allowAuthorizedReplay)fail("WORK_REPLACEMENT_SESSION_ENDED","A régi session már lezárult.");
  await verifyCurrentSourceExecutionState(session.sourceProvenance,{requireClean:true});
  await assertNoPendingExecution(taskId);
+ if(previousStage===3)await assertCheckpointExecutionSettled(taskId);
  const foundation=await getDeveloperGridFoundation();
  const source=await resolveDeveloperGridModuleSource({projectId:input.projectId,moduleName:input.moduleName,fallbackHead:String(foundation.sourceProvenance.head||""),pinnedHead:input.sourceCommit});
  if(source.authority!=="MODULE_CATALOG")fail("WORK_REPLACEMENT_MODULE_SOURCE_REQUIRED","Új fejlesztési körhöz ellenőrzött modulforrás-kötés szükséges.");
  const reviewedWritePaths=normalizeReviewedWritePaths(raw.reviewedWritePaths,input.projectId,input.moduleName);
- const plan={...(input.sourceCheckpointMode==="SCOPED_GIT"?{sourceCheckpointMode:input.sourceCheckpointMode}:{}),reviewedWritePaths,schemaVersion:1,previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
- return {plan,planSha256:hash(plan),task,session,input};
+ const preservedCheckpoint=previousStage===3?{stage:3 as const,head:receipt!.head,receiptId:receipt!.id}:undefined;
+ const plan={...(input.sourceCheckpointMode==="SCOPED_GIT"?{sourceCheckpointMode:input.sourceCheckpointMode}:{}),reviewedWritePaths,schemaVersion:preservedCheckpoint?2:1,...(preservedCheckpoint?{previousStage,previousCheckpointId:preservedCheckpoint.receiptId,previousOutcome:"PRESERVED_NOT_COMPLETED"}:{}),previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
+ return {plan,planSha256:hash(plan),task,session,input,preservedCheckpoint};
 }
 export async function prepareDeveloperGridWorkReplacement(raw:Record<string,unknown>){const {plan,planSha256}=await replacementPlan(raw);return {plan,planSha256};}
 
@@ -61,7 +67,7 @@ async function replaceDeveloperGridWorkLocked(raw:Record<string,unknown>){
   const authorization=previous?.developmentContext.workReplacementAuthorization;
   if(authorization&&authorization.planSha256!==expected)fail("WORK_REPLACEMENT_ALREADY_AUTHORIZED","Ehhez a régi taskhoz másik átállítás már elindult. A megőrzött kérést folytasd.");
   const authorized=authorization?.planSha256===expected;
-  const {plan,planSha256,task,session,input}=await replacementPlan(raw,authorized);
+  const {plan,planSha256,task,session,input,preservedCheckpoint}=await replacementPlan(raw,authorized);
   if(planSha256!==expected)fail("WORK_REPLACEMENT_PLAN_CHANGED","Az átállítás forrása vagy utasítása megváltozott. Új előnézet szükséges.");
   const idempotencyKey=`replace:${hash([session.id,expected])}`,nextTaskId=workStartTaskId(idempotencyKey);
   if(!authorized){
@@ -70,7 +76,7 @@ async function replaceDeveloperGridWorkLocked(raw:Record<string,unknown>){
   }
   if(!authorized)await appendGridEvent({kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:task.id,projectId:task.projectId,productionAccess:"DENY",delta:{eventType:"WORK_REPLACEMENT_AUTHORIZED",sessionId:session.id,planSha256,nextTaskId,previousHead:plan.previousHead,targetHead:plan.targetSource.head,summary:"Explicit új fejlesztési kör; régi forrás és audit megőrizve."}});
   if(!session.endedAt){
-   await retireDevEngineTaskForReplacement({taskId:task.id,sessionId:String(session.developmentContext.engineSessionId||""),workerCode:session.workerCode,nextTaskId});
+   await retireDevEngineTaskForReplacement({taskId:task.id,sessionId:String(session.developmentContext.engineSessionId||""),workerCode:session.workerCode,nextTaskId,...(preservedCheckpoint?{preservedCheckpoint}:{})});
    await assertNoPendingExecution(task.id);
    await patchGridWorkerSession({sessionId:session.id,taskId:session.taskId,workerCode:session.workerCode,expectedSourceProofSha256:plan.previousSourceProofSha256,endedAt:new Date().toISOString()});
   }

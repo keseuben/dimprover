@@ -1332,10 +1332,14 @@ export async function setDevEngineTaskTesting(taskId: string) {
   return { ok: true as const, task: mapTask(data as JsonRecord) };
 }
 
-export async function retireDevEngineTaskForReplacement(input:{taskId:string;sessionId:string;workerCode:string;nextTaskId:string}){
+export async function retireDevEngineTaskForReplacement(input:{taskId:string;sessionId:string;workerCode:string;nextTaskId:string;preservedCheckpoint?:{stage:3;head:string;receiptId:string}}){
   const client=await requireClient();
   const task=await getTaskForConsoleControl(client,input.taskId);
-  if(["completed","cancelled","testing"].includes(task.status))throw new DevCenterEngineError("A task jelenlegi állapotában nem váltható le.","WORK_REPLACEMENT_ENGINE_STATE_DENIED",409);
+  // Only the replacement service may supply this after validating the stored
+  // checkpoint, clean worktree and settled execution/ACK journal under its task lock.
+  const checkpoint=input.preservedCheckpoint;
+  const preserved=checkpoint?.stage===3&&/^[a-f0-9]{40}$/.test(checkpoint.head)&&/^[a-f0-9]{64}$/.test(checkpoint.receiptId);
+  if(["completed","cancelled"].includes(task.status)||(task.status==="testing"&&!preserved))throw new DevCenterEngineError("A task jelenlegi állapotában nem váltható le.","WORK_REPLACEMENT_ENGINE_STATE_DENIED",409);
   const row=await client.from("dev_center_worker_sessions").select("*").eq("id",input.sessionId).maybeSingle();
   if(row.error)databaseError("A leváltandó session nem olvasható.",row.error);
   if(!row.data||text(row.data.task_id)!==task.id||!text(row.data.worker_id)||task.requestedWorkerId!==text(row.data.worker_id))throw new DevCenterEngineError("Eltérő engine task/session/worker kötés.","WORK_REPLACEMENT_ENGINE_IDENTITY_MISMATCH",409);
@@ -1357,7 +1361,7 @@ export async function retireDevEngineTaskForReplacement(input:{taskId:string;ses
     const released=await client.from(table).update({status:"released",released_at:now}).eq("session_id",input.sessionId).eq("status","active");
     if(released.error)databaseError("A régi session megmaradt erőforrása nem oldható fel.",released.error,409);
   }
-  return finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${input.nextTaskId}; korábbi task nem készre jelentve.`,rebalance:false});
+  return finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${input.nextTaskId}; korábbi task nem készre jelentve.${preserved?` Megőrzött 3/6 Git-mentés: ${checkpoint!.receiptId}, HEAD: ${checkpoint!.head}.`:""}`,rebalance:false});
 }
 
 export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null; rebalance?: boolean }) {
