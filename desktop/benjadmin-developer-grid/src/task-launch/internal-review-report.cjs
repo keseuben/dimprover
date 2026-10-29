@@ -36,7 +36,7 @@ function parseDeveloperGridInternalReviewReport(raw) {
     return {
       severity: text(item.severity, 40).toUpperCase(),
       category: text(item.category, 80).toUpperCase(),
-      message: text(item.message, 800),
+      message: text(item.message || item.summary, 800),
       path: text(item.path, 800) || null,
     };
   }) : [];

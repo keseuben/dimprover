@@ -29,6 +29,7 @@ function buildInternalReviewFallbackPrompt({ workerCode, workerLabel, task, pres
     "- Review-zd a teljes base → current HEAD commitált változást kizárólag a saját engedélyezett DEV source scope-ban.",
     "- Ellenőrizd külön: security, jogosultság/auth, adatvesztési kockázat, regresszió, concurrency/atomicitás, migráció, scope, tesztlefedettség és build-readiness.",
     "- Ellenőrizd a releváns diffet és a current HEAD-hez tartozó teszt evidence-et.",
+    "- Ha a base és current HEAD azonos, nincs új változás review-ja: kizárólag a meglévő forrás ellenőrzési eredményeit értékeld. A Central Core ezt INTERNAL_BASELINE_VALIDATION jelöléssel, csak tényleges, visszaigazolt READ_FILE/SHA-256, TSC és a teszt utáni tiszta Git-ellenőrzések alapján fogadhatja el. Ez nem a teljes meglévő kód auditja és nem független review.",
     "- NE review-zd és NE javítsd a Developer Grid task/session/stage/build/recovery/handoff infrastruktúrát, kivéve ha maga a task explicit Developer Grid fejlesztési scope.",
     "- Grid-koordinációs eltérés önmagában nem source finding: jelöld GRID_COORDINATION_OBSERVED megjegyzésként, a Central Core/Desktop kezeli.",
     "- Ne módosíts review közben fájlt csak azért, hogy PASS legyen. Ha hibát találsz, FAIL-t adj; utána a normál fejlesztési kör javítson és review-zd újra.",

@@ -5653,7 +5653,11 @@ async function processCapturedInternalReviewReport({body,workerCode,task,baselin
   const responseSha256=createHash("sha256").update(textBody).digest("hex");
   if (baselineResponseSha256 && responseSha256===baselineResponseSha256) return {processed:false,reason:"baseline"};
   const parsed=parseDeveloperGridInternalReviewReport(textBody);
-  if (!parsed?.ok || !parsed.report) return {processed:false,reason:parsed?.code || "parse"};
+  if (!parsed?.ok || !parsed.report) {
+    const code=parsed?.code || "INTERNAL_REVIEW_PARSE_FAILED";
+    if(loadTaskLaunchRecords()[task.id]?.internalReviewErrorResponseSha256!==responseSha256) publishTaskLaunchPatch(task,workerCode,{autopilotError:parsed?.error || code,autopilotErrorCode:code,internalReviewErrorResponseSha256:responseSha256,autopilotAt:new Date().toISOString()},"autopilot-internal-review-parse-blocked");
+    return {processed:false,reason:code};
+  }
   const report=parsed.report;
   const backendWorkerCode=String(workerCode || "").toUpperCase()==="BENAI"?"BENJAMINAI":String(workerCode || "").toUpperCase();
   if (report.workerCode!==backendWorkerCode || report.taskId!==String(task.id) || report.sessionId!==String(task.sessionId)) return {processed:true,error:"identity-mismatch"};
@@ -5663,6 +5667,7 @@ async function processCapturedInternalReviewReport({body,workerCode,task,baselin
   }).catch((error)=>({ok:false,state:"BLOCKED",code:error?.code || "INTERNAL_REVIEW_HTTP_FAILED",error:error instanceof Error?error.message:"INTERNAL_REVIEW_HTTP_FAILED"}));
   send("context:refresh",{reason:review?.ok?"internal-review-recorded":"internal-review-blocked",taskId:task.id,workerCode:backendWorkerCode,reviewMode:"INTERNAL_REVIEW_FALLBACK"});
   const uiCode=backendWorkerCode==="BENJAMINAI"?"BENAI":backendWorkerCode;
+  publishTaskLaunchPatch(task,uiCode,{autopilotState:review?.ok?"INTERNAL_REVIEW_ACCEPTED":"INTERNAL_REVIEW_BLOCKED",autopilotError:review?.ok?null:(review?.error || review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotErrorCode:review?.ok?null:(review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotAt:new Date().toISOString()},review?.ok?"autopilot-internal-review-accepted":"autopilot-internal-review-rejected");
   if (review?.ok && review?.state==="PASS") setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
   else if (review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
     const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
@@ -5719,7 +5724,7 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
     const head=String(task.sourceHead || "");
 
     if(stage>=1 && stage<=3) {
-      const stageKey=`${stage}:${head}`;
+      const stageKey=JSON.stringify([task.id,task.sessionId,stage,head,resolvedExecutionProofSha256(task),String(task.surfaceConversationId || task.chatConversationId || "")]);
       if(String(record.autopilotStagePromptKey || "")===stageKey && String(record.autopilotState || "")==="WAITING_STAGE_REPORT") return {ok:true,state:"WAITING_STAGE_REPORT",stage};
       publishTaskLaunchPatch(task,uiCode,{autopilotState:"PREPARING_STAGE",autopilotStagePromptKey:stageKey,autopilotAt:new Date().toISOString()}, "autopilot-stage-preparing");
       const sent=await prepareWorkerStageAction(uiCode,"advance-stage",context, {automatic:true});
@@ -5729,7 +5734,21 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
 
     if(stage===4) {
       const gate=await fetchDeveloperGridReviewGate({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId:task.id,target:"REVIEW"});
-      if(!gate?.gate?.ready) return {ok:false,state:"REVIEW_READINESS_BLOCKED"};
+      if(!gate?.gate?.ready) {
+        const readiness=gate?.gate;
+        const failedChecks=(readiness?.checks || []).filter(item=>item.required && !item.pass);
+        const readinessKey=JSON.stringify([task.id,task.sessionId,head,resolvedExecutionProofSha256(task),String(task.surfaceConversationId || task.chatConversationId || ""),failedChecks.map(item=>item.id).sort()]);
+        if(record.autopilotReadinessKey===readinessKey && record.autopilotState==="WAITING_READINESS_REPORT") return {ok:false,state:"WAITING_READINESS_REPORT"};
+        const error=failedChecks.map(item=>`${item.label}: ${item.detail}`).join(" · ") || "A belső ellenőrzés előfeltétele nem igazolt.";
+        publishTaskLaunchPatch(task,uiCode,{autopilotState:"REVIEW_READINESS_BLOCKED",autopilotError:error,autopilotAt:new Date().toISOString()},"autopilot-review-readiness-blocked");
+        // Only the matching authoritative gate can ask the worker to reconcile its own diagnostics.
+        // The reply remains at stage 4; it never grants new operations or overrides a failed gate.
+        if(readiness?.taskId!==task.id || readiness?.sessionId!==task.sessionId || readiness?.sourceHead!==head || !failedChecks.length) return {ok:false,state:"REVIEW_READINESS_BLOCKED"};
+        const sent=await prepareWorkerStageAction(uiCode,"review-readiness",{...context,reviewReadiness:readiness},{automatic:true});
+        const confirmed=sent?.ok===true && sent?.mode==="sent";
+        publishTaskLaunchPatch(task,uiCode,{autopilotReadinessKey:confirmed?readinessKey:null,autopilotState:confirmed?"WAITING_READINESS_REPORT":"REVIEW_READINESS_BLOCKED",autopilotError:confirmed?error:(sent?.error || error),autopilotAt:new Date().toISOString()},confirmed?"autopilot-readiness-report-requested":"autopilot-readiness-send-blocked");
+        return {ok:false,state:confirmed?"WAITING_READINESS_REPORT":"REVIEW_READINESS_BLOCKED"};
+      }
       if(gate?.vguard?.providerReady===true) {
         const reviewKey=`external:${head}`;
         if(String(record.autopilotReviewKey || "")===reviewKey && String(record.autopilotState || "")==="EXTERNAL_REVIEW") return {ok:true,state:"WAITING_EXTERNAL_REVIEW"};
@@ -5744,8 +5763,8 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
         },700);
         return {ok:review?.ok===true,state:review?.state||"BLOCKED"};
       }
-      const reviewKey=`internal:${head}`;
-      if(String(record.autopilotReviewKey || "")===reviewKey && String(record.autopilotState || "")==="INTERNAL_REVIEW_FALLBACK") return {ok:true,state:"WAITING_INTERNAL_REVIEW"};
+      const reviewKey=JSON.stringify(["internal",task.id,task.sessionId,head,resolvedExecutionProofSha256(task),String(task.surfaceConversationId || task.chatConversationId || ""),app.getVersion()]);
+      if(String(record.autopilotReviewKey || "")===reviewKey && ["INTERNAL_REVIEW_FALLBACK","INTERNAL_REVIEW_BLOCKED"].includes(String(record.autopilotState || ""))) return {ok:record.autopilotState!=="INTERNAL_REVIEW_BLOCKED",state:record.autopilotState==="INTERNAL_REVIEW_BLOCKED"?"INTERNAL_REVIEW_BLOCKED":"WAITING_INTERNAL_REVIEW"};
       publishTaskLaunchPatch(task,uiCode,{autopilotReviewKey:reviewKey,autopilotState:"INTERNAL_REVIEW_FALLBACK",autopilotAt:new Date().toISOString()}, "autopilot-internal-review");
       const sent=await prepareInternalReviewFallback(uiCode,context);
       if(!sent?.ok) publishTaskLaunchPatch(task,uiCode,{autopilotState:"BLOCKED",autopilotError:sent?.error || "INTERNAL_REVIEW_SEND_FAILED",autopilotAt:new Date().toISOString()}, "autopilot-internal-review-blocked");
@@ -5955,8 +5974,8 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
   }
 
   const sourceTask=(contextOverride?.session?.developmentContext)?{...task,sourceCheckpointPolicy:contextOverride.session.developmentContext.sourceCheckpointPolicy,sourceCheckpointReceipt:contextOverride.session.developmentContext.sourceCheckpointReceipt}:task;
-  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task:sourceTask, presence })+"\n"+executionBridgeProtocolLines(sourceTask,code).join("\n");
-  if (["advance-stage","review-rework","build-rework"].includes(action)) {
+  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task:sourceTask, presence, reviewReadiness:contextOverride?.reviewReadiness })+(action==="review-readiness"?"":"\n"+executionBridgeProtocolLines(sourceTask,code).join("\n"));
+  if (["advance-stage","review-rework","build-rework","review-readiness"].includes(action)) {
     const sent=await dispatchBoundStagePrompt({view,task,presence,code,action,prompt,automatic});
     if(sent.ok)void monitorWorkerStageReport({view,workerCode:code,task,baselineResponseSha256}).catch(()=>undefined);
     return sent;

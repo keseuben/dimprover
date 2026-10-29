@@ -15,6 +15,8 @@ import { evaluateDeveloperGridReviewGate } from "./review-gate";
 import { appendGridEvidence, listGridEvidence } from "./evidence";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { getDeveloperGridTaskById } from "./work-start";
+import { readFile } from "node:fs/promises";
+import { baselineReviewProof } from "./baseline-review-proof";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIFF_BYTES = 512 * 1024;
@@ -96,10 +98,18 @@ export async function submitDeveloperGridInternalReviewFallback(input: Record<st
   if (!["PASS","PASS_WITH_NOTES","FAIL"].includes(result)) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_RESULT_INVALID",error:"Érvénytelen belső review result." };
 
   const changedPaths = baseHead === head ? [] : (await git(session.sourceProvenance.worktree,["diff","--name-only","--diff-filter=ACDMRTUXB",baseHead,head])).split("\n").map((item)=>item.trim()).filter(Boolean);
-  if (!changedPaths.length) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_EMPTY_DIFF",error:"Nincs review-zható base → current változás." };
+  let baselineProof: ReturnType<typeof baselineReviewProof> | null = null;
+  if (!changedPaths.length) {
+    if(baseHead!==head || !/^[a-zA-Z0-9_-]+$/.test(resolvedTaskId)) return {ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_EMPTY_DIFF",error:"Nincs review-zható base → current változás."};
+    try {
+      const audit=(await readFile(`/srv/dimpro-dev/coordination/developer-grid/execution/${resolvedTaskId}.jsonl`,"utf8")).split("\n").filter(Boolean).map(line=>JSON.parse(line) as unknown);
+      // Baseline validation requires actual accepted bridge results, not worker claims or a generic TEST/PASS.
+      baselineProof=baselineReviewProof(audit,{taskId:resolvedTaskId,sessionId:session.id,workerCode:session.workerCode,head,baseHead,proof:session.developmentContext.sourceExecutionProof?.sha256 || "",requiredPaths:session.developmentContext.moduleSourceBinding?.requiredPaths?.slice(0,1) || []});
+    } catch(error) { return {ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_BASELINE_REVIEW_PROOF_REQUIRED",error:error instanceof Error?error.message:"A változatlan forrás tényleges ellenőrzései nem igazoltak."}; }
+  }
   const findings = (Array.isArray(input.findings) ? input.findings : []).slice(0,100).map((value) => {
     const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string,unknown> : {};
-    return { severity:text(row.severity,40).toUpperCase(), category:text(row.category,80).toUpperCase(), message:text(row.message,800), path:text(row.path,800) || null };
+    return { severity:text(row.severity,40).toUpperCase(), category:text(row.category,80).toUpperCase(), message:text(row.message || row.summary,800), path:text(row.path,800) || null };
   });
   const tests = (Array.isArray(input.tests) ? input.tests : []).slice(0,100).map((value)=>text(value,500)).filter(Boolean);
   const changedSet = new Set(changedPaths);
@@ -115,8 +125,8 @@ export async function submitDeveloperGridInternalReviewFallback(input: Record<st
   const evidence = await appendGridEvidence({
     kind:"REVIEW", status:result, severity, source:"REVIEW_GATE", taskId:resolvedTaskId, projectId:task.projectId,
     workerCode:session.workerCode, sessionId:session.id, branch:session.sourceProvenance.branch, worktree:session.sourceProvenance.worktree, head,
-    summary:`INTERNAL_REVIEW_FALLBACK · ${result} · ${summary || `${findings.length} finding`}`,
-    attributes:{ reviewId, reviewResult:result, reviewMode:"INTERNAL_REVIEW_FALLBACK", reviewerWorkerCode:session.workerCode, resolvesFingerprint:result!=="FAIL"?priorFail?.fingerprintSha256||null:null }
+    summary:`${baselineProof?"INTERNAL_BASELINE_VALIDATION":"INTERNAL_REVIEW_FALLBACK"} · ${result} · ${summary || `${findings.length} finding`}`,
+    attributes:{ reviewId, reviewResult:result, reviewMode:baselineProof?"INTERNAL_BASELINE_VALIDATION":"INTERNAL_REVIEW_FALLBACK", reviewerWorkerCode:session.workerCode, resolvesFingerprint:result!=="FAIL"?priorFail?.fingerprintSha256||null:null }
   });
   await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
     delta:{eventType:"INTERNAL_REVIEW_FALLBACK_COMPLETED",summary:`INTERNAL_REVIEW_FALLBACK ${result} · ${findings.length} finding.`,status:result,severity,sessionId:session.id,reviewId,reviewMode:"INTERNAL_REVIEW_FALLBACK",reviewerWorkerCode:session.workerCode,reviewResult:result,changedFileCount:changedPaths.length,findingCount:findings.length,testCount:tests.length,sanitized:true} });
