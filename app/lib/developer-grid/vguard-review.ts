@@ -129,7 +129,7 @@ export async function submitDeveloperGridInternalReviewFallback(input: Record<st
     attributes:{ reviewId, reviewResult:result, reviewMode:baselineProof?"INTERNAL_BASELINE_VALIDATION":"INTERNAL_REVIEW_FALLBACK", reviewerWorkerCode:session.workerCode, resolvesFingerprint:result!=="FAIL"?priorFail?.fingerprintSha256||null:null }
   });
   await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
-    delta:{eventType:"INTERNAL_REVIEW_FALLBACK_COMPLETED",summary:`INTERNAL_REVIEW_FALLBACK ${result} · ${findings.length} finding.`,status:result,severity,sessionId:session.id,reviewId,reviewMode:"INTERNAL_REVIEW_FALLBACK",reviewerWorkerCode:session.workerCode,reviewResult:result,changedFileCount:changedPaths.length,findingCount:findings.length,testCount:tests.length,sanitized:true} });
+    delta:{eventType:"INTERNAL_REVIEW_FALLBACK_COMPLETED",summary:`INTERNAL_REVIEW_FALLBACK ${result} · ${findings.length} finding.`,status:result,severity,sessionId:session.id,reviewId,reviewMode:baselineProof?"INTERNAL_BASELINE_VALIDATION":"INTERNAL_REVIEW_FALLBACK",reviewerWorkerCode:session.workerCode,reviewResult:result,changedFileCount:changedPaths.length,findingCount:findings.length,testCount:tests.length,sanitized:true} });
 
   if (result !== "FAIL") {
     const advanced = { ...session, developmentContext:{...session.developmentContext,workStageIndex:5,resolvedAt:new Date().toISOString()} };
@@ -187,7 +187,7 @@ export async function requestDeveloperGridVGuardReview(input: Record<string, unk
     const priorFail = (await listGridEvidence({taskId:resolvedTaskId,kind:"REVIEW",limit:50})).find((item)=>item.head===head && (item.status==="FAIL"||item.status==="BLOCKED"));
     const severity = review.result === "FAIL" ? "HIGH" : review.result === "PASS_WITH_NOTES" ? "WARNING" : "INFO";
     await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
-      delta:{eventType:"VGUARD_REVIEW_COMPLETED",summary:`V.Guard ${review.result} · ${review.findings.length} finding.`,status:review.result,severity,sessionId:session.id,reviewId,reviewResult:review.result,resolvesFingerprint:review.result!=="FAIL"?priorFail?.fingerprintSha256||null:null,
+      delta:{eventType:"VGUARD_REVIEW_COMPLETED",summary:`V.Guard ${review.result} · ${review.findings.length} finding.`,status:review.result,severity,sessionId:session.id,reviewId,reviewMode:"VGUARD_EXTERNAL",reviewResult:review.result,resolvesFingerprint:review.result!=="FAIL"?priorFail?.fingerprintSha256||null:null,
         provider:result.provider,modelId:result.modelId,promptSha256:built.sha256,changedFileCount:changedPaths.length,inputTokens:result.inputTokens,outputTokens:result.outputTokens,costHuf:result.costHuf,durationMs:result.durationMs,sanitized:true} });
     if (review.result !== "FAIL") {
       const advanced = { ...session, developmentContext: { ...session.developmentContext, workStageIndex: 5, resolvedAt: new Date().toISOString() } };

@@ -50,7 +50,7 @@ await check('a blocked review gate requests one diagnostic reconciliation withou
  vm.createContext(ctx);vm.runInContext(main.slice(main.indexOf('async function continueDeveloperGridAutopilot('),main.indexOf('async function syncConversationMemoryOnce('))+';globalThis.run=continueDeveloperGridAutopilot;',ctx);
  assert.equal((await ctx.run('OUTMINAI')).state,'WAITING_READINESS_REPORT');assert.equal(sends,1);assert.match(record.autopilotError,/2 nyitott/);await ctx.run('OUTMINAI');assert.equal(sends,1);
  gate.checks[0].detail='3 nyitott jelzés';gate.evidenceSummary.unresolvedBlockers.push({fingerprintSha256:'d'.repeat(64)});await ctx.run('OUTMINAI');assert.equal(sends,1,'repeated BLOCKED reports must not form an infinite prompt loop');assert.equal(reviews,0);
- gate.ready=true;ctx.app={getVersion:()=> '0.1.120'};await ctx.run('OUTMINAI');assert.equal(reviews,1);assert.equal(record.autopilotState,'INTERNAL_REVIEW_FALLBACK');
+ gate.ready=true;ctx.app={getVersion:()=> '0.1.121'};await ctx.run('OUTMINAI');assert.equal(reviews,1);assert.equal(record.autopilotState,'INTERNAL_REVIEW_FALLBACK');
 });
 await check('foreign readiness or a protected draft cannot be marked delivered',async()=>{
  const record={executionPreflightProofSha256:'b'.repeat(64)};let sends=0;const gate={taskId:'foreign',sessionId:task.sessionId,sourceHead:task.sourceHead,ready:false,checks:[{id:'BLOCKERS',required:true,pass:false,label:'Blokkoló',detail:'Nyitott'}]};

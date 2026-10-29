@@ -243,6 +243,8 @@ export function evidenceInputFromGridEvent(event: GridActivityEvent): Record<str
       outputSha256: delta.outputSha256 || delta.resultSha256,
       resolvesFingerprint: delta.resolvesFingerprint,
       reviewResult: delta.reviewResult || delta.result,
+      reviewMode: delta.reviewMode,
+      reviewerWorkerCode: delta.reviewerWorkerCode,
       handoffStatus: delta.handoffStatus || delta.status,
     },
   };
