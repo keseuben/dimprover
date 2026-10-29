@@ -5661,13 +5661,16 @@ async function processCapturedInternalReviewReport({body,workerCode,task,baselin
   const report=parsed.report;
   const backendWorkerCode=String(workerCode || "").toUpperCase()==="BENAI"?"BENJAMINAI":String(workerCode || "").toUpperCase();
   if (report.workerCode!==backendWorkerCode || report.taskId!==String(task.id) || report.sessionId!==String(task.sessionId)) return {processed:true,error:"identity-mismatch"};
+  if(task.sourceHead && report.head!==String(task.sourceHead)) return {processed:false,reason:"historical-review-head"};
+  const acceptedKey=JSON.stringify([report.taskId,report.sessionId,report.workerCode,report.head,resolvedExecutionProofSha256(task),createHash("sha256").update(JSON.stringify(report)).digest("hex")]);
+  if(loadTaskLaunchRecords()[task.id]?.internalReviewAcceptedKey===acceptedKey) return {processed:true,replayed:true};
   const review=await submitDeveloperGridInternalReviewFallback({
     baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),
     input:{action:"INTERNAL_REVIEW_FALLBACK",reviewMode:report.reviewMode,workerCode:report.workerCode,taskId:report.taskId,sessionId:report.sessionId,head:report.head,result:report.result,summary:report.summary,findings:report.findings,tests:report.tests}
   }).catch((error)=>({ok:false,state:"BLOCKED",code:error?.code || "INTERNAL_REVIEW_HTTP_FAILED",error:error instanceof Error?error.message:"INTERNAL_REVIEW_HTTP_FAILED"}));
   send("context:refresh",{reason:review?.ok?"internal-review-recorded":"internal-review-blocked",taskId:task.id,workerCode:backendWorkerCode,reviewMode:"INTERNAL_REVIEW_FALLBACK"});
   const uiCode=backendWorkerCode==="BENJAMINAI"?"BENAI":backendWorkerCode;
-  publishTaskLaunchPatch(task,uiCode,{autopilotState:review?.ok?"INTERNAL_REVIEW_ACCEPTED":"INTERNAL_REVIEW_BLOCKED",autopilotError:review?.ok?null:(review?.error || review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotErrorCode:review?.ok?null:(review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotAt:new Date().toISOString()},review?.ok?"autopilot-internal-review-accepted":"autopilot-internal-review-rejected");
+  publishTaskLaunchPatch(task,uiCode,{...(review?.ok?{internalReviewAcceptedKey:acceptedKey}:{}),autopilotState:review?.ok?"INTERNAL_REVIEW_ACCEPTED":"INTERNAL_REVIEW_BLOCKED",autopilotError:review?.ok?null:(review?.error || review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotErrorCode:review?.ok?null:(review?.code || "INTERNAL_REVIEW_NOT_ACCEPTED"),autopilotAt:new Date().toISOString()},review?.ok?"autopilot-internal-review-accepted":"autopilot-internal-review-rejected");
   if (review?.ok && review?.state==="PASS") setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
   else if (review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
     const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
