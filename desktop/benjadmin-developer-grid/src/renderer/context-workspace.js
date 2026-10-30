@@ -502,10 +502,14 @@
     root.querySelector("#vguardReviewButton")?.addEventListener("click",()=>void requestVGuardReview());
     root.querySelectorAll("[data-cw-jump]").forEach(b=>b.addEventListener("click",()=>{
       const wasManual=state.navSection==="manual";const target=String(b.dataset.cwJump||"work");state.navSection=target;
-      if(target==="manual"||wasManual){render();if(target==="manual")void refresh(false);return;}
-      root.querySelectorAll("[data-cw-jump]").forEach(x=>x.dataset.active=String(x===b));
-      if(target==="handoffs"&&state.tab!=="handoffs"){state.tab="handoffs";state.query="";render();setTimeout(()=>root.querySelector('[data-cw-section="handoffs"]')?.scrollIntoView({behavior:"smooth",block:"start"}),0);return;}
-      root.querySelector(`[data-cw-section="${target}"]`)?.scrollIntoView({behavior:"smooth",block:"start"});
+      if(target==="manual"){render();void refresh(false);return;}
+      if(wasManual)render();
+      if(target==="handoffs"&&state.tab!=="handoffs"){state.tab="handoffs";state.query="";render();}
+      root.querySelectorAll("[data-cw-jump]").forEach(x=>x.dataset.active=String(x.dataset.cwJump===target));
+      setTimeout(()=>{
+        const section=root.querySelector(`[data-cw-section="${target}"]`);
+        if(section){section.style.scrollMarginTop=`${(root.querySelector(".cw-card-nav")?.offsetHeight||0)+12}px`;section.scrollIntoView({behavior:"smooth",block:"start"});}
+      },0);
     }));
     root.querySelectorAll("[data-cw-tab]").forEach(b=>b.addEventListener("click",()=>{state.tab=b.dataset.cwTab;state.query="";state.navSection=b.dataset.cwTab==="handoffs"?"handoffs":state.navSection;render();})); root.querySelector("#cwRefresh")?.addEventListener("click",()=>void refresh());
     const q=root.querySelector("#cwQuery"); q?.addEventListener("input",()=>{state.query=q.value;render();const next=root.querySelector("#cwQuery");next?.focus();next?.setSelectionRange(next.value.length,next.value.length);});

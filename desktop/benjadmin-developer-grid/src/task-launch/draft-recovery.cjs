@@ -26,6 +26,31 @@ function firstMatch(text, patterns) {
 function parseTaskLaunchDraftIdentity(value) {
   const text = clean(value);
   const kind = classifyTaskLaunchDraft(text);
+  // Continuation context may quote historical "Task:" titles, TASK ID / SESSION ID
+  // and source proofs. Only the generated ACK template identifies the current launch.
+  // Conflicting templates are ambiguous; never guess a task or silently rewrite a draft.
+  const anchors = [...text.matchAll(/(?:^|\n)Az első válaszod pontosan tartalmazza ezt a blokkot:[ \t]*\nBOOT ACKNOWLEDGEMENT[ \t]*\n/g)];
+  const bootAnchors = anchors.length ? anchors : [...text.matchAll(/(?:^|\n)BOOT ACKNOWLEDGEMENT[ \t]*\n/g)];
+  if (TASK_LAUNCH_KINDS.has(kind) && bootAnchors.length) {
+    const identities = bootAnchors.map(anchor => {
+      const lines = text.slice(anchor.index + anchor[0].length).split("\n").slice(0, 16);
+      const block = lines.join("\n");
+      if ((anchors.length > 0 && !/^Worker:[ \t]*(?:ARMINAI|OUTMINAI|BENAI|BENJAMINAI|JAZMINAI|DEVMINAI)[ \t]*$/m.test(block))
+          || ["Task:", "Session:", "Source proof:"].some(label => lines.filter(line => line.startsWith(label)).length !== 1)) {
+        return { taskId:"", sessionId:"", sourceProofSha256:"" };
+      }
+      const taskId = firstMatch(block, [/^Task:[ \t]*([A-Za-z0-9][A-Za-z0-9._:-]{0,239})[ \t]*$/m]);
+      const sessionId = firstMatch(block, [/^Session:[ \t]*([A-Za-z0-9][A-Za-z0-9._:-]{0,239})[ \t]*$/m]);
+      const sourceProofSha256 = firstMatch(block, [/^Source proof:[ \t]*([0-9a-f]{64})[ \t]*$/im]).toLowerCase();
+      return { taskId, sessionId, sourceProofSha256 };
+    });
+    const complete = identities.every(item => item.taskId && item.sessionId && item.sourceProofSha256);
+    const distinct = new Set(identities.map(item => JSON.stringify(item)));
+    if (!complete || distinct.size !== 1) {
+      return { kind, taskId:"", sessionId:"", sourceProofSha256:"", text, identityState:"AMBIGUOUS_OR_INCOMPLETE_ACK_TEMPLATE" };
+    }
+    return { kind, ...identities[0], text, identityState:"ACK_TEMPLATE" };
+  }
   const taskId = firstMatch(text, [
     /(?:^|\n)Task:\s*([^\n]+)/i,
     /(?:^|\n)TASK ID:\s*([^\n]+)/i,
