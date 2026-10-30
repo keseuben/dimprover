@@ -1,6 +1,9 @@
 "server-only";
 
 import { finalizeDevEngineTask } from "@/app/lib/dev-center/engine-repository";
+import { devDeliveryAllowsClosure, devDeliveryIdentity } from "./dev-delivery-policy";
+import { getDeveloperGridDevDelivery } from "./dev-delivery";
+import { readBuildRunStore } from "./build-run-store";
 import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
 import { getDeveloperGridTaskById } from "./work-start";
@@ -20,6 +23,11 @@ export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) 
   if (!session) fail("DEVELOPER_GRID_CLOSE_SESSION_REQUIRED", "A lezáráshoz aktív worker session szükséges.");
   if (Number(session.developmentContext.workStageIndex || 1) !== 6) fail("DEVELOPER_GRID_CLOSE_STAGE_REQUIRED", "A lezárás csak a 6/6 LEZÁRÁS fázisban engedélyezett.");
   if (session.developmentContext.bootAckState !== "VALIDATED") fail("DEVELOPER_GRID_CLOSE_BOOT_ACK_REQUIRED", "A lezáráshoz VALIDATED BOOT ACK szükséges.");
+  if (session.developmentContext.devDeliveryTarget && session.developmentContext.devDeliveryTarget !== "NONE") {
+    const expected=devDeliveryIdentity(session,(await readBuildRunStore()).runs);
+    const delivery=await getDeveloperGridDevDelivery(taskId,session.id);
+    if(!devDeliveryAllowsClosure(session,delivery,expected))fail("DEV_DELIVERY_CLOSURE_BLOCKED","A feladat DEV-kihelyezést kér. A candidate, a publikus ellenőrzés és a bejelentkezett böngészős igazolás még nem teljesült; nem zárható le build PASS alapján.");
+  }
 
   const memory = await refreshDerivedConversationMemory(taskId, session.id).catch(() => null);
   const gate = await evaluateDeveloperGridReviewGate({ taskId, target: "CLOSURE" });

@@ -13,7 +13,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { recordDeveloperGridExecutionReceipt, developerGridWorkReplacement, fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { developerGridDevDelivery, recordDeveloperGridExecutionReceipt, developerGridWorkReplacement, fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -5801,6 +5801,14 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
 
     if(stage===6) {
       await syncConversationMemoryForWorker(uiCode,true).catch(()=>null);
+      if(session?.developmentContext?.devDeliveryTarget === "DRIVE_DEV") {
+        if (workflowControl.isManual(config,uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
+        const delivery=await developerGridDevDelivery({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{action:"ADVANCE",taskId:task.id,sessionId:session.id}});
+        if(delivery?.status !== "PASS_ASSISTED") {
+          publishTaskLaunchPatch(task,uiCode,{autopilotState:"DEV_DELIVERY_WAIT",autopilotError:delivery?.code||null,autopilotAt:new Date().toISOString()},"autopilot-dev-delivery-wait");
+          return {ok:false,state:"DEV_DELIVERY_WAIT",delivery};
+        }
+      }
       if (workflowControl.isManual(config,uiCode)) return {ok:false,reason:"MANUAL_CONTROL"};
       const close=await closeDeveloperGridWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}}).catch((error)=>({error:error instanceof Error?error.message:"CLOSURE_BLOCKED"}));
       if(close?.task?.status==="COMPLETED" || close?.session?.endedAt) {
@@ -7101,6 +7109,9 @@ async function runManualControl(input) {
     if (!workflowControl.WORKERS.includes(code)) throw new Error("Válassz kódmérnököt.");
     saveConfig({...config,workflowControlModes:{...config.workflowControlModes,[code]:modeAction === "auto" ? "AUTO" : "MANUAL"}});
     for (const [id,record] of Object.entries(loadTaskLaunchRecords())) if (workflowControl.worker(record.workerCode) === code) saveTaskLaunchPatch({id},code,{manualExecutionPermission:null,manualContinuationPreview:null});
+    const live=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()});
+    const deliveryContext=authoritativeAutopilotContext(live,code,"");
+    if(deliveryContext?.session?.developmentContext?.devDeliveryTarget==="DRIVE_DEV")await developerGridDevDelivery({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{action:modeAction==="pause"?"PAUSE":"RESUME",taskId:deliveryContext.task.id,sessionId:deliveryContext.session.id}});
     send("config:state",config);send("context:refresh",{reason:"manual-mode",workerCode:code});
     return {ok:true,message:modeAction === "auto" ? "Automatikus vezérlés bekapcsolva ennél a kódmérnöknél." : "Kézi mód; az új végrehajtások szünetelnek. A már futó művelet befejeződhet."};
   }
@@ -7424,6 +7435,11 @@ function registerIpc() {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try { return { ok:true, memory:await fetchDeveloperGridConversationMemory({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId || ""), sessionId:String(payload?.sessionId || ""), conversationId:String(payload?.conversationId || "") }) }; }
     catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Conversation Memory nem tölthető be." }; }
+  });
+  ipcMain.handle("dev-delivery:action", async (_event, payload) => {
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    try {const delivery=await developerGridDevDelivery({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:payload||{},readOnly:payload?.action==="READ"});return {ok:true,delivery};}
+    catch(error){return {ok:false,error:error.message||"A DEV-kihelyezés blokkolva maradt."};}
   });
   ipcMain.handle("build-runs:get", async () => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };

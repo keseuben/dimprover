@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   importDeveloperGridTaskBridgeAcceptance: (taskId = "") => ipcRenderer.invoke("task-bridge:import-acceptance", { taskId }),
   heartbeatDeveloperGridTaskBridge: (taskId = "") => ipcRenderer.invoke("task-bridge:heartbeat", { taskId }),
   importDeveloperGridTaskBridgeResult: (taskId = "") => ipcRenderer.invoke("task-bridge:import-result", { taskId }),
+  developerGridDevDelivery: (input={}) => ipcRenderer.invoke("dev-delivery:action",input),
   getDeveloperGridBuildRuns: () => ipcRenderer.invoke("build-runs:get"),
   requestDeveloperGridFullBuild: (input = {}) => ipcRenderer.invoke("build-runs:request", input),
   getDeveloperGridEvidence: (taskId = "") => ipcRenderer.invoke("evidence:get", { taskId }),

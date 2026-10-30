@@ -1,4 +1,5 @@
 import {makeSourceCheckpointPolicy,checkpointHash} from "./source-checkpoint-policy";
+import { normalizeDevDeliveryTarget } from "./dev-delivery-policy";
 import {normalizeReviewedWritePaths} from "./reviewed-write-scope";
 import {renewReviewedWriteApproval} from "./reviewed-write-scope";
 "server-only";
@@ -82,6 +83,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const projectId = text(input.projectId, 180) || DEVELOPER_GRID_PROJECT_ID;
   const moduleName = text(input.moduleName, 180) || "Developer Grid V1";
   const submoduleName = text(input.submoduleName, 180) || null;
+  const devDeliveryTarget = normalizeDevDeliveryTarget(input.devDeliveryTarget, projectId, moduleName);
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
   const autoRetireStalePreBoot = input.autoRetireStalePreBoot === true;
   const sourceCommit = text(input.sourceCommit,80).toLowerCase() || null;
@@ -131,7 +133,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const reviewedWritePaths=normalizeReviewedWritePaths(input.reviewedWritePaths,projectId,moduleName);
   if(mode==="SCOPED_GIT"&&!reviewedWritePaths.length)throw Object.assign(new Error("A Git-mentéshez legalább egy pontos forrásfájlt jelölj ki."),{code:"CHECKPOINT_PATHS_REQUIRED",status:400});
   const sourceCheckpointMode=mode as "DISABLED"|"SCOPED_GIT";
-  return { sourceCheckpointMode, reviewedWritePaths, sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit, continuityMode: input.continuityMode === "NEW_WORK" ? "NEW_WORK" as const : "CONTINUE" as const };
+  return { devDeliveryTarget, sourceCheckpointMode, reviewedWritePaths, sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot, sourceCommit, continuityMode: input.continuityMode === "NEW_WORK" ? "NEW_WORK" as const : "CONTINUE" as const };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -577,6 +579,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
       || String(metadata.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")
       || String(metadata.sourceCheckpointMode || "DISABLED") !== input.sourceCheckpointMode
+      || String(metadata.devDeliveryTarget || "NONE") !== String(input.devDeliveryTarget || "NONE")
       || JSON.stringify(metadata.reviewedWritePaths || []) !== JSON.stringify(input.reviewedWritePaths)) {
       const error = new Error("Az idempotencyKey már más tartalmú munkaindításhoz tartozik.");
       Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT", status: 409 });
@@ -610,6 +613,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
           origin: "BENJADMIN_DEVELOPER_GRID_WORK_START",
           sourcePrompt: input.sourcePrompt,
           sourceCheckpointMode:input.sourceCheckpointMode,
+          devDeliveryTarget:input.devDeliveryTarget,
           reviewedWritePaths:input.reviewedWritePaths,
           sourcePromptPreserved: true,
           moduleSourceBinding,
@@ -645,6 +649,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
         || String(existingMeta.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
         || String(existingMeta.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")
         || String(existingMeta.sourceCheckpointMode || "DISABLED") !== input.sourceCheckpointMode
+        || String(existingMeta.devDeliveryTarget || "NONE") !== String(input.devDeliveryTarget || "NONE")
         || JSON.stringify(existingMeta.reviewedWritePaths || []) !== JSON.stringify(input.reviewedWritePaths)) throw createError;
       engineTask = existing;
       reused = true;
@@ -707,6 +712,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     engineTask = readyExecution.engineTask;
   }
   const developmentContext: DevelopmentContext = {
+    devDeliveryTarget: input.devDeliveryTarget,
     projectId: input.projectId,
     mainModule: "BENJADMIN",
     moduleName: input.moduleName,

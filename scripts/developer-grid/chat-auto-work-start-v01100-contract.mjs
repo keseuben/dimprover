@@ -97,4 +97,4 @@ check("AUTH context remains AUTH",()=>{
   assert.equal(auto.inferAutoWorkModuleName("DIMPRO AUTH Beléptetés",turns(["USER","PostgreSQL OTP."],["ASSISTANT","Developer Grid."],["USER","folytasd"])),"DIMPRO AUTH Beléptetés");
 });
 
-console.log(`Developer Grid Chat-to-Grid auto work-start v0.1.121 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid Chat-to-Grid auto work-start v0.1.122 contract PASS · ${n}/${n}`);
