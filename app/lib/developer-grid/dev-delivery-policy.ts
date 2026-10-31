@@ -45,7 +45,7 @@ export function devDeliveryIdentity(session: WorkerSession, runs: GridBuildRun[]
 }
 
 export function sameDevDeliveryIdentity(record: DevDeliveryIdentity, expected: DevDeliveryIdentity) {
-  return (Object.keys(expected) as (keyof DevDeliveryIdentity)[]).every(key => record[key] === expected[key]);
+  return (["taskId","sessionId","workerCode","sourceCommit","sourceBranch","buildRunId","buildId","artifactSha256"] as const).every(key => record[key] === expected[key]);
 }
 
 export function devDeliveryAllowsClosure(session: WorkerSession, record: DevDeliveryRecord | null, expected?: DevDeliveryIdentity) {

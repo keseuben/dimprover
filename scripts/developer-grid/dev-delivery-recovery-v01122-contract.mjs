@@ -16,6 +16,9 @@ function fixture(options={}){
   const keys=Object.keys(env).filter(k=>/^(NEXT_PUBLIC_|SUPABASE_|DIMPRO_AUTH_|DIMPRO_DRIVE_|DIMPRO_DROP_|DRIVE_DEV_|DRIVE_PILOT_)/.test(k)).sort();
   const before="fixture_old_config",after="fixture_new_config",asset="/_next/static/version.js",assetBytes=Buffer.from("fixture_drive_0.9.67");
   let record={...identity,schemaVersion:1,id,target:"DRIVE_DEV",environment:"DEV",productionAccess:"DENY",status:options.staging?"STAGING":"PUBLIC_PENDING_BROWSER",runtimeRoot:runtime,port:3460,oldPort:3414,processName:"dimpro-"+id,version:"0.9.67",environmentFingerprint:hash(JSON.stringify(keys.map(k=>[k,env[k]]))),httpBaseline:{"/":{status:307,location:"https://drive.dev.dimpro.hu/drive"},"/login":{status:307,location:"https://drive.dev.dimpro.hu/api/dimpro-auth/start"},"/api/drive/health":{status:401,location:null}},asset,assetSha256:hash(assetBytes),browserVerification:null,publicChangedAt:new Date(now-60000).toISOString(),browserDeadlineAt:new Date(now+(options.expired?-1000:60000)).toISOString()};
+  record.publicHttpBaseline=structuredClone(record.httpBaseline);
+  if(options.splitTransport){record.httpBaseline['/'].location='https://drive.dev.dimpro.hu/login';record.httpBaseline['/login']={status:200,location:null};}
+  if(options.missingPublicBaseline)delete record.publicHttpBaseline;
   const put=(p,v)=>files.set(path.normalize(p),typeof v==="string"?v:JSON.stringify(v));
   put(ROOT+`/${id}.json`,record);
   put("/srv/dimpro-dev/coordination/active-development.json",{operation:"release",task:id,status:"running"});
@@ -52,6 +55,9 @@ function fixture(options={}){
     if(options.badPublic&&publicSite)status=500;
     const headers={"x-dimpro-drive-source":identity.sourceCommit,"x-dimpro-drive-build":identity.buildId,"x-dimpro-production-access":"DENY"};
     if(p==="/")headers.location="https://drive.dev.dimpro.hu/drive";if(p==="/login")headers.location="https://drive.dev.dimpro.hu/api/dimpro-auth/start";
+    if(options.splitTransport&&!publicSite){if(p==='/')headers.location='https://drive.dev.dimpro.hu/login';if(p==='/login'){status=200;delete headers.location;}}
+    if(options.badPublicRedirect&&publicSite&&p==='/login')headers.location='https://drive.dev.dimpro.hu/wrong-auth';
+    if(options.badPublicBuild&&publicSite)headers['x-dimpro-drive-build']='stale_build';
     return new Response(p===asset?assetBytes:"fixture",{status,headers});
   }
   const exports={};
@@ -70,4 +76,8 @@ await check("stale browser identity triggers rollback instead of reusing prior a
 await check("manual pause before an interrupted cutover prevents that release",async()=>{const f=fixture({paused:true,crashBeforeWrite:true});await f.run();assert.equal(f.read().status,"ROLLED_BACK");assert.equal(f.config(),f.before);});
 await check("source drift during pending release restores old routing",async()=>{const f=fixture({dirty:true});await f.run();assert.equal(f.read().status,"ROLLED_BACK");assert.equal(f.config(),f.before);});
 await check("staged release and already running candidate resume without duplicate extraction/start",async()=>{const f=fixture({staging:true,crashBeforeWrite:true});await f.run();assert.equal(f.read().status,"PUBLIC_PENDING_BROWSER");assert.equal(f.config(),f.after);assert.ok(!f.commands.some(c=>c[0]==="python3"||(c[0]==="pm2"&&c[1]==="start")));});
+await check("real HTTP-versus-HTTPS auth redirects use their own baselines",async()=>{const f=fixture({splitTransport:true});await f.run();assert.equal(f.read().status,'PUBLIC_PENDING_BROWSER');assert.equal(f.read().publicHttp.find(r=>r.route==='/login').status,307);});
+await check("public redirect regression rolls back with precise sanitized mismatch",async()=>{const f=fixture({splitTransport:true,badPublicRedirect:true});await f.run();assert.equal(f.read().status,'ROLLED_BACK');assert.deepEqual(JSON.parse(JSON.stringify(f.read().failureContext)),{surface:'PUBLIC',route:'/login',field:'location',actual:'https://drive.dev.dimpro.hu/wrong-auth',expected:'https://drive.dev.dimpro.hu/api/dimpro-auth/start'});});
+await check("a stale public BUILD_ID still fails despite matching route statuses",async()=>{const f=fixture({splitTransport:true,badPublicBuild:true});await f.run();assert.equal(f.read().status,'ROLLED_BACK');assert.equal(f.read().failureContext.field,'build');});
+await check("missing public baseline never falls back to loopback expectations",async()=>{const f=fixture({missingPublicBaseline:true});await f.run();assert.equal(f.read().status,'ROLLED_BACK');assert.match(f.read().failureReason,/DEV_HTTP_BASELINE_REQUIRED:PUBLIC/);});
 console.log(JSON.stringify({ok:true,tests,scope:"actual deployment engine with isolated filesystem/process/HTTP fixtures; no live deployment",liveMutation:false}));

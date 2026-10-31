@@ -10,6 +10,7 @@ import { readBuildRunStore } from "./build-run-store";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { devDeliveryIdentity, sameDevDeliveryIdentity, type DevDeliveryRecord } from "./dev-delivery-policy";
+import { withDeveloperGridTaskOperation } from "./task-operation-lock";
 
 const ROOT = path.join(DEFAULT_DEVELOPER_GRID_STATE_ROOT, "dev-deliveries");
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code, status:409 }); }
@@ -17,6 +18,22 @@ function idFor(taskId: string, sessionId: string) { return `dev-delivery-${creat
 async function readRecord(id: string): Promise<DevDeliveryRecord | null> {
   try { return JSON.parse(await readFile(path.join(ROOT, `${id}.json`), "utf8")); }
   catch(error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+}
+async function currentRecord(baseId: string): Promise<DevDeliveryRecord | null> {
+  let record=await readRecord(baseId);
+  const seen=new Set<string>();
+  while(record){
+    if(seen.has(record.id)||seen.size>=20)fail("DEV_DELIVERY_HISTORY_INVALID","A kihelyezési próbák lánca nem olvasható.");
+    seen.add(record.id);
+    let next: {previousId:string;nextId:string};
+    try{next=JSON.parse(await readFile(path.join(ROOT,`${record.id}.next.json`),"utf8"));}
+    catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")return record;throw error;}
+    if(next.previousId!==record.id||!/^dev-delivery-[0-9a-f]{32}$/.test(next.nextId))fail("DEV_DELIVERY_HISTORY_INVALID","Hibás kihelyezési előzményhivatkozás.");
+    const child=await readRecord(next.nextId);
+    if(!child||child.retryOfDeliveryId!==record.id||!sameDevDeliveryIdentity(child,record))fail("DEV_DELIVERY_HISTORY_INVALID","Az újrapróbálás másik taskhoz vagy buildhez tartozik.");
+    record=child;
+  }
+  return null;
 }
 // link() publishes a complete JSON document atomically and never replaces prior approval/proof.
 async function immutable(file: string, value: unknown) {
@@ -29,7 +46,7 @@ async function immutable(file: string, value: unknown) {
 }
 export async function getDeveloperGridDevDelivery(taskId: string, sessionId: string): Promise<DevDeliveryRecord | null> {
   if (!taskId || !sessionId) return null;
-  const record=await readRecord(idFor(taskId,sessionId));
+  const record=await currentRecord(idFor(taskId,sessionId));
   if(record && (record.taskId!==taskId || record.sessionId!==sessionId || record.environment!=="DEV" || record.productionAccess!=="DENY")) fail("DEV_DELIVERY_IDENTITY_CONFLICT","A tárolt kihelyezés azonosítói eltérnek.");
   return record?{...record,paused:existsSync(path.join(ROOT,`${record.id}.paused`))}:null;
 }
@@ -55,10 +72,35 @@ export async function advanceDeveloperGridDevDelivery(input: Record<string,unkno
   const id=idFor(identity.taskId,identity.sessionId),now=new Date().toISOString();
   const initial: DevDeliveryRecord={...identity,schemaVersion:1,id,target:"DRIVE_DEV",environment:"DEV",productionAccess:"DENY",status:"APPROVED",approvedAt:now,updatedAt:now,code:null,browserVerification:null};
   await immutable(path.join(ROOT,`${id}.json`),initial);
-  const record=await readRecord(id);
+  const record=await currentRecord(id);
   if(!record || !sameDevDeliveryIdentity(record,identity))fail("DEV_DELIVERY_APPROVAL_MISMATCH","A feladat korábbi kihelyezési jóváhagyása más buildhez tartozik. Új buildhez új fejlesztési kör szükséges.");
-  if(!["PASS_ASSISTED","ROLLED_BACK","BLOCKED"].includes(record.status))dispatch(id);
+  if(!["PASS_ASSISTED","ROLLED_BACK","BLOCKED"].includes(record.status))dispatch(record.id);
   return record;
+}
+export async function retryDeveloperGridDevDelivery(input: Record<string,unknown>) {
+  return withDeveloperGridTaskOperation(String(input.taskId||""),async()=>{
+    const {identity}=await authorized(input);
+    const previous=await currentRecord(idFor(identity.taskId,identity.sessionId));
+    if(!previous||!sameDevDeliveryIdentity(previous,identity))fail("DEV_DELIVERY_APPROVAL_MISMATCH","Az újrapróbálás csak ugyanahhoz az igazolt buildhez tartozhat.");
+    for(const key of ["sourceCommit","buildId","artifactSha256"] as const)if(input[key]!==previous[key])fail("DEV_DELIVERY_RETRY_IDENTITY_MISMATCH","Az újrapróbálási előnézet már nem aktuális.");
+    // A repeated click after a published retry returns that attempt, never creates another.
+    if(previous.retryOfDeliveryId===input.id){
+      if(!["PASS_ASSISTED","ROLLED_BACK","BLOCKED"].includes(previous.status))dispatch(previous.id);
+      return previous;
+    }
+    for(const key of ["id","sourceCommit","buildId","artifactSha256"] as const)if(input[key]!==previous[key])fail("DEV_DELIVERY_RETRY_IDENTITY_MISMATCH","Az újrapróbálási előnézet már nem aktuális.");
+    if(previous.status!=="ROLLED_BACK"||previous.code!=="DEV_DELIVERY_PUBLIC_CHECK_FAILED"||previous.publicRoutingUncertain||previous.browserVerification)fail("DEV_DELIVERY_RETRY_NOT_ALLOWED","Csak a visszaállított, publikus ellenőrzésen elakadt próba indítható újra.");
+    if(Number(previous.attemptNumber||1)>=20)fail("DEV_DELIVERY_RETRY_LIMIT","Ehhez a feladathoz a próbák száma elérte a megengedett határt.");
+    const id=`dev-delivery-${createHash("sha256").update(JSON.stringify([previous.id,"RETRY_V1"])).digest("hex").slice(0,32)}`;
+    const now=new Date().toISOString();
+    const record:DevDeliveryRecord={...identity,schemaVersion:1,id,target:"DRIVE_DEV",environment:"DEV",productionAccess:"DENY",status:"APPROVED",approvedAt:now,updatedAt:now,code:null,browserVerification:null,retryOfDeliveryId:previous.id,attemptNumber:Number(previous.attemptNumber||1)+1};
+    await immutable(path.join(ROOT,`${id}.json`),record);
+    const saved=await readRecord(id);
+    if(!saved||!sameDevDeliveryIdentity(saved,identity)||saved.retryOfDeliveryId!==previous.id)fail("DEV_DELIVERY_HISTORY_INVALID","Az új próbát nem lehetett azonosítani.");
+    await immutable(path.join(ROOT,`${previous.id}.next.json`),{schemaVersion:1,previousId:previous.id,nextId:id,createdAt:now});
+    // The failed record, runtime, log and browser-proof path remain untouched.
+    dispatch(id);return saved;
+  });
 }
 export async function recordDeveloperGridDevBrowserCheck(input: Record<string,unknown>) {
   const identity=input.result==="FAIL"

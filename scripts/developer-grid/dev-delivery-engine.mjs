@@ -106,6 +106,31 @@ async function get(url) {
   return {status:r.status,location:u?u.origin+u.pathname:null,sha256:sha(bytes),bytes,source:r.headers.get("x-dimpro-drive-source"),build:r.headers.get("x-dimpro-drive-build"),productionAccess:r.headers.get("x-dimpro-production-access")};
 }
 function publicResult(r){const {bytes,...value}=r;return value;}
+export function verifyHttpResult(record, route, r, publicSite=false) {
+  const check=(field,actual,expected)=>{
+    if(actual!==expected)throw Object.assign(new Error(`DEV_HTTP_MISMATCH:${publicSite?'PUBLIC':'CANDIDATE'}:${route}:${field}`),{
+      verification:{surface:publicSite?'PUBLIC':'CANDIDATE',route,field,actual,expected},
+    });
+  };
+  if(![200,301,302,303,307,308,401,403].includes(r.status))check('status',r.status,'200|301|302|303|307|308|401|403');
+  if(route===record.asset){check('status',r.status,200);check('sha256',r.sha256,record.assetSha256);}
+  else {
+    const baseline=(publicSite?record.publicHttpBaseline:record.httpBaseline)?.[route];
+    assert.ok(baseline,`DEV_HTTP_BASELINE_REQUIRED:${publicSite?'PUBLIC':'CANDIDATE'}:${route}`);
+    check('status',r.status,baseline.status);check('location',r.location,baseline.location);
+  }
+  if(publicSite){check('source',r.source,record.sourceCommit);check('build',r.build,record.buildId);check('productionAccess',r.productionAccess,'DENY');}
+}
+export function routingIdentity(original) {
+  const a=original.indexOf(START),b=original.indexOf(END,a);assert.ok(a>=0&&b>a,'DEV_VHOST_BOUNDARY_INVALID');
+  const result={};
+  for(const [field,key] of [['sourceCommit','X-DIMPRO-Drive-Source'],['buildId','X-DIMPRO-Drive-Build']]){
+    const matches=[...original.slice(a,b).matchAll(new RegExp(`add_header ${key} "([^"\\n]+)" always;`,'g'))];
+    assert.equal(matches.length,1,`DEV_BASELINE_HEADER_REQUIRED:${key}`);result[field]=matches[0][1];
+  }
+  assert.match(result.sourceCommit,/^[0-9a-f]{40}$/);assert.match(result.buildId,/^[A-Za-z0-9_-]{1,180}$/);
+  return result;
+}
 async function smoke(record, publicSite=false) {
   const base=publicSite?SITE:`http://127.0.0.1:${record.port}`;
   const p=runtimeAt(record.port),env=envFor(p);
@@ -116,10 +141,7 @@ async function smoke(record, publicSite=false) {
   const result=[];
   for(const route of ["/","/login","/api/drive/health",record.asset]) {
     const r=await get(base+route);
-    assert.ok([200,301,302,303,307,308,401,403].includes(r.status),`DEV_SMOKE_HTTP_FAILED:${route}`);
-    if(route===record.asset){assert.equal(r.status,200);assert.equal(r.sha256,record.assetSha256);}
-    else {const baseline=record.httpBaseline[route];assert.equal(r.status,baseline.status);assert.equal(r.location,baseline.location);}
-    if(publicSite){assert.equal(r.source,record.sourceCommit);assert.equal(r.build,record.buildId);assert.equal(r.productionAccess,"DENY");}
+    verifyHttpResult(record,route,r,publicSite);
     result.push({route,...publicResult(r)});
   }
   return result;
@@ -160,10 +182,20 @@ export async function runDelivery(id) {
         const original=fs.readFileSync(NGINX,"utf8"),oldPort=routingPort(original),oldEnv=envFor(runtimeAt(oldPort));
         assert.equal(oldEnv.DIMPRO_PRODUCTION_ACCESS,"DENY");assert.notEqual(oldEnv.DIMPRO_DRIVE_PERSONAL_UPLOAD_ENABLED,"true");assert.notEqual(oldEnv.DIMPRO_DRIVE_PERSONAL_MULTIPART_ENABLED,"true");
         const port=await freePort();const runtimeRoot=`/srv/dimpro-dev/runtime/${id}`;
-        const baseline={};for(const route of ["/","/login","/api/drive/health"]){const r=await get(`http://127.0.0.1:${oldPort}`+route);assert.ok([200,301,302,303,307,308,401,403].includes(r.status));baseline[route]=publicResult(r);}
+        const baseline={},publicBaseline={},oldIdentity=routingIdentity(original);
+        for(const route of ["/","/login","/api/drive/health"]){
+          const internal=await get(`http://127.0.0.1:${oldPort}`+route);assert.ok([200,301,302,303,307,308,401,403].includes(internal.status));baseline[route]=publicResult(internal);
+          // TLS/proxy/auth routing is a separate observable surface. Preserve that surface's
+          // behavior, rather than requiring it to match a direct loopback request.
+          const external=await get(SITE+route);assert.ok([200,301,302,303,307,308,401,403].includes(external.status));
+          assert.equal(external.source,oldIdentity.sourceCommit,'DEV_PUBLIC_BASELINE_SOURCE_MISMATCH');
+          assert.equal(external.build,oldIdentity.buildId,'DEV_PUBLIC_BASELINE_BUILD_MISMATCH');
+          assert.equal(external.productionAccess,'DENY','DEV_PUBLIC_BASELINE_PROD_DENY_REQUIRED');
+          publicBaseline[route]=publicResult(external);
+        }
         fs.mkdirSync(runtimeRoot,{mode:0o700});fs.writeFileSync(runtimeRoot+"/nginx.before",original,{mode:0o600,flag:"wx"});
         const desired=planDriveRouting(original,port,record,version);fs.writeFileSync(runtimeRoot+"/nginx.after",desired,{mode:0o600,flag:"wx"});
-        save({status:"STAGING",runtimeRoot,port,oldPort,processName:`dimpro-${id}`,version,httpBaseline:baseline,environmentFingerprint:protectedFingerprint(oldEnv),oldNginxSha256:sha(original),newNginxSha256:sha(desired)});
+        save({status:"STAGING",runtimeRoot,port,oldPort,processName:`dimpro-${id}`,version,httpBaseline:baseline,publicHttpBaseline:publicBaseline,baselineRoutingIdentity:oldIdentity,environmentFingerprint:protectedFingerprint(oldEnv),oldNginxSha256:sha(original),newNginxSha256:sha(desired)});
       }
       // Reuse a fully staged release after a crash; partial staging never becomes executable.
       const release=path.join(record.runtimeRoot,"release");
@@ -228,12 +260,13 @@ export async function runDelivery(id) {
     return record;
   } catch(error) {
     const failureReason=String(error?.message||"Ellenőrzési hiba").split("\n")[0].slice(0,300);
+    const failureContext=error?.verification||null;
     // Failure after public intent must restore the old routing. If another operator changed it,
     // preserve that configuration and report an explicit unresolved rollback, never success.
     if(record.status==="PUBLIC_PENDING_BROWSER") {
-      try{record=rollback({...record,code:"DEV_DELIVERY_PUBLIC_CHECK_FAILED",failureOperation:operation,failureReason});atomic(file,record);return record;}
-      catch {save({status:"BLOCKED",code:"DEV_DELIVERY_ROLLBACK_REQUIRES_OPERATOR",failureOperation:operation,failureReason,publicRoutingUncertain:true});}
-    } else save({status:"BLOCKED",code:"DEV_DELIVERY_PREFLIGHT_OR_CANDIDATE_FAILED",failureOperation:operation,failureReason});
+      try{record=rollback({...record,code:"DEV_DELIVERY_PUBLIC_CHECK_FAILED",failureOperation:operation,failureReason,failureContext});atomic(file,record);return record;}
+      catch {save({status:"BLOCKED",code:"DEV_DELIVERY_ROLLBACK_REQUIRES_OPERATOR",failureOperation:operation,failureReason,failureContext,publicRoutingUncertain:true});}
+    } else save({status:"BLOCKED",code:"DEV_DELIVERY_PREFLIGHT_OR_CANDIDATE_FAILED",failureOperation:operation,failureReason,failureContext});
     throw error;
   }
 }
