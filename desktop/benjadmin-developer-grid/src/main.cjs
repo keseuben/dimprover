@@ -3897,6 +3897,7 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task, m
   // execution attempt or a blocker belonging to the newly selected task.
   if(request.workerCode!==backendWorkerCode||request.taskId!==String(task.id)||request.sessionId!==String(task.sessionId))return {processed:false,historical:true,reason:"EXECUTION_FOREIGN_TASK"};
   const launchRecord = loadTaskLaunchRecords()[task.id] || {};
+  if (workflowControl.wasAbandonedRead(launchRecord, request)) return {processed:false,historical:true,reason:"EXECUTION_READ_ABANDONED"};
   const rolloverState = String(launchRecord.conversationRolloverState || task?.conversationRolloverState || task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
   if (rolloverPendingState(rolloverState) || rolloverState === ROLLOVER_STATES.BLOCKED) {
     saveTaskLaunchPatch(task, workerCode, {
@@ -7144,11 +7145,15 @@ async function runManualControl(input) {
     if (!capture?.ok || capture.generating) throw new Error("A csevegés még választ ír vagy nem olvasható. Várd meg a válasz végét.");
     if (action === "recover") {
       if (workflowControl.executionPending(record)) {
-        if (!workflowControl.recoverableReadFailure(record, executionRequestProcessingKeys.has(`${task.id}:${task.sessionId}`)))
+        const abandoned = workflowControl.recoverableReadRequest(record, executionRequestProcessingKeys.has(`${task.id}:${task.sessionId}`));
+        const request = abandoned?.request;
+        if (!request || request.taskId !== task.id || request.sessionId !== task.sessionId
+            || normalizedProofWorkerCode(request.workerCode) !== normalizedProofWorkerCode(code)
+            || request.sourceProofSha256 !== proof)
           throw new Error("Előbb rendezd a függő végrehajtási választ; helyreállítás most nem forgathat source proofot.");
         saveTaskLaunchPatch(task,code,{
-          abandonedReadRequests:[...(record.abandonedReadRequests || []),{key:record.executionRequest.key,requestId:record.executionRequest.request.requestId,action:record.executionRequest.request.action,reason:"OPERATOR_CONNECTION_RECOVERY",at:new Date().toISOString()}].slice(-32),
-          executionRequest:null,executionRetryAt:null,executionBridgeState:"RECOVERY_REQUIRED",executionBridgeError:null,manualExecutionPermission:null,
+          abandonedReadRequests:[...(record.abandonedReadRequests || []),{key:abandoned.key,requestId:request.requestId,action:request.action,source:abandoned.source,request,reason:"OPERATOR_CONNECTION_RECOVERY",at:new Date().toISOString()}].slice(-32),
+          queuedExecutionRequest:null,executionRequest:null,executionRetryAt:null,executionBridgeState:"RECOVERY_REQUIRED",executionBridgeError:null,manualExecutionPermission:null,
         });
       }
       let recovered;

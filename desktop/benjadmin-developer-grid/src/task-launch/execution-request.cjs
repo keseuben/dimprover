@@ -61,7 +61,7 @@ function recoverAcknowledgedNextRequest(messages,task,workerCode,record,proof) {
     const next=parseDeveloperGridExecutionRequest(body);
     if(!next.ok)return null;
     const q=next.request;
-    if(q.taskId!==task.id||q.sessionId!==task.sessionId||q.workerCode!==worker||q.sourceProofSha256!==proof||q.requestId===ack.requestId||(record.executionHistory||[]).some(h=>h.requestId===q.requestId))return null;
+    if(q.taskId!==task.id||q.sessionId!==task.sessionId||q.workerCode!==worker||q.sourceProofSha256!==proof||q.requestId===ack.requestId||(record.executionHistory||[]).some(h=>h.requestId===q.requestId)||require('../workflow/control.cjs').wasAbandonedRead(record,q))return null;
     return q;
   }
   return null;

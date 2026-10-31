@@ -33,17 +33,33 @@ function executionSummary(record={},recoveryRequired=false) {
   const state=record.executionBridgeState||"WAITING";
   return {executionResultStatus:status,executionState:recoveryRequired&&!record.pendingExecutionResult&&state!=="COMPLETED"?"RECOVERY_REQUIRED":state,executionCode:record.executionBridgeError||envelope?.code||record.executionBridgeCode||""};
 }
-function recoverableReadFailure(record, running = false) {
+function recoverableReadRequest(record, running = false) {
+  // A next read can be captured after the previous result was acknowledged but
+  // before it was dispatched. Treat that queue separately from an attempted
+  // request; never discard two potentially different operations together.
+  if (record?.queuedExecutionRequest && record?.executionRequest) return null;
   const queued = record?.executionRequest;
-  const request = queued?.request;
+  const request = record?.queuedExecutionRequest || queued?.request;
   // An operator may abandon a read attempt, but never an unknown write or a
   // result which still needs delivery/ACK. Server-side recovery rechecks source,
   // scope and ownership; this helper grants no execution authority.
-  return Boolean(!running && !record?.pendingExecutionResult && queued?.key
+  const safe = Boolean(!running && !record?.pendingExecutionResult
+    && (record?.queuedExecutionRequest || queued?.key)
     && request?.taskId && request?.sessionId && request?.requestId
     && ["READ_FILE", "LIST_FILES", "SEARCH_FILES", "GIT_STATUS", "GIT_DIFF", "GIT_DIFF_CHECK"].includes(request.action)
     && ["TRANSPORT_RETRY", "BLOCKED", "WAITING_MANUAL_EXECUTION", "RECOVERY_REQUIRED"].includes(record.executionBridgeState)
-    && !(record.executionHistory || []).some(item => item.key === queued.key && item.completedAt));
+    && !(record.executionHistory || []).some(item => item.completedAt
+      && ((queued?.key && item.key === queued.key) || item.requestId === request.requestId)));
+  return safe ? {request, key:queued?.key || null, source:queued ? "ATTEMPTED_READ" : "UNDISPATCHED_READ"} : null;
+}
+function recoverableReadFailure(record, running = false) { return Boolean(recoverableReadRequest(record, running)); }
+function wasAbandonedRead(record, request) {
+  if (!["READ_FILE", "LIST_FILES", "SEARCH_FILES", "GIT_STATUS", "GIT_DIFF", "GIT_DIFF_CHECK"].includes(request?.action)) return false;
+  return (record?.abandonedReadRequests || []).some(item => {
+    const previous = item.request;
+    return previous && [...new Set([...Object.keys(previous), ...Object.keys(request)])]
+      .every(key => previous[key] === request[key]);
+  });
 }
 function requestKey(request, hash) {
   return `${request.taskId}:${request.sessionId}:${request.requestId}:${hash}`;
@@ -72,4 +88,4 @@ function continuationPrompt(task, code, proof, protocolLines) {
     "Minden további művelet új requestId-t kapjon; korábbi req-001 azonosítót ne használj újra.",
   ].join("\n");
 }
-module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, executionSummary, recoverableReadFailure, requestKey, wasDelivered, continuationPrompt };
+module.exports = { WORKERS, worker, mode, isManual, executionAllowed, executionPending, executionSummary, recoverableReadFailure, recoverableReadRequest, wasAbandonedRead, requestKey, wasDelivered, continuationPrompt };
