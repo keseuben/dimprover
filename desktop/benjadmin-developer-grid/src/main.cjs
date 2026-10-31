@@ -5554,7 +5554,7 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
   const bodyWithInternalReview = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(INTERNAL_REVIEW_REPORT_START));
-  if (bodyWithInternalReview) await processCapturedInternalReviewReport({ body:bodyWithInternalReview.text, workerCode:code, task:live.task }).catch(() => undefined);
+  if (bodyWithInternalReview && Number(live.presence?.workStageIndex) === 4) await processCapturedInternalReviewReport({ body:bodyWithInternalReview.text, workerCode:code, task:live.task }).catch(() => undefined);
 
   let memory = null;
   if (forceSnapshot || conversationMemoryHashes.get(cacheKey) !== transcriptHash) {
@@ -5716,7 +5716,8 @@ async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
     const record=loadTaskLaunchRecords()[String(task.id)] || {};
     if (workflowControl.executionPending(record)) return {ok:false,reason:"EXECUTION_RESULT_PENDING"};
     if (record.executionWorkflowBlocked) return {ok:false,reason:"EXECUTION_WORKFLOW_BLOCKED"};
-    if (record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) {
+    // Stage 6 performs only server-gated delivery/closure; it must not restart worker source work.
+    if (stage !== 6 && record.executionPreflightProofSha256 !== resolvedExecutionProofSha256(task)) {
       try { return await prepareAutomaticExecutionPreflight(uiCode,context); }
       catch(error) {
         const code=error?.code === "PREFLIGHT_ORIGINAL_INSTRUCTION_REQUIRED" ? error.code : "AUTOMATIC_PREFLIGHT_FAILED";
