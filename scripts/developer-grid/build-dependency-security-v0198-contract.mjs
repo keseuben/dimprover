@@ -8,8 +8,17 @@ const lock=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-develope
 const packages=lock.packages||{};
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 check("desktop v0.1.124",()=>assert.equal(pkg.version,"0.1.124"));
-const expected=new Map([["node_modules/@electron/asar/node_modules/brace-expansion","1.1.21"],["node_modules/@electron/universal/node_modules/brace-expansion","2.1.7"],["node_modules/brace-expansion","5.0.12"],["node_modules/dir-compare/node_modules/brace-expansion","1.1.21"],["node_modules/filelist/node_modules/brace-expansion","2.1.7"],["node_modules/glob/node_modules/brace-expansion","1.1.21"]]);
-for(const [key,version] of expected) check(`${key} patched`,()=>assert.equal(packages[key]?.version,version));
+const patchedMatchers=new Map([["brace-expansion","5.0.12"],["minimatch","11.0.3"],["glob","14.0.3"]]);
+for(const [name,version] of patchedMatchers) {
+  check(name+" patched version present",()=>assert.equal(packages["node_modules/"+name]?.version,version));
+  for(const [key,entry] of Object.entries(packages).filter(([key])=>key.endsWith("/"+name))) {
+    check(key+" has no vulnerable legacy copy",()=>assert.equal(entry.version,version));
+    check(key+" installed content matches lock",()=>assert.equal(JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid",key,"package.json"),"utf8")).version,version));
+  }
+}
+check("patched glob dependencies are pinned for every consumer",()=>{
+  assert.equal(pkg.overrides.minimatch,"$minimatch");assert.equal(pkg.overrides.glob,"$glob");
+});
 check("Electron security patch version pinned",()=>assert.equal(pkg.devDependencies?.electron,"43.8.3"));
 check("HTTP cache semantics security patch pinned",()=>assert.equal(packages["node_modules/http-cache-semantics"]?.version,"4.3.0"));
 check("electron-builder direct version unchanged",()=>assert.equal(pkg.devDependencies?.["electron-builder"],"26.15.3"));
