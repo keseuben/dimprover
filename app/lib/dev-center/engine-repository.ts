@@ -1332,6 +1332,48 @@ export async function setDevEngineTaskTesting(taskId: string) {
   return { ok: true as const, task: mapTask(data as JsonRecord) };
 }
 
+// Called only by the Grid closure service after its current-HEAD test/review/build/handoff gates pass.
+export async function synchronizeDevEngineTaskTestingForGrid(input: {
+  taskId: string; sessionId: string; workerCode: string; branch: string; worktree: string; head: string;
+}) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  const workerId = CONSOLE_ROUTABLE_WORKERS[text(input.workerCode).toUpperCase()];
+  const metadata = jsonRecord(task.metadata);
+  if (!workerId || !input.sessionId || !/^[0-9a-f]{40}$/.test(input.head) || task.requestedWorkerId !== workerId
+      || task.assignedWorkerId !== workerId || task.claimedBySessionId !== input.sessionId || text(metadata.activeSessionId) !== input.sessionId) {
+    throw new DevCenterEngineError("A Grid tesztkapu task/worker/session kötése eltér; helyreállítás szükséges.", "DEV_CENTER_GRID_TESTING_IDENTITY_MISMATCH", 409);
+  }
+  const row = await client.from("dev_center_worker_sessions").select("*").eq("id", input.sessionId).maybeSingle();
+  if (row.error) databaseError("A Grid tesztkapu engine sessionje nem olvasható.", row.error);
+  const session = row.data ? mapSession(row.data as JsonRecord) : null;
+  if (!session || session.taskId !== task.id || session.workerId !== workerId || session.handshakeStage !== "READY"
+      || session.branchName !== input.branch || session.worktreePath !== input.worktree
+      || task.branchName !== input.branch || task.worktreePath !== input.worktree) {
+    throw new DevCenterEngineError("A Grid tesztkapu forrás- és sessionazonossága nem igazolt.", "DEV_CENTER_GRID_TESTING_SESSION_MISMATCH", 409);
+  }
+  // A previous successful engine finalization may be retried while the Grid closure is being persisted.
+  if (task.status === "completed") return { ok: true as const, task, alreadyCompleted: true, synchronized: false };
+  if (!["claimed", "in_progress", "testing"].includes(task.status)
+      || session.status !== "active" || !session.leaseExpiresAt || !Number.isFinite(Date.parse(session.leaseExpiresAt)) || Date.parse(session.leaseExpiresAt) <= Date.now()) {
+    throw new DevCenterEngineError("A Grid tesztkapuhoz aktív READY engine kapcsolat szükséges; előbb állítsd helyre a kapcsolatot.", "DEV_CENTER_GRID_TESTING_RECOVERY_REQUIRED", 409);
+  }
+  if (task.status === "testing") return { ok: true as const, task, alreadyCompleted: false, synchronized: false };
+  const now = nowIso();
+  const nextMetadata = { ...metadata, workflowState: "TESTING", testingStartedAt: text(metadata.testingStartedAt) || now,
+    bridgeState: "RESULT_PENDING", bridgeUpdatedAt: now, resultPendingAt: text(metadata.resultPendingAt) || now,
+    gridTestingSynchronizedAt: now, gridTestingEngineSessionId: input.sessionId, gridTestingSourceHead: input.head };
+  const changed = await client.from("dev_center_tasks").update({ status: "testing", metadata: nextMetadata, updated_at: now })
+    .eq("id", task.id).eq("updated_at", task.updatedAt).select("*").maybeSingle();
+  if (changed.error) databaseError("A Grid tesztkapu engine állapota nem menthető.", changed.error, 409);
+  if (!changed.data) throw new DevCenterEngineError("A task a Grid tesztkapu egyeztetése közben megváltozott; újraellenőrzés szükséges.", "DEV_CENTER_GRID_TESTING_RACE", 409);
+  await addAudit(client, { action: "TASK_TESTING", entityType: "task", entityId: task.id, taskId: task.id,
+    sessionId: input.sessionId, projectId: task.projectId, actorId: input.workerCode,
+    summary: `${task.title} · az igazolt Grid lezárási kapu TESTING állapota egyeztetve.`,
+    metadata: { source: "DEVELOPER_GRID_CLOSURE_GATE", workerCode: input.workerCode, sourceHead: input.head, productionAccess: "DENY" } });
+  return { ok: true as const, task: mapTask(changed.data as JsonRecord), alreadyCompleted: false, synchronized: true };
+}
+
 export async function retireDevEngineTaskForReplacement(input:{taskId:string;sessionId:string;workerCode:string;nextTaskId:string;preservedCheckpoint?:{stage:3;head:string;receiptId:string};settledTestFailure?:{stage:3;head:string;resultId:string;resultSha256:string}}){
   const client=await requireClient();
   const task=await getTaskForConsoleControl(client,input.taskId);

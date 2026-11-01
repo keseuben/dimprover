@@ -38,6 +38,8 @@ await check("HTTP/public display is not a browser ACK or closure PASS",()=>{
 await check("actual close endpoint cannot finalize a delivery task without its matching completed proof",async()=>{
   let finalized=0,delivery=null;
   const deps={...policy,readGridState:async()=>({sessions:[session],task:{id:"task"}}),getDeveloperGridTaskById:async()=>({id:"task",projectId:"project_dimprover"}),readBuildRunStore:async()=>({runs:[run]}),getDeveloperGridDevDelivery:async()=>delivery,refreshDerivedConversationMemory:async()=>({}),evaluateDeveloperGridReviewGate:async()=>({ready:true}),finalizeDevEngineTask:async()=>{finalized++;return {task:{status:"COMPLETED"}};},upsertGridTask:async()=>{},upsertWorkerSession:async()=>{},appendGridEvent:async()=>{}};
+  deps.withDeveloperGridTaskOperation=async(_id,operation)=>operation();
+  deps.synchronizeDevEngineTaskTestingForGrid=async()=>({synchronized:true});
   const close=load("app/lib/developer-grid/work-close.ts",deps).closeDeveloperGridWork;
   await assert.rejects(close({taskId:"task",sessionId:"session"}),e=>e.code==="DEV_DELIVERY_CLOSURE_BLOCKED");assert.equal(finalized,0);
   delivery=receipt;await close({taskId:"task",sessionId:"session"});assert.equal(finalized,1);

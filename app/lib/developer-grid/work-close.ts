@@ -1,6 +1,7 @@
 "server-only";
 
-import { finalizeDevEngineTask } from "@/app/lib/dev-center/engine-repository";
+import { finalizeDevEngineTask, synchronizeDevEngineTaskTestingForGrid } from "@/app/lib/dev-center/engine-repository";
+import { withDeveloperGridTaskOperation } from "./task-operation-lock";
 import { devDeliveryAllowsClosure, devDeliveryIdentity } from "./dev-delivery-policy";
 import { getDeveloperGridDevDelivery } from "./dev-delivery";
 import { readBuildRunStore } from "./build-run-store";
@@ -14,6 +15,11 @@ function fail(code: string, message: string, status = 409): never {
 }
 
 export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) {
+  const lockTaskId = String(rawInput.taskId || "").trim().slice(0, 220);
+  return withDeveloperGridTaskOperation(lockTaskId, () => closeDeveloperGridWorkLocked(rawInput));
+}
+
+async function closeDeveloperGridWorkLocked(rawInput: Record<string, unknown>) {
   const taskId = String(rawInput.taskId || "").trim().slice(0, 220);
   const sessionId = String(rawInput.sessionId || "").trim().slice(0, 240);
   const state = await readGridState();
@@ -37,6 +43,7 @@ export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) 
   }
 
   const summary = memory?.handoff?.summary || memory?.context?.summary || session.developmentContext.contextSnapshotSummary || task.title;
+  const testing = await synchronizeDevEngineTaskTestingForGrid({ taskId, sessionId: String(session.developmentContext.engineSessionId || ""), workerCode: session.workerCode, branch: session.sourceProvenance.branch, worktree: session.sourceProvenance.worktree, head: session.sourceProvenance.head });
   const engine = await finalizeDevEngineTask({ taskId, outcome: "completed", note: String(summary || "").slice(0, 1000) });
   const closedAt = new Date().toISOString();
   const completedTask = { ...task, status: "COMPLETED" as const };
@@ -80,7 +87,7 @@ export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) 
     session: closedSession,
     gate,
     memory,
-    engine: { alreadyFinalized: engine.alreadyFinalized === true, taskStatus: engine.task.status },
+    engine: { testingSynchronized: testing.synchronized, alreadyFinalized: engine.alreadyFinalized === true, taskStatus: engine.task.status },
     closedAt,
     productionAccess: "DENY" as const,
   };
