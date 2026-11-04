@@ -11,7 +11,7 @@ export function normalizeReviewedWritePaths(raw:unknown,projectId:string,moduleN
  const source=catalog.sources.find(s=>s.projectId===projectId&&s.modules.some(n=>key(n)===key(moduleName)));
  return [...new Set(paths.map(value=>{
   const rel=String(value||"").trim();
-  if(!rel||rel.includes("\\")||rel.startsWith("/")||rel.split("/").some(p=>!p||[".","..",".git","node_modules",".next"].includes(p))||!source?.readRoots.some(root=>rel.startsWith(root+"/"))||classifyScopePath(rel).decision==="DENIED")
+  if(!rel||rel.includes("\\")||rel.startsWith("/")||rel.split("/").some(p=>!p||[".","..",".git","node_modules",".next"].includes(p))||!(source?.readRoots.some(root=>rel.startsWith(root+"/"))||(source&&"reviewedWriteFiles" in source&&Array.isArray(source.reviewedWriteFiles)&&source.reviewedWriteFiles.includes(rel)))||classifyScopePath(rel).decision==="DENIED")
    throw Object.assign(new Error(`Nem jóváhagyható modulútvonal: ${rel}`),{code:"WRITE_REVIEW_PATH_DENIED",status:403});
   return rel;
  }))].sort();

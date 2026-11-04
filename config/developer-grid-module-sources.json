@@ -18,6 +18,10 @@
         "app/lib/transfer-core",
         "app/lib/drive",
         "app/api/drive"
+      ],
+      "reviewedWriteFiles": [
+        "app/lib/drive-core/storageRepository.ts",
+        "app/projektkapu/kiadas/page.tsx"
       ]
     },
     {

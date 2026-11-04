@@ -18,4 +18,8 @@ const grant={...identity,authority:'MANUAL_REPLACEMENT_PLAN',planSha256:'c'.repe
 assert.equal(bound(grant,identity)[0],file);
 for(const field of Object.keys(identity))assert.equal(bound(grant,{...identity,[field]:'changed'}).length,0);
 assert.equal(bound({...grant,authority:'CHAT_MESSAGE'},identity).length,0);assert.equal(bound({...grant,planSha256:''},identity).length,0);assert.equal(bound(null,identity).length,0);
-console.log(JSON.stringify({ok:true,tests:19,scope:'exact-file-reviewed-write-approval',liveMutation:false}));
+for(const exact of ['app/lib/drive-core/storageRepository.ts','app/projektkapu/kiadas/page.tsx']){assert.equal(normalize([exact],project,module)[0],exact);assert.equal(normalize([exact],project,'Drive')[0],exact);assert.throws(()=>normalize([exact],'other',module));assert.throws(()=>normalize([exact],project,'Developer Grid V1'));assert.throws(()=>normalize([exact+'/child.ts'],project,module));}
+for(const sibling of ['app/lib/drive-core/other.ts','app/projektkapu/kiadas/other.tsx'])assert.throws(()=>normalize([sibling],project,module),e=>e.code==='WRITE_REVIEW_PATH_DENIED');
+assert.equal(policy.exports.classifyScopePath('app/lib/drive-core/storageRepository.ts').decision,'NEEDS_REVIEW');assert.equal(policy.exports.classifyScopePath('app/projektkapu/kiadas/page.tsx').decision,'AUTO_APPROVED');
+console.log('EXACT_DRIVE_REVIEW_FILES_PASS 14');
+console.log(JSON.stringify({ok:true,tests:33,scope:'exact-file-reviewed-write-approval',liveMutation:false}));

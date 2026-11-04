@@ -12,4 +12,4 @@ for(const [i,output]of values.entries()){
  assert.equal(actual.action,'RUN_DEV_COMMAND');assert(text.includes('"requestId"'));assert(text.includes('"sourceProofSha256"'));
  console.log('PASS '+(i+1)+' exact data and signed identity through rich-text quote escaping');
 }
-console.log('Grid 0.1.130 serialization runtime PASS 3/3');
+console.log('Grid 0.1.131 serialization runtime PASS 3/3');
