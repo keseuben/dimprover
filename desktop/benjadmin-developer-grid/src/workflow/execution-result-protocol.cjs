@@ -7,7 +7,15 @@ function canonical(value){if(value===null||typeof value!=="object")return JSON.s
 const digest=value=>createHash("sha256").update(canonical(value)).digest("hex");
 // Keep rich-text/Markdown editors from treating log or source bytes as markup.
 // JSON decoding restores the original bytes; the signed envelope is unchanged.
-const serializeEnvelope=row=>JSON.stringify(row,null,2).replace(/[<>&`]/g,char=>"\\u"+char.charCodeAt(0).toString(16).padStart(4,"0"));
+function serializeEnvelope(row) {
+  return JSON.stringify(row,null,2).replace(/"(?:\\.|[^"\\])*"/g,token=>{
+    const value=JSON.parse(token);
+    // Protocol keys and simple technical identities stay readable. Free text
+    // carries no Markdown punctuation or quote/backslash escape combinations.
+    if(/^[A-Za-z0-9_./:-]*$/.test(value))return token;
+    return '"'+value.split("").map(char=>/^[A-Za-z0-9 ]$/.test(char)?char:"\\u"+char.charCodeAt(0).toString(16).padStart(4,"0")).join("")+'"';
+  });
+}
 function bodyFor(payload,identity={}){
   const e=payload.execution||{};
   return {schemaVersion:2,taskId:String(payload.taskId||identity.taskId||""),sessionId:String(payload.sessionId||identity.sessionId||""),workerCode:worker(payload.workerCode||identity.workerCode),requestId:String(payload.requestId||identity.requestId||""),sourceProofSha256:String(payload.sourceProofSha256||identity.sourceProofSha256||""),action:String(payload.action||identity.action||"").toUpperCase(),status:String(e.status||"FAIL").toUpperCase(),code:String(e.code||""),summary:String(e.summary||""),data:e.data&&typeof e.data==="object"&&!Array.isArray(e.data)?e.data:{},productionAccess:"DENY"};

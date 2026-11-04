@@ -38,7 +38,7 @@ await check('foreign result marker never clicks',async()=>{const s=surface({fore
 await check('ambiguous disclosure fails closed',async()=>{const s=surface({buttons:2});const c=await captureExecutionResultTranscript(s.view,envelope,'chat-128');assert.equal(s.clicks(),0);assert.equal(protocol.parseResult(c.messages[0].text),null);});
 await check('generating surface is not touched',async()=>{const s=surface({generating:true});const c=await captureExecutionResultTranscript(s.view,envelope,'chat-128');assert.equal(s.clicks(),0);assert(c.generating);});
 await check('navigation during disclosure is rejected by bound capture',async()=>{const s=surface({changeConversationOnClick:true});const c=await captureExecutionResultTranscript(s.view,envelope,'chat-128');assert.equal(s.clicks(),1);assert.equal(c.ok,false);});
-await check('expanded altered result remains unverifiable',async()=>{const s=surface({full:prompt.replace('LINT sikertelen.','hamis siker')});const c=await captureExecutionResultTranscript(s.view,envelope,'chat-128');assert.equal(s.clicks(),1);assert.equal(protocol.verifyEnvelope(protocol.parseResult(c.messages[0].text)),false);});
+await check('expanded altered result remains unverifiable',async()=>{const s=surface({full:prompt.replace(protocol.serializeEnvelope(envelope),protocol.serializeEnvelope({...envelope,summary:'hamis siker'}))});const c=await captureExecutionResultTranscript(s.view,envelope,'chat-128');assert.equal(s.clicks(),1);assert.equal(protocol.verifyEnvelope(protocol.parseResult(c.messages[0].text)),false);});
 await check('failure receipt completes ACK lifecycle without another execution or continuation',async()=>{
  const request={schemaVersion:1,taskId:envelope.taskId,sessionId:envelope.sessionId,workerCode:'OUTMINAI',requestId:envelope.requestId,sourceProofSha256:envelope.sourceProofSha256,action:envelope.action,command:'LINT'},task={id:request.taskId,sessionId:request.sessionId};
  const ack={schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,envelope[k]])),decision:'ACCEPTED'};
@@ -48,4 +48,4 @@ await check('failure receipt completes ACK lifecycle without another execution o
  const result=await process({view:{},task,workerCode:'OUTMINAI',request,expectedProof:envelope.sourceProofSha256,localMismatch:false});
  assert.equal(executions,0);assert.equal(sends,0);assert.deepEqual(stages,['DELIVERED','ACKNOWLEDGED']);assert.equal(result.completed.resultStatus,'FAIL');assert.equal(record.executionWorkflowBlocked,true);assert.equal(record.pendingExecutionResult,null);assert.equal(record.queuedExecutionRequest,null);
 });
-console.log(`Grid 0.1.128 result delivery runtime PASS ${count}/${count}`);
+console.log(`Grid 0.1.129 result delivery runtime PASS ${count}/${count}`);

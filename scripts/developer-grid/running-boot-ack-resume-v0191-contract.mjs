@@ -11,9 +11,9 @@ const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts")
 let n = 0;
 function check(name, fn) { fn(); n += 1; console.log("PASS", name); }
 
-check("desktop v0.1.128", () => assert.equal(pkg.version, "0.1.128"));
-check("backend v0.1.128-dev", () => assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.128-dev"')));
+check("desktop v0.1.129", () => assert.equal(pkg.version, "0.1.129"));
+check("backend v0.1.129-dev", () => assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.129-dev"')));
 check("resume is available for READY, RUNNING and explicit recovery pre-ACK tasks", () => assert.ok(ui.includes('["READY","RUNNING","RECOVERY_REQUIRED"].includes(String(task.status||"").toUpperCase())&&bootAckState!=="VALIDATED"')));
 check("resume control still routes through existing-task recovery", () => { assert.ok(ui.includes('id="workResumeButton"')); assert.ok(ui.includes("resumeWorkLaunch")); });
 
-console.log("Developer Grid v0.1.128 RUNNING BOOT ACK resume contract PASS · " + n + "/" + n);
+console.log("Developer Grid v0.1.129 RUNNING BOOT ACK resume contract PASS · " + n + "/" + n);

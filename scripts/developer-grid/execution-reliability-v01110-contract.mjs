@@ -27,7 +27,7 @@ await check('actual builder preserves template backticks, BOM, CRLF and Hungaria
 });
 await check('a result marker, copied ID, truncated JSON, changed payload or other identity never proves delivery',()=>{
   const env=protocol.makeEnvelope(payload),prompt=build({...payload,resultEnvelope:env});
-  for(const bad of ['BENJADMIN_EXECUTION_RESULT_ID: '+env.resultId,prompt.slice(0,prompt.indexOf(protocol.END)),prompt.replace('task-a','task-b'),prompt.replace('árvíztűrő','changed'),prompt.replace('EXECUTION_READ_OK','WRONG')])assert(!matches(bad,prompt));
+  for(const bad of ['BENJADMIN_EXECUTION_RESULT_ID: '+env.resultId,prompt.slice(0,prompt.indexOf(protocol.END)),prompt.replace('task-a','task-b'),protocol.START+'\n'+JSON.stringify({...env,data:{...env.data,rawContent:'changed'}})+'\n'+protocol.END,prompt.replace('EXECUTION_READ_OK','WRONG')])assert(!matches(bad,prompt));
   const reordered={};for(const k of Object.keys(env).reverse())reordered[k]=env[k];
   assert(matches(protocol.START+'\n'+JSON.stringify(reordered)+'\n'+protocol.END,prompt));
 });
