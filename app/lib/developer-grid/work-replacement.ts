@@ -42,7 +42,7 @@ async function settledReadOnlyTestFailure(taskId:string,sessionId:string,workerC
   if(!result||!/^[a-f0-9]{64}$/.test(String(result.resultSha256))||result.resultId!=="res-"+result.resultSha256||!["PASS","FAIL","BLOCKED"].includes(result.result?.status))fail("WORK_REPLACEMENT_EXECUTION_PENDING","A művelet eredménye még nem igazolt.");
   const bound=(r:Record<string,any>)=>same(r)&&r.resultId===result.resultId&&r.resultSha256===result.resultSha256&&r.sourceProofSha256===q.sourceProofSha256;
   if(!rows.some(r=>r.event==="DELIVERED"&&bound(r))||!rows.some(r=>r.event==="ACKNOWLEDGED"&&bound(r)&&r.decision==="ACCEPTED")||!rows.some(r=>r.event==="COMPLETED"&&bound(r)&&r.workflowContinue===(result.result.status==="PASS")))fail("WORK_REPLACEMENT_EXECUTION_PENDING","A korábbi eredmény kézbesítését és feldolgozását előbb rendezni kell.");
-  last=(q.action||q.request?.action)==="RUN_DEV_COMMAND"&&result.result.status==="FAIL"&&result.result.code==="EXECUTION_COMMAND_FAIL"&&result.result.data?.command==="TSC"?result:null;
+  last=(q.action||q.request?.action)==="RUN_DEV_COMMAND"&&result.result.status==="FAIL"&&result.result.code==="EXECUTION_COMMAND_FAIL"&&["TSC","LINT"].includes(String(result.result.data?.command))?result:null;
  }
  return last?{stage:3 as const,resultId:String(last.resultId),resultSha256:String(last.resultSha256)}:null;
 }
@@ -61,8 +61,11 @@ async function replacementPlan(raw:Record<string,unknown>,allowAuthorizedReplay=
  let settledTestFailure:null|{stage:3;head:string;resultId:string;resultSha256:string}=null;
  if(previousStage!==1&&previousStage!==3)fail("WORK_REPLACEMENT_STAGE_DENIED","Csak tiszta elemzési feladat vagy igazolt, megőrzött 3/6-os Git-mentés váltható le.");
  if(previousStage===3&&!receipt){const failure=await settledReadOnlyTestFailure(taskId,sessionId,worker);if(failure)settledTestFailure={...failure,head:session.sourceProvenance.head};}
- if(previousStage===3&&!settledTestFailure&&(!receipt||receipt.schemaVersion!==1||!/^[a-f0-9]{64}$/.test(receipt.id)||receipt.head!==session.sourceProvenance.head||receipt.gitClean!==true||!receipt.files.length||receipt.files.some(f=>!f.path||!/^[a-f0-9]{64}$/.test(f.sha256)||!Number.isSafeInteger(f.bytes)||f.bytes<0)))fail("WORK_REPLACEMENT_CHECKPOINT_REQUIRED","A 3/6-os feladat leváltásához megőrzött Git-mentés vagy teljesen visszaigazolt TSC-hiba szükséges.");
+ if(previousStage===3&&!settledTestFailure&&(!receipt||receipt.schemaVersion!==1||!/^[a-f0-9]{64}$/.test(receipt.id)||receipt.head!==session.sourceProvenance.head||receipt.gitClean!==true||!receipt.files.length||receipt.files.some(f=>!f.path||!/^[a-f0-9]{64}$/.test(f.sha256)||!Number.isSafeInteger(f.bytes)||f.bytes<0)))fail("WORK_REPLACEMENT_CHECKPOINT_REQUIRED","A 3/6-os feladat leváltásához megőrzött Git-mentés vagy teljesen visszaigazolt TSC/LINT-hiba szükséges.");
  if(session.endedAt&&!allowAuthorizedReplay)fail("WORK_REPLACEMENT_SESSION_ENDED","A régi session már lezárult.");
+ // A preserved checkpoint still requires validation above. Only a fully
+ // acknowledged final read-only test failure can settle its later FAIL.
+ if(previousStage===3&&receipt){const failure=await settledReadOnlyTestFailure(taskId,sessionId,worker);if(failure)settledTestFailure={...failure,head:session.sourceProvenance.head};}
  await verifyCurrentSourceExecutionState(session.sourceProvenance,{requireClean:true});
  await assertNoPendingExecution(taskId);
  if(previousStage===3&&!settledTestFailure)await assertCheckpointExecutionSettled(taskId);
@@ -71,7 +74,7 @@ async function replacementPlan(raw:Record<string,unknown>,allowAuthorizedReplay=
  if(source.authority!=="MODULE_CATALOG")fail("WORK_REPLACEMENT_MODULE_SOURCE_REQUIRED","Új fejlesztési körhöz ellenőrzött modulforrás-kötés szükséges.");
  const reviewedWritePaths=normalizeReviewedWritePaths(raw.reviewedWritePaths,input.projectId,input.moduleName);
  const preservedCheckpoint=previousStage===3&&receipt?{stage:3 as const,head:receipt.head,receiptId:receipt.id}:undefined;
- const plan={...(input.sourceCheckpointMode==="SCOPED_GIT"?{sourceCheckpointMode:input.sourceCheckpointMode}:{}),reviewedWritePaths,schemaVersion:settledTestFailure?3:preservedCheckpoint?2:1,...(preservedCheckpoint?{previousStage,previousCheckpointId:preservedCheckpoint.receiptId,previousOutcome:"PRESERVED_NOT_COMPLETED"}:{}),...(settledTestFailure?{previousStage,previousFailedTestResultId:settledTestFailure.resultId,previousOutcome:"FAILED_TEST_PRESERVED"}:{}),previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
+ const plan={...(input.devDeliveryTarget==="DRIVE_DEV"?{devDeliveryTarget:input.devDeliveryTarget}:{}),...(input.sourceCheckpointMode==="SCOPED_GIT"?{sourceCheckpointMode:input.sourceCheckpointMode}:{}),reviewedWritePaths,schemaVersion:settledTestFailure?3:preservedCheckpoint?2:1,...(preservedCheckpoint?{previousStage,previousCheckpointId:preservedCheckpoint.receiptId,previousOutcome:"PRESERVED_NOT_COMPLETED"}:{}),...(settledTestFailure?{previousStage,previousFailedTestResultId:settledTestFailure.resultId,previousOutcome:"FAILED_TEST_PRESERVED"}:{}),previousTaskId:taskId,previousSessionId:sessionId,workerCode:worker,previousHead:session.sourceProvenance.head,previousSourceProofSha256:proof,sourcePrompt:input.sourcePrompt,projectId:input.projectId,moduleName:input.moduleName,targetSource:source,requiresNewBootAck:true,preservesPreviousWorktree:true,productionAccess:"DENY"};
  return {plan,planSha256:hash(plan),task,session,input,preservedCheckpoint,settledTestFailure};
 }
 export async function prepareDeveloperGridWorkReplacement(raw:Record<string,unknown>){const {plan,planSha256}=await replacementPlan(raw);return {plan,planSha256};}

@@ -1405,7 +1405,7 @@ export async function retireDevEngineTaskForReplacement(input:{taskId:string;ses
     const released=await client.from(table).update({status:"released",released_at:now}).eq("session_id",input.sessionId).eq("status","active");
     if(released.error)databaseError("A régi session megmaradt erőforrása nem oldható fel.",released.error,409);
   }
-  return finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${input.nextTaskId}; korábbi task nem készre jelentve.${preserved?` Megőrzött 3/6 Git-mentés: ${checkpoint!.receiptId}, HEAD: ${checkpoint!.head}.`:""}${failedTest?` Visszaigazolt TSC-hiba megőrizve: ${failure!.resultId}, HEAD: ${failure!.head}.`:""}`,rebalance:false});
+  return finalizeDevEngineTask({taskId:task.id,outcome:"failed",note:`SOURCE_REPLACED_BY:${input.nextTaskId}; korábbi task nem készre jelentve.${preserved?` Megőrzött 3/6 Git-mentés: ${checkpoint!.receiptId}, HEAD: ${checkpoint!.head}.`:""}${failedTest?` Visszaigazolt teszthiba megőrizve: ${failure!.resultId}, HEAD: ${failure!.head}.`:""}`,rebalance:false});
 }
 
 export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null; rebalance?: boolean }) {
