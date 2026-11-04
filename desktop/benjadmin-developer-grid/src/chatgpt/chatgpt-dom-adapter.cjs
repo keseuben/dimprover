@@ -240,6 +240,31 @@ const SCROLL_LATEST_SCRIPT = String.raw`(() => {
   }
 })()`;
 
+function executionResultTranscriptScript({conversationId:expectedConversationId,resultId,expand=false}) {
+  return String.raw`(() => {
+    try {
+      ${sharedPrelude()}
+      const expectedConversationId=${JSON.stringify(expectedConversationId)};
+      const resultId=${JSON.stringify(resultId)};
+      if(!expectedConversationId || conversationId!==expectedConversationId || !/^res-[a-f0-9]{64}$/.test(resultId)) return {ok:false,reason:"result-identity-mismatch",conversationId};
+      const generating=Boolean(firstVisible(selectors.stopButton));
+      if(generating) return {ok:true,generating:true,conversationId,messages:[]};
+      const marker="BENJADMIN_EXECUTION_RESULT_ID: "+resultId;
+      const turns=collectConversationTurns();
+      const isResult=turn=>turn.role==="USER" && turn.text.split(/\r?\n/).some(line=>line.trim()===marker);
+      if(${JSON.stringify(expand)}) {
+        const target=turns.filter(isResult).at(-1);
+        if(!target) return {ok:false,reason:"bound-result-missing",conversationId};
+        const buttons=Array.from(target.container.querySelectorAll('button,[role="button"]')).filter(button=>visible(button)&&/^(?:Show more|Több mutatása)$/i.test(String(button.innerText||button.textContent||button.getAttribute('aria-label')||'').trim()));
+        if(buttons.length!==1) return {ok:false,reason:"result-disclosure-not-unique",conversationId};
+        buttons[0].click();
+        return {ok:true,expanded:true,conversationId,messageId:target.messageId};
+      }
+      return {ok:true,generating:false,conversationId,capturedAt:new Date().toISOString(),messages:turns.slice(-500).map(turn=>({messageId:turn.messageId,role:turn.role,text:turn.text.slice(0,isResult(turn)?1024*1024:80000)}))};
+    } catch { return {ok:false,reason:"result-capture-failed"}; }
+  })()`;
+}
+
 const TRANSCRIPT_SCRIPT = String.raw`(() => {
   try {
     ${sharedPrelude()}
@@ -374,6 +399,7 @@ module.exports = {
   REFRESH_SAFETY_SCRIPT,
   SCROLL_LATEST_SCRIPT,
   TRANSCRIPT_SCRIPT,
+  executionResultTranscriptScript,
   CONVERSATION_INFO_SCRIPT,
   LATEST_ASSISTANT_SCRIPT,
   HANDOFF_ASSISTANT_SCRIPT,

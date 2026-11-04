@@ -3837,7 +3837,10 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
 }
 
 async function executionResultTranscriptProof(view,prompt) {
-  const capture=await captureConversationTranscript(view).catch(()=>null);
+  const envelope=require("./workflow/execution-result-protocol.cjs").parseResult(prompt);
+  const capture=envelope?.schemaVersion===2
+    ? await require("./workflow/result-capture.cjs").captureExecutionResultTranscript(view,envelope,chatConversationIdFromUrl(view.webContents.getURL()))
+    : await captureConversationTranscript(view).catch(()=>null);
   const normalize=value=>String(value || "").replace(/\s+/g," ").trim();
   const expected=normalize(prompt);
   const found=capture?.ok && capture.messages?.find(item=>item.role === "USER" && require("./workflow/result-transcript.cjs").matchesExecutionResultTranscript(item.text,prompt));
@@ -3846,7 +3849,8 @@ async function executionResultTranscriptProof(view,prompt) {
 
 async function observeExecutionResult(view,pending) {
   const protocol=require("./workflow/execution-result-protocol.cjs");
-  const capture=await captureConversationTranscript(view).catch(()=>null),envelope=pending.payload.resultEnvelope;
+  const envelope=pending.payload.resultEnvelope;
+  const capture=await require("./workflow/result-capture.cjs").captureExecutionResultTranscript(view,envelope,pending.conversationId);
   if(!capture?.ok||capture.generating||capture.conversationId!==pending.conversationId)return {delivered:false};
   const messages=capture.messages||[];
   let delivered=-1,mismatch=false;

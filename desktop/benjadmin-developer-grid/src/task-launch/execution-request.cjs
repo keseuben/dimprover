@@ -22,7 +22,7 @@ function buildDeveloperGridExecutionResultPrompt(payload){
   const envelope=payload.resultEnvelope||protocol.makeEnvelope(payload);
   const acknowledgement={schemaVersion:1,taskId:envelope.taskId,sessionId:envelope.sessionId,workerCode:envelope.workerCode,requestId:envelope.requestId,resultId:envelope.resultId,resultSha256:envelope.resultSha256,sourceProofSha256:envelope.sourceProofSha256,decision:"ACCEPTED"};
   const fence=String.fromCharCode(96).repeat(3);
-  return ["BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1","BENJADMIN_EXECUTION_RESULT_ID: "+envelope.resultId,EXECUTION_RESULT_START,fence+"json",JSON.stringify(envelope,null,2),fence,EXECUTION_RESULT_END,
+  return ["BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1","BENJADMIN_EXECUTION_RESULT_ID: "+envelope.resultId,EXECUTION_RESULT_START,fence+"json",protocol.serializeEnvelope(envelope),fence,EXECUTION_RESULT_END,
     "A fenti JSON az adott kérés konkrét, szerveroldali eredménye. A kódot és rawContent mezőt szó szerint kezeld; a backtick, BOM és sorvég is adat.",
     "Először igazold vissza a feldolgozott eredményt az alábbi ACK-blokkal. Az azonosítókat és lenyomatot pontosan másold. Ha nem tudod elfogadni az eredményt, a decision legyen REJECTED, és állj meg.",
     protocol.ACK,fence+"json",JSON.stringify(acknowledgement),fence,protocol.ACK_END,

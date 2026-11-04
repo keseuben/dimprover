@@ -22,7 +22,8 @@ await check('actual builder preserves template backticks, BOM, CRLF and Hungaria
   const env=protocol.makeEnvelope(payload),prompt=build({...payload,resultEnvelope:env});
   assert(matches(rendered(prompt),prompt));assert.equal(protocol.parseResult(rendered(prompt)).data.rawContent,raw);
   assert.equal(protocol.parseResult(rendered(prompt)).data.fileSha256,hash(Buffer.from(raw)));
-  assert(!matches(rendered(prompt).replace('`V${version}`','V${version}'),prompt));
+  const tampered=protocol.parseResult(rendered(prompt));tampered.data.rawContent=tampered.data.rawContent.replace('`V${version}`','V${version}');
+  assert(!matches(protocol.START+'\n'+JSON.stringify(tampered)+'\n'+protocol.END,prompt));
 });
 await check('a result marker, copied ID, truncated JSON, changed payload or other identity never proves delivery',()=>{
   const env=protocol.makeEnvelope(payload),prompt=build({...payload,resultEnvelope:env});
@@ -88,7 +89,7 @@ await check('worker ACK is observed only in a later ASSISTANT turn in the bound 
   const main=fs.readFileSync(path.join(source,'main.cjs'),'utf8'),a=main.indexOf('async function observeExecutionResult('),b=main.indexOf('\nasync function sendExecutionResultToWorker(',a),e=protocol.makeEnvelope(payload);
   const prompt=build({...payload,resultEnvelope:e}),ack=protocol.ACK+'\n'+JSON.stringify({schemaVersion:1,...Object.fromEntries(['taskId','sessionId','workerCode','requestId','resultId','resultSha256','sourceProofSha256'].map(k=>[k,e[k]])),decision:'ACCEPTED'})+'\n'+protocol.ACK_END;
   let capture={ok:true,generating:false,conversationId:'chat-a',messages:[{role:'USER',messageId:'u',text:rendered(prompt)},{role:'USER',messageId:'bad',text:ack}]};
-  const ctx={require:id=>require(path.join(source,id)),captureConversationTranscript:async()=>capture};vm.createContext(ctx);vm.runInContext(main.slice(a,b)+';globalThis.run=observeExecutionResult',ctx);
+  const ctx={require:id=>id==='./workflow/result-capture.cjs'?{captureExecutionResultTranscript:async()=>capture}:require(path.join(source,id)),captureConversationTranscript:async()=>capture};vm.createContext(ctx);vm.runInContext(main.slice(a,b)+';globalThis.run=observeExecutionResult',ctx);
   const pending={payload:{...payload,resultEnvelope:e},conversationId:'chat-a'};
   assert(!(await ctx.run({},pending)).ack);capture.messages[1].role='ASSISTANT';assert((await ctx.run({},pending)).ack);
   capture.conversationId='other-chat';assert(!(await ctx.run({},pending)).delivered);

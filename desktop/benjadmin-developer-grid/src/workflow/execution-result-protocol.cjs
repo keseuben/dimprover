@@ -5,6 +5,9 @@ const ACK="BENJADMIN_EXECUTION_RESULT_ACK_V1",ACK_END="BENJADMIN_EXECUTION_RESUL
 const worker=value=>String(value||"").toUpperCase()==="BENAI"?"BENJAMINAI":String(value||"").toUpperCase();
 function canonical(value){if(value===null||typeof value!=="object")return JSON.stringify(value);if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";return "{"+Object.keys(value).filter(k=>value[k]!==undefined).sort().map(k=>JSON.stringify(k)+":"+canonical(value[k])).join(",")+"}";}
 const digest=value=>createHash("sha256").update(canonical(value)).digest("hex");
+// Keep rich-text/Markdown editors from treating log or source bytes as markup.
+// JSON decoding restores the original bytes; the signed envelope is unchanged.
+const serializeEnvelope=row=>JSON.stringify(row,null,2).replace(/[<>&`]/g,char=>"\\u"+char.charCodeAt(0).toString(16).padStart(4,"0"));
 function bodyFor(payload,identity={}){
   const e=payload.execution||{};
   return {schemaVersion:2,taskId:String(payload.taskId||identity.taskId||""),sessionId:String(payload.sessionId||identity.sessionId||""),workerCode:worker(payload.workerCode||identity.workerCode),requestId:String(payload.requestId||identity.requestId||""),sourceProofSha256:String(payload.sourceProofSha256||identity.sourceProofSha256||""),action:String(payload.action||identity.action||"").toUpperCase(),status:String(e.status||"FAIL").toUpperCase(),code:String(e.code||""),summary:String(e.summary||""),data:e.data&&typeof e.data==="object"&&!Array.isArray(e.data)?e.data:{},productionAccess:"DENY"};
@@ -23,4 +26,4 @@ function parseBlock(text,start,end){
 const parseResult=text=>parseBlock(text,START,END);
 const parseAck=text=>parseBlock(text,ACK,ACK_END);
 function ackMatches(ack,envelope){return Boolean(ack&&ack.schemaVersion===1&&["ACCEPTED","REJECTED"].includes(ack.decision)&&["taskId","sessionId","requestId","resultId","resultSha256","sourceProofSha256"].every(k=>ack[k]===envelope[k])&&worker(ack.workerCode)===envelope.workerCode);}
-module.exports={START,END,ACK,ACK_END,worker,canonical,digest,bodyFor,makeEnvelope,verifyEnvelope,parseResult,parseAck,ackMatches};
+module.exports={START,END,ACK,ACK_END,worker,canonical,digest,serializeEnvelope,bodyFor,makeEnvelope,verifyEnvelope,parseResult,parseAck,ackMatches};
