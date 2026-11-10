@@ -22,6 +22,9 @@
       "reviewedWriteFiles": [
         "app/lib/drive-core/storageRepository.ts",
         "app/projektkapu/kiadas/page.tsx"
+      ],
+      "readOnlyRoots": [
+        "app/lib/drive-core"
       ]
     },
     {

@@ -224,7 +224,9 @@ async function buildScopePlan(input: { root: string; taskTitle: string; sourcePr
   const moduleKey=(value:string)=>value.normalize("NFKC").trim().toLocaleLowerCase("hu-HU").replace(/\s+/g," ");
   const registered=moduleCatalog.sources.find(item=>item.projectId===input.projectId&&item.modules.some(name=>moduleKey(name)===moduleKey(input.moduleName)));
   if(registered){
-    const roots=registered.readRoots.filter(rel=>rel&&!rel.startsWith("/")&&!rel.split("/").includes(".."));
+    // Module dependencies may be readable without becoming eligible for reviewed writes.
+    const readOnlyRoots="readOnlyRoots" in registered&&Array.isArray(registered.readOnlyRoots)?registered.readOnlyRoots:[];
+    const roots=[...registered.readRoots,...readOnlyRoots].filter((rel):rel is string=>typeof rel==="string"&&Boolean(rel)&&!rel.startsWith("/")&&!rel.split("/").some(part=>!part||part==="."||part==="..")&&!rel.includes("\\"));
     const listed=await git(input.root,["ls-files","-z","--",...roots]);
     if(listed.code!==0)throw new DeveloperGridExecutionError("A modul forráslistája nem olvasható.","EXECUTION_MODULE_SCOPE_UNAVAILABLE",409);
     for(const rel of listed.stdout.split("\0").filter(Boolean).slice(0,5000)){
@@ -343,7 +345,7 @@ async function readFileAction(root: string, scope: ScopePlan, input: Input): Pro
   if (buffer.includes(0)) throw new DeveloperGridExecutionError("Bináris fájl nem adható a ChatGPT workernek.", "EXECUTION_BINARY_DENIED", 415);
   const lines = buffer.toString("utf8").split(/\r?\n/);
   const start = clampInt(input.startLine, 1, Math.max(1, lines.length), 1);
-  const end = clampInt(input.endLine, start, Math.min(lines.length, start + 399), Math.min(lines.length, start + 199));
+  const end = clampInt(input.endLine, start, Math.min(lines.length, start + 1999), Math.min(lines.length, start + 199));
   const content = output(lines.slice(start - 1, end).map((line, index) => `${start + index}: ${line}`).join("\n"));
   const decoded=buffer.toString("utf8"),lossless=Buffer.from(decoded,"utf8").equals(buffer);
   const completeFile=start===1&&end===lines.length&&lossless&&buffer.length<=MAX_OUTPUT_BYTES;

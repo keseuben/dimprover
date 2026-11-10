@@ -48,4 +48,4 @@ await check('failure receipt completes ACK lifecycle without another execution o
  const result=await process({view:{},task,workerCode:'OUTMINAI',request,expectedProof:envelope.sourceProofSha256,localMismatch:false});
  assert.equal(executions,0);assert.equal(sends,0);assert.deepEqual(stages,['DELIVERED','ACKNOWLEDGED']);assert.equal(result.completed.resultStatus,'FAIL');assert.equal(record.executionWorkflowBlocked,true);assert.equal(record.pendingExecutionResult,null);assert.equal(record.queuedExecutionRequest,null);
 });
-console.log(`Grid 0.1.131 result delivery runtime PASS ${count}/${count}`);
+console.log(`Grid 0.1.132 result delivery runtime PASS ${count}/${count}`);
