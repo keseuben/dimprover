@@ -34,6 +34,14 @@ const prompt=recovery.prompt({id:'task',sessionId:'session',branchName:'branch',
 assert.match(prompt,/A Central Core friss READY végrehajtási kapcsolatot igazolt/);assert.match(prompt,/Pontosan EGY végrehajtási kérésblokkot/);assert.doesNotMatch(prompt,/The previous|No new Grid|Do not use|Reply with|Then wait/);
 const request=JSON.parse(prompt.split('BENJADMIN_EXECUTION_REQUEST_V1\n')[1].split('\n')[0]);assert.equal(request.workerCode,'BENJAMINAI');assert.equal(request.action,'GIT_STATUS');assert.equal(request.sourceProofSha256,'b'.repeat(64));
 console.log('PASS Hungarian recovery prose retains the exact machine protocol and request identity');
+let draft=prompt,sent=0;
+const draftTask={id:'task',sessionId:'session',sourceHead:'a'.repeat(40)};
+const manual={manualControlContext:async()=>({code:'BENAI',task:draftTask,view:{},proof:'b'.repeat(64),conversationId:'chat',pair:{}}),manualControlKeys:new Set(),workflowControl:{isManual:()=>true,executionPending:()=>false},config:{},loadTaskLaunchRecords:()=>({}),captureLatestAssistantText:async()=>({ok:true,generating:false,text:''}),captureComposerDraftText:async()=>({ok:true,text:draft}),createHash,normalizedProofWorkerCode:code=>code==='BENAI'?'BENJAMINAI':code,sendPreparedChatPrompt:async()=>{sent++;return {sent:true,verified:true};},saveTaskLaunchPatch:()=>{},send:()=>{}};
+vm.runInNewContext(fn(main,'runManualControl')+';globalThis.run=runManualControl;',manual);
+const sendDraft=()=>manual.run({action:'send-draft',sha256:createHash('sha256').update(draft).digest('hex')});
+await sendDraft();assert.equal(sent,1,'generated recovery prompt passes the real manual draft identity validator');
+draft=prompt.replace('Fresh source proof: '+ 'b'.repeat(64),'Fresh source proof: '+'c'.repeat(64));await assert.rejects(sendDraft,/azonossága nem igazolt/);assert.equal(sent,1,'foreign proof never sends');
+console.log('PASS recovery prompt travels through actual manual send-draft validation; foreign proof stays blocked');
 const status={manualControlContext:async()=>({pair:{selectionRecoveryRequired:true,session:{developmentContext:{bootAckState:'VALIDATED'}}},task:{id:'task',sessionId:'session',sourceHead:'a'.repeat(40)},code:'OUTMINAI',proof:'b'.repeat(64),conversationId:'chat',conversationBound:false}),loadTaskLaunchRecords:()=>({}),config:{},workflowControl:{...workflowControl,mode:()=> 'MANUAL',executionAllowed:()=>false},createHash};
 vm.runInNewContext(fn(main,'manualControlStatus')+';globalThis.status=manualControlStatus;',status);
 const result=await status.status({});assert.equal(result.control.sourceAuthorityReady,false);assert.equal(result.control.executionState,'RECOVERY_REQUIRED');assert.equal(result.control.executionAccess,'PAUSED');

@@ -2728,7 +2728,7 @@ function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
     "Branch: " + String(task?.branchName || ""),
     "Worktree: " + String(task?.worktreePath || ""),
     "HEAD: " + String(task?.sourceHead || ""),
-    "Friss forrásigazolás: " + proofSha256,
+    "Fresh source proof: " + proofSha256,
     "DEV ONLY - PROD DENY.",
     "",
     "A Central Core friss READY végrehajtási kapcsolatot igazolt ugyanahhoz a meglévő Grid task/session/worktree azonossághoz.",

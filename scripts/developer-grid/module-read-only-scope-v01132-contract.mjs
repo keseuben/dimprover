@@ -57,5 +57,5 @@ const bounded=await readSandbox.read('/fixture',{}, {path:'app/lib/drive-core/st
 assert.equal(bounded.data.endLine,2000);assert.equal(bounded.data.completeFile,false);
 bytes=Buffer.alloc(256*1024+1,120);
 await assert.rejects(()=>readSandbox.read('/fixture',{}, {path:'app/lib/drive-core/storageRepository.ts'}),e=>e.code==='EXECUTION_READ_TOO_LARGE');
-console.log('Grid 0.1.133 read-only module scope PASS 18/18');
-console.log('Grid 0.1.133 complete source read PASS 23/23');
+console.log('Grid 0.1.134 read-only module scope PASS 18/18');
+console.log('Grid 0.1.134 complete source read PASS 23/23');
