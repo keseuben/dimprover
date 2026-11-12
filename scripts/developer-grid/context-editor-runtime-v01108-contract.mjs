@@ -31,7 +31,7 @@ console.log('PASS prelaunch memory isolation and existing validated task continu
 const recovery={EXECUTION_REQUEST_START:'BENJADMIN_EXECUTION_REQUEST_V1',EXECUTION_REQUEST_END:'BENJADMIN_EXECUTION_REQUEST_END'};
 vm.runInNewContext(fn(main,'buildExecutionAuthorityRecoveredPrompt')+';globalThis.prompt=buildExecutionAuthorityRecoveredPrompt;',recovery);
 const prompt=recovery.prompt({id:'task',sessionId:'session',branchName:'branch',worktreePath:'/work',sourceHead:'a'.repeat(40)},'BENAI',{proofSha256:'b'.repeat(64)});
-assert.match(prompt,/A korábbi belső Dev Center munkamenet lejárt/);assert.match(prompt,/Pontosan EGY végrehajtási kérésblokkot/);assert.doesNotMatch(prompt,/The previous|No new Grid|Do not use|Reply with|Then wait/);
+assert.match(prompt,/A Central Core friss READY végrehajtási kapcsolatot igazolt/);assert.match(prompt,/Pontosan EGY végrehajtási kérésblokkot/);assert.doesNotMatch(prompt,/The previous|No new Grid|Do not use|Reply with|Then wait/);
 const request=JSON.parse(prompt.split('BENJADMIN_EXECUTION_REQUEST_V1\n')[1].split('\n')[0]);assert.equal(request.workerCode,'BENJAMINAI');assert.equal(request.action,'GIT_STATUS');assert.equal(request.sourceProofSha256,'b'.repeat(64));
 console.log('PASS Hungarian recovery prose retains the exact machine protocol and request identity');
 const status={manualControlContext:async()=>({pair:{selectionRecoveryRequired:true,session:{developmentContext:{bootAckState:'VALIDATED'}}},task:{id:'task',sessionId:'session',sourceHead:'a'.repeat(40)},code:'OUTMINAI',proof:'b'.repeat(64),conversationId:'chat',conversationBound:false}),loadTaskLaunchRecords:()=>({}),config:{},workflowControl:{...workflowControl,mode:()=> 'MANUAL',executionAllowed:()=>false},createHash};

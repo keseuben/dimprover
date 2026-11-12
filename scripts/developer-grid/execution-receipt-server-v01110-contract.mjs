@@ -1,3 +1,4 @@
+import {resourceRetry} from './resource-retry-test-loader.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -16,7 +17,7 @@ const session={id:'session-a',taskId:'task-a',workerCode:'OUTMINAI',endedAt:null
 const state={sessions:[session]},task={id:'task-a',environment:'DEV',productionAccess:'DENY'};
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'app/lib/developer-grid/execution-bridge.ts'),'utf8')+'\nexport const test={readFileAction,writeFileAction,resultEnvelope,appendAudit,auditRows,assertPriorExecutionSettled};',{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
 const stubs={'node:fs/promises':mapped,'./state-store':{readGridState:async()=>state},'./work-start':{getDeveloperGridTaskById:async id=>id===task.id?task:null},'./task-operation-lock':{withDeveloperGridTaskOperation:async(_id,fn)=>fn()},'./module-source':{},'./reviewed-write-scope':{},'@/config/developer-grid-module-sources.json':{sources:[]},'@/app/lib/dev-center/engine-repository':{},'@/app/lib/dev-center/ai-worker/scope-analyzer':{},'@/app/lib/dev-center/ai-worker/scope-policy':{classifyScopePath:()=>({decision:'AUTO_APPROVED',riskLevel:'GREEN'})},'node:child_process':{execFile:(_file,_args,_opts,done)=>done(null,'','')}};
-const context={exports:{},require:id=>Object.hasOwn(stubs,id)?stubs[id]:require(id),Buffer,console,process:{env:{BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT:audit}}};vm.createContext(context);vm.runInContext(compiled,context);
+const context={exports:{},require:id=>id==='./resource-retry'?resourceRetry:Object.hasOwn(stubs,id)?stubs[id]:require(id),Buffer,console,process:{env:{BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT:audit}}};vm.createContext(context);vm.runInContext(compiled,context);
 const server=context.exports,test=server.test,hash=b=>createHash('sha256').update(b).digest('hex');
 let count=0;async function check(name,fn){await fn();console.log('PASS',++count,name);}
 const rel='components/drive/driveBuildInfo.ts',scope={readablePaths:[rel],writablePaths:[rel],reviewedWritePaths:[],candidates:[]};

@@ -12,6 +12,7 @@ import {verifyCurrentSourceExecutionState} from "./source-provenance";
 import {developerWorkerBranchName,developerWorkerWorktreePath,DEVELOPER_WORKER_REPOSITORY} from "./worker-workspace";
 import {patchGridWorkerSession,appendGridEvent} from "./state-store";
 import type {SourceExecutionProof,WorkerSession,DeveloperGridTask} from "./types";
+import {resourceRetryResolved} from "./resource-retry";
 function fail(code:string,message:string):never{throw Object.assign(new Error(message),{code,status:409});}
 export async function assertCheckpointExecutionSettled(taskId:string){
  const root=process.env.BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT?.trim()||"/srv/dimpro-dev/coordination/developer-grid/execution";
@@ -28,7 +29,7 @@ export async function assertCheckpointExecutionSettled(taskId:string){
   const result=rows.find(r=>r.event==="RESULT"&&sameRequest(r)&&r.requestHash===request.requestHash);
   const validResult=result&&typeof result.resultSha256==="string"&&/^[a-f0-9]{64}$/.test(result.resultSha256)&&result.resultId==="res-"+result.resultSha256;
   const sameResult=(r:Record<string,unknown>)=>validResult&&sameRequest(r)&&r.resultId===result!.resultId&&r.resultSha256===result!.resultSha256&&r.sourceProofSha256===request.sourceProofSha256;
-  if(!validResult||!rows.some(r=>r.event==="DELIVERED"&&sameResult(r))||!rows.some(r=>r.event==="ACKNOWLEDGED"&&sameResult(r)&&r.decision==="ACCEPTED")||!rows.some(r=>r.event==="COMPLETED"&&sameResult(r)&&r.workflowContinue===true))
+  if(!validResult||!rows.some(r=>r.event==="DELIVERED"&&sameResult(r))||!rows.some(r=>r.event==="ACKNOWLEDGED"&&sameResult(r)&&r.decision==="ACCEPTED")||(!rows.some(r=>r.event==="COMPLETED"&&sameResult(r)&&r.workflowContinue===true)&&!resourceRetryResolved(rows,result!)))
    fail("CHECKPOINT_EXECUTION_PENDING","A Git-mentéshez minden művelet eredményének feldolgozását vissza kell igazolni.");
  }
 }

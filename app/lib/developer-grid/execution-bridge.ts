@@ -3,6 +3,7 @@ import {resolveDeveloperGridModuleSource} from "./module-source";
 import {boundReviewedWritePaths} from "./reviewed-write-scope";
 import moduleCatalog from "@/config/developer-grid-module-sources.json";
 import {withDeveloperGridTaskOperation} from "./task-operation-lock";
+import {isMemoryPreflight,resultSettled,resourceRetryResolved,sameExecution} from "./resource-retry";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -479,21 +480,36 @@ function envelopeFromAudit(row:Record<string,unknown>,rows:Record<string,unknown
   const request=rows.find(r=>r.event==="REQUEST"&&r.requestId===row.requestId&&r.requestHash===row.requestHash);
   return resultEnvelope({...request,...row,sourceProofSha256:row.sourceProofSha256||request?.sourceProofSha256});
 }
-async function assertPriorExecutionSettled(context:{taskId:string;sessionId:string;proofSha:string;requestId:string}) {
+async function retrySourceFingerprint(root:string) {
+  const diff=await git(root,["diff","--binary","HEAD"]),untracked=await git(root,["ls-files","--others","--exclude-standard"]);
+  if(diff.code||untracked.code||untracked.stdout.trim())throw new DeveloperGridExecutionError("Az újrapróbálás forrásállapota nem igazolható.","EXECUTION_RESOURCE_RETRY_SOURCE_INVALID",409);
+  return sha(diff.stdout);
+}
+async function assertPriorExecutionSettled(context:{taskId:string;sessionId:string;proofSha:string;requestId:string;worker?:string;root?:string;action?:string},input:Input={}) {
   const rows=await auditRows(context.taskId);
+  const unresolved=rows.filter(r=>r.sessionId===context.sessionId&&isMemoryPreflight(r)&&!resourceRetryResolved(rows,r));
+  let retryAuthorizationId:string|null=null;
+  if(unresolved.length){
+    const authorization=[...rows].reverse().find(r=>r.event==="RESOURCE_RETRY_AUTHORIZED"&&r.sessionId===context.sessionId&&r.workerCode===context.worker&&r.sourceProofSha256===context.proofSha&&Array.isArray(r.blockedResultIds)&&unresolved.every(b=>(r.blockedResultIds as unknown[]).includes(b.resultId)));
+    if(!authorization||!context.root||authorization.sourceFingerprint!==await retrySourceFingerprint(context.root)
+      ||!(context.action==="RUN_DEV_COMMAND"&&text(input.command,80).toUpperCase()==="TSC"||["GIT_STATUS","GIT_DIFF","GIT_DIFF_CHECK","READ_FILE","LIST_FILES","SEARCH_FILES"].includes(context.action||"")))
+      throw new DeveloperGridExecutionError("A memória miatt megállt teszthez igazolt, azonos forrású újrapróbálás szükséges.","EXECUTION_RESOURCE_RETRY_REQUIRED",409);
+    retryAuthorizationId=String(authorization.authorizationId);
+  }
   if(rows.some(r=>r.event==="REQUEST"&&r.sessionId===context.sessionId&&r.sourceProofSha256===context.proofSha&&!rows.some(done=>done.event==="RESULT"&&done.requestId===r.requestId&&done.requestHash===r.requestHash)))throw new DeveloperGridExecutionError("Egy korábbi végrehajtás kimenetele bizonytalan; új kérés nem indulhat.","EXECUTION_OUTCOME_UNCERTAIN",409);
   for(const row of rows.filter(r=>r.event==="RESULT"&&r.protocolVersion===2&&r.sessionId===context.sessionId&&r.sourceProofSha256===context.proofSha&&r.requestId!==context.requestId)) {
     const e=envelopeFromAudit(row,rows),completed=rows.find(r=>r.event==="COMPLETED"&&r.resultId===e.resultId);
     if(!completed)throw new DeveloperGridExecutionError("Az előző eredmény worker ACK-ja még nincs elfogadva.","EXECUTION_PREVIOUS_ACK_REQUIRED",409);
-    if(completed.workflowContinue!==true)throw new DeveloperGridExecutionError("Az előző művelet hibával vagy elutasított ACK-val zárult; új művelet nem indulhat.","EXECUTION_PREVIOUS_RESULT_BLOCKED",409);
+    if(completed.workflowContinue!==true&&!resourceRetryResolved(rows,row)&&!(retryAuthorizationId&&unresolved.includes(row)))throw new DeveloperGridExecutionError("Az előző művelet hibával vagy elutasított ACK-val zárult; új művelet nem indulhat.","EXECUTION_PREVIOUS_RESULT_BLOCKED",409);
   }
+  return retryAuthorizationId;
 }
 export async function recordDeveloperGridExecutionReceipt(raw:unknown) {
   const input=(raw&&typeof raw==="object"&&!Array.isArray(raw)?raw:{}) as Record<string,unknown>;
   const taskId=text(input.taskId,220);
   return withDeveloperGridTaskOperation(taskId,async()=>{
     const sessionId=text(input.sessionId,240),worker=workerCode(input.workerCode),requestId=safeRequestId(input.requestId),stage=text(input.stage,40);
-    if(!taskId||!sessionId||!INTERNAL_WORKERS.has(worker)||!["LOOKUP","DELIVERED","ACKNOWLEDGED"].includes(stage))throw new DeveloperGridExecutionError("Hiányos kézbesítési identity.","EXECUTION_RECEIPT_INVALID",400);
+    if(!taskId||!sessionId||!INTERNAL_WORKERS.has(worker)||!["LOOKUP","DELIVERED","ACKNOWLEDGED","RETRY_RESOURCE"].includes(stage))throw new DeveloperGridExecutionError("Hiányos kézbesítési identity.","EXECUTION_RECEIPT_INVALID",400);
     const state=await readGridState(),session=state.sessions.find(s=>s.id===sessionId&&s.taskId===taskId&&!s.endedAt);
     const task=await getDeveloperGridTaskById(taskId);
     const development=session?.developmentContext as unknown as Record<string,unknown>|undefined;
@@ -502,6 +518,22 @@ export async function recordDeveloperGridExecutionReceipt(raw:unknown) {
     const rows=await auditRows(taskId),row=[...rows].reverse().find(r=>r.event==="RESULT"&&r.requestId===requestId&&r.sessionId===sessionId&&workerCode(r.workerCode)===worker);
     if(!row)throw new DeveloperGridExecutionError("Nincs ilyen eltárolt szerveres eredmény.","EXECUTION_RESULT_NOT_FOUND",404);
     const envelope=envelopeFromAudit(row,rows);
+    if(stage==="RETRY_RESOURCE"){
+      if(!isMemoryPreflight(row)||!resultSettled(rows,row,false)||input.resultId!==envelope.resultId||input.resultSha256!==envelope.resultSha256)
+        throw new DeveloperGridExecutionError("Csak visszaigazolt memória-előellenőrzés próbálható újra.","EXECUTION_RESOURCE_RETRY_DENIED",409);
+      const context=await validateContext({...input,schemaVersion:1,requestId:"retry-"+randomUUID(),action:"RUN_DEV_COMMAND",command:"TSC"});
+      // Every prior request must have a known, accepted outcome. Only this exact
+      // resource preflight is recoverable; code failures and rejected ACKs stay blocked.
+      const prior=rows.filter(r=>r.event==="RESULT"&&r.sessionId===sessionId);
+      if(rows.some(r=>r.event==="REQUEST"&&r.sessionId===sessionId&&!prior.some(p=>sameExecution(p,r)&&p.requestHash===r.requestHash))
+        ||prior.some(r=>!resultSettled(rows,r,false)||((r.result as Result).status!=="PASS"&&!resourceRetryResolved(rows,r)&&!isMemoryPreflight(r))))
+        throw new DeveloperGridExecutionError("Más függő vagy hibás művelet mellett nincs erőforrás-újrapróbálás.","EXECUTION_RESOURCE_RETRY_DENIED",409);
+      const availableBytes=(process as typeof process & {availableMemory?:()=>number}).availableMemory?.()||0;
+      if(availableBytes<6*1024**3)throw new DeveloperGridExecutionError("A típusellenőrzéshez továbbra sincs 6 GiB szabad memóriakeret.","EXECUTION_TEST_MEMORY_UNAVAILABLE",409);
+      const authorization={event:"RESOURCE_RETRY_AUTHORIZED",authorizationId:"retry-"+randomUUID(),at:new Date().toISOString(),taskId,sessionId,workerCode:worker,sourceProofSha256:context.proofSha,conversationId:bound,command:"TSC",blockedResultIds:prior.filter(r=>isMemoryPreflight(r)&&!resourceRetryResolved(rows,r)).map(r=>r.resultId),sourceFingerprint:await retrySourceFingerprint(context.root),availableBytes,requiredAvailableBytes:6*1024**3,environment:"DEV",productionAccess:"DENY"};
+      await appendAudit(taskId,authorization);
+      return {ok:true,stage:"RESOURCE_RETRY_AUTHORIZED",authorization};
+    }
     if(stage==="LOOKUP") {
       if(envelope.sourceProofSha256!==text(input.sourceProofSha256,80))throw new DeveloperGridExecutionError("Az eltárolt eredmény source proofja eltér.","EXECUTION_RESULT_ACK_MISMATCH",409);
       return {ok:true,stage:"EXECUTED",replayed:true,execution:row.result,resultEnvelope:envelope,requestId,taskId,sessionId,action:envelope.action,executedAt:row.at,productionAccess:"DENY"};
@@ -539,7 +571,7 @@ async function executeDeveloperGridRequestLocked(raw: unknown) {
   }
   const priorRows=await auditRows(context.taskId);
   if(priorRows.some(r=>r.event==="REQUEST"&&r.requestId===context.requestId))throw new DeveloperGridExecutionError("A korábbi művelet eredménye bizonytalan; automatikus újrafuttatás tiltva.","EXECUTION_OUTCOME_UNCERTAIN",409);
-  await assertPriorExecutionSettled(context);
+  const resourceRetryAuthorizationId=await assertPriorExecutionSettled(context,input);
   await appendAudit(context.taskId, {
     event: "REQUEST",
     at: new Date().toISOString(),
@@ -554,6 +586,7 @@ async function executeDeveloperGridRequestLocked(raw: unknown) {
     querySha256: text(input.query, 500) ? sha(text(input.query, 500)) : null,
     contentSha256: typeof input.content === "string" ? sha(input.content) : null,
     command: text(input.command, 80).toUpperCase() || null,
+    ...(resourceRetryAuthorizationId&&context.action==="RUN_DEV_COMMAND"?{resourceRetryAuthorizationId}:{}),
     scope: { moduleName: context.scopePlan.moduleName, readableCount: context.scopePlan.readablePaths.length, writableCount: context.scopePlan.writablePaths.length },
     environment: "DEV",
     productionAccess: "DENY",

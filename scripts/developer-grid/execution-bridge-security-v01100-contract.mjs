@@ -1,3 +1,4 @@
+import {resourceRetry} from './resource-retry-test-loader.mjs';
 import {automaticWorkflowVm} from "./automatic-workflow-test-context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -50,7 +51,7 @@ function load(data) {
     "./work-start":{getDeveloperGridTaskById:async id=>data.task?.id===id?data.task:null},
     "./state-store":{readGridState:async()=>data.state},
   };
-  const sandbox={exports:{},require:id=>Object.hasOwn(stubs,id)?stubs[id]:require(id),process:{env:{}},Buffer,console};
+  const sandbox={exports:{},require:id=>id==='./resource-retry'?resourceRetry:Object.hasOwn(stubs,id)?stubs[id]:require(id),process:{env:{}},Buffer,console};
   automaticWorkflowVm(vm).runInNewContext(compiled,sandbox,{filename:"execution-bridge.ts"});
   return {...sandbox.exports.runtimeTest,calls};
 }

@@ -1,9 +1,10 @@
+import {resourceRetry} from './resource-retry-test-loader.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import vm from 'node:vm';import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';
 process.chdir(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'));
 const require=createRequire(import.meta.url),ts=require('typescript');
 const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
-function load(file,mocks={}){const m={exports:{}};vm.runInNewContext(compile(fs.readFileSync(file,'utf8')),{module:m,exports:m.exports,require:id=>Object.hasOwn(mocks,id)?mocks[id]:require(id),process,Buffer,console,setTimeout,clearTimeout});return m.exports;}
+function load(file,mocks={}){const m={exports:{}};vm.runInNewContext(compile(fs.readFileSync(file,'utf8')),{module:m,exports:m.exports,require:id=>id==='./resource-retry'?resourceRetry:Object.hasOwn(mocks,id)?mocks[id]:require(id),process,Buffer,console,setTimeout,clearTimeout});return m.exports;}
 const base='app/lib/developer-grid/',policy=load(base+'source-checkpoint-policy.ts'),hash=policy.checkpointHash;
 let n=0;async function test(name,fn){await fn();console.log('PASS',++n,name);}
 const identity={taskId:'task',sessionId:'session',workerCode:'OUTMINAI',initialHead:'a'.repeat(40),sourcePromptSha256:hash('Develop fixture'),paths:['components/a.ts']};

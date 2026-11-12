@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import {createRequire} from 'node:module';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+import {resourceRetry} from './resource-retry-test-loader.mjs';
+process.chdir(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'));
+const require=createRequire(import.meta.url),ts=require('typescript');
+const tmp=await fsp.mkdtemp(path.join(os.tmpdir(),'grid-resource-retry-133-'));
+const task={id:'task-133',environment:'DEV',productionAccess:'DENY'};
+const session={id:'session-133',taskId:task.id,workerCode:'OUTMINAI',endedAt:null,developmentContext:{surfaceConversationId:'chat-133'}};
+let available=5*1024**3,diff='approved dirty source',executions=0,authorizationValid=true;
+const scope={readablePaths:[],writablePaths:[],candidates:[]};
+const execFile=()=>{throw Error('use promisified exec');};
+execFile[promisify.custom]=async(_file,args)=>({stdout:args.includes('diff')?diff:'',stderr:''});
+const compiled=ts.transpileModule(fs.readFileSync('app/lib/developer-grid/execution-bridge.ts','utf8')+`
+export const test={appendAudit,auditRows,resultEnvelope,assertPriorExecutionSettled};
+export function setDependencies(validate:typeof validateContext,run:typeof perform){validateContext=validate;perform=run;}
+`,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+const stubs={'./resource-retry':resourceRetry,'./state-store':{readGridState:async()=>({sessions:[session]})},'./work-start':{getDeveloperGridTaskById:async id=>id===task.id?task:null},'./task-operation-lock':{withDeveloperGridTaskOperation:async(_id,fn)=>fn()},'./module-source':{},'./reviewed-write-scope':{},'@/config/developer-grid-module-sources.json':{},'@/app/lib/dev-center/engine-repository':{},'@/app/lib/dev-center/ai-worker/scope-analyzer':{},'@/app/lib/dev-center/ai-worker/scope-policy':{},'node:child_process':{execFile}};
+const sandbox={exports:{},require:id=>Object.hasOwn(stubs,id)?stubs[id]:require(id),Buffer,process:{env:{BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT:tmp},availableMemory:()=>available}};
+vm.runInNewContext(compiled,sandbox);
+const server=sandbox.exports;
+server.setDependencies(async input=>{if(!authorizationValid)throw Error('authority denied');return {taskId:input.taskId,sessionId:input.sessionId,worker:input.workerCode,proofSha:input.sourceProofSha256,requestId:input.requestId,action:input.action,root:'/fixture',scopePlan:scope,requestHash:'hash-'+input.requestId};},async()=>{executions++;return {status:'PASS',code:'EXECUTION_COMMAND_OK',summary:'TSC PASS.',data:{command:'TSC'}};});
+const base={taskId:task.id,sessionId:session.id,workerCode:'OUTMINAI',sourceProofSha256:'a'.repeat(64),conversationId:'chat-133'};
+const request={...base,schemaVersion:1,requestId:'req-blocked',action:'RUN_DEV_COMMAND',command:'TSC'};
+const blocked={status:'BLOCKED',code:'EXECUTION_TEST_MEMORY_UNAVAILABLE',summary:'Memóriahiány.',data:{command:'TSC',availableBytes:5*1024**3,requiredAvailableBytes:6*1024**3}};
+const envelope=server.test.resultEnvelope({...request,result:blocked});
+await server.test.appendAudit(task.id,{...request,event:'REQUEST',requestHash:'original-hash'});
+await server.test.appendAudit(task.id,{...request,event:'RESULT',requestHash:'original-hash',protocolVersion:2,result:blocked,resultId:envelope.resultId,resultSha256:envelope.resultSha256});
+const receipt={...base,requestId:request.requestId,resultId:envelope.resultId,resultSha256:envelope.resultSha256};
+const retry=()=>server.recordDeveloperGridExecutionReceipt({...receipt,sourceProofSha256:'b'.repeat(64),stage:'RETRY_RESOURCE'});
+await assert.rejects(retry(),e=>e.code==='EXECUTION_RESOURCE_RETRY_DENIED');
+await server.recordDeveloperGridExecutionReceipt({...receipt,stage:'DELIVERED'});
+await server.recordDeveloperGridExecutionReceipt({...receipt,stage:'ACKNOWLEDGED',decision:'ACCEPTED'});
+await assert.rejects(retry(),e=>e.code==='EXECUTION_TEST_MEMORY_UNAVAILABLE');assert.equal(executions,0);
+available=7*1024**3;authorizationValid=false;await assert.rejects(retry(),/authority denied/);authorizationValid=true;
+for(const [key,value] of [['conversationId','other'],['workerCode','BENJAMINAI'],['resultId','other'],['resultSha256','0'.repeat(64)]])await assert.rejects(()=>server.recordDeveloperGridExecutionReceipt({...receipt,[key]:value,stage:'RETRY_RESOURCE'}));
+const permitted=await retry();assert.equal(permitted.stage,'RESOURCE_RETRY_AUTHORIZED');assert.equal(executions,0,'retry authorization itself never executes a test');
+const next={...request,requestId:'req-retry',sourceProofSha256:'b'.repeat(64)};
+await assert.rejects(()=>server.executeDeveloperGridRequest({...next,action:'WRITE_FILE'}),e=>e.code==='EXECUTION_RESOURCE_RETRY_REQUIRED');
+await assert.rejects(()=>server.executeDeveloperGridRequest({...next,command:'LINT'}),e=>e.code==='EXECUTION_RESOURCE_RETRY_REQUIRED');
+diff='changed since authorization';await assert.rejects(()=>server.executeDeveloperGridRequest(next),e=>e.code==='EXECUTION_RESOURCE_RETRY_REQUIRED');diff='approved dirty source';
+const outcome=await server.executeDeveloperGridRequest(next);assert.equal(executions,1);assert.equal(outcome.execution.status,'PASS');
+const rows=await server.test.auditRows(task.id),original=rows.find(r=>r.event==='RESULT'&&r.requestId===request.requestId);
+assert.equal(resourceRetry.resourceRetryResolved(rows,original),false,'execution alone does not resolve the historical blocker');
+const nextReceipt={...base,sourceProofSha256:next.sourceProofSha256,requestId:next.requestId,resultId:outcome.resultEnvelope.resultId,resultSha256:outcome.resultEnvelope.resultSha256};
+await server.recordDeveloperGridExecutionReceipt({...nextReceipt,stage:'DELIVERED'});
+assert.equal(resourceRetry.resourceRetryResolved(await server.test.auditRows(task.id),original),false,'delivery alone is not ACK');
+await server.recordDeveloperGridExecutionReceipt({...nextReceipt,stage:'ACKNOWLEDGED',decision:'ACCEPTED'});
+const complete=await server.test.auditRows(task.id);assert.equal(resourceRetry.resourceRetryResolved(complete,original),true);
+assert.equal(original.result.status,'BLOCKED');assert.equal(complete.filter(r=>r.event==='RESULT'&&r.requestId===request.requestId).length,1);
+await server.executeDeveloperGridRequest(next);assert.equal(executions,1,'request replay must not repeat TSC');
+for(const key of ['taskId','sessionId','workerCode','requestId','sourceProofSha256','resultId','resultSha256']){
+ const tampered=complete.map(row=>row.event==='ACKNOWLEDGED'&&row.requestId===next.requestId?{...row,[key]:'other'}:row);
+ assert.equal(resourceRetry.resourceRetryResolved(tampered,original),false,'cross-identity ACK cannot resolve '+key);
+}
+// Run the actual checkpoint audit gate against the same immutable event history.
+const checkpointSource=fs.readFileSync('app/lib/developer-grid/source-checkpoint.ts','utf8');
+const gate=checkpointSource.slice(checkpointSource.indexOf('export async function assertCheckpointExecutionSettled('),checkpointSource.indexOf('// Called under'));
+const gateSandbox={exports:{},process:sandbox.process,path,readFile:fsp.readFile,stat:fsp.stat,resourceRetryResolved:resourceRetry.resourceRetryResolved,fail:(code,message)=>{throw Object.assign(Error(message),{code});}};
+vm.runInNewContext(ts.transpileModule(gate,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,gateSandbox);
+await gateSandbox.exports.assertCheckpointExecutionSettled(task.id);
+const rejected=complete.map(r=>r.event==='ACKNOWLEDGED'&&r.requestId===next.requestId?{...r,decision:'REJECTED'}:r);
+await fsp.writeFile(path.join(tmp,task.id+'.jsonl'),rejected.map(r=>JSON.stringify(r)).join('\n')+'\n');
+await assert.rejects(()=>gateSandbox.exports.assertCheckpointExecutionSettled(task.id),e=>e.code==='CHECKPOINT_EXECUTION_PENDING');
+await fsp.writeFile(path.join(tmp,task.id+'.jsonl'),complete.map(r=>JSON.stringify(r)).join('\n')+'\n');
+// Exercise the actual desktop recovery function: the local stop can only be
+// lifted after the server authorizes the exact failed result and fresh proof.
+const main=fs.readFileSync('desktop/benjadmin-developer-grid/src/main.cjs','utf8'),start=main.indexOf('async function recoverConversationExecutionAuthority('),end=main.indexOf('\nfunction buildExecutionAuthorityRecoveredPrompt(',start);
+const refreshedTask={id:task.id,sessionId:session.id,sourceHead:'c'.repeat(40),surfaceConversationId:'chat-133'};
+const proof={sha256:'b'.repeat(64),engineSessionId:'engine-133'};
+let local,reply,calls;
+const reset=()=>{calls=0;local={executionWorkflowBlocked:true,executionBridgeCode:'EXECUTION_TEST_MEMORY_UNAVAILABLE',executionHistory:[{action:'RUN_DEV_COMMAND',requestId:request.requestId,resultId:envelope.resultId,resultSha256:envelope.resultSha256,resultStatus:'BLOCKED',completedAt:'now'}]};reply={ok:true,stage:'RESOURCE_RETRY_AUTHORIZED',authorization:permitted.authorization};};
+const desktop={exports:{},config:{benjadminBaseUrl:'https://grid.dev'},readDeviceToken:()=>'',resolvedExecutionProofSha256:()=>proof.sha256,normalizedProofWorkerCode:x=>x,launchTaskFromWork:()=>refreshedTask,loadTaskLaunchRecords:()=>({[task.id]:local}),saveTaskLaunchPatch:(_task,_worker,patch)=>Object.assign(local,patch),workflowControl:{executionPending:()=>false},send:()=>{},recoverDeveloperGridExecutionAuthority:async()=>({recovery:{task,session:{...session,sourceProvenance:{head:refreshedTask.sourceHead},developmentContext:{bootAckState:'VALIDATED',bootAckCodingAllowed:true,sourceExecutionProof:proof,engineSessionId:proof.engineSessionId}},sourceExecutionProof:proof}}),recordDeveloperGridExecutionReceipt:async()=>{calls++;if(reply instanceof Error)throw reply;return reply;}};
+vm.runInNewContext(main.slice(start,end)+'\nexports.recover=recoverConversationExecutionAuthority;',desktop);
+reset();reply=new Error('memory still unavailable');await assert.rejects(()=>desktop.exports.recover(refreshedTask,'OUTMINAI'));assert.equal(local.executionWorkflowBlocked,true);
+reset();reply={...reply,authorization:{...permitted.authorization,sessionId:'foreign'}};await assert.rejects(()=>desktop.exports.recover(refreshedTask,'OUTMINAI'));assert.equal(local.executionWorkflowBlocked,true);
+reset();await desktop.exports.recover(refreshedTask,'OUTMINAI');assert.equal(calls,1);assert.equal(local.executionWorkflowBlocked,false);assert.equal(local.executionHistory.length,1);assert.equal(local.executionHistory[0].resultStatus,'BLOCKED');assert.equal(local.manualExecutionPermission,undefined);
+reset();local.executionBridgeCode='EXECUTION_COMMAND_FAIL';await desktop.exports.recover(refreshedTask,'OUTMINAI');assert.equal(calls,0);assert.equal(local.executionWorkflowBlocked,true,'code failure is not a resource recovery');
+console.log('PASS resource retry: accepted immutable failure, fresh authority, 6 GiB gate, source fingerprint, narrow TSC/read scope, unique replay-safe request, result-specific ACK, checkpoint resolution');

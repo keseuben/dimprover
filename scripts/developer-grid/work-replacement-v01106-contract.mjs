@@ -1,3 +1,4 @@
+import {resourceRetry} from './resource-retry-test-loader.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -17,7 +18,7 @@ function fixture(){
  const input={taskId:task.id,sessionId:session.id,workerCode:'BENJAMINAI',expectedSourceProofSha256:'b'.repeat(64),sourcePrompt:'Implement a DEV-only UI correction; no deployment.',projectId:task.projectId,moduleName:'Developer Grid V1'};
  const source={schemaVersion:1,head:'c'.repeat(40),branch:'codex/test',authority:'MODULE_CATALOG'};
  const data={audit:'',dirty:false,failStart:false,session,task,input,source,calls,events};
- const settled={exports:{},process:{env:{}},path,stat:async()=>({size:data.audit.length}),readFile:async()=>data.audit,fail:(code,message)=>{throw Object.assign(Error(message),{code});}};
+ const settled={resourceRetryResolved:resourceRetry.resourceRetryResolved,exports:{},process:{env:{}},path,stat:async()=>({size:data.audit.length}),readFile:async()=>data.audit,fail:(code,message)=>{throw Object.assign(Error(message),{code});}};
  vm.runInNewContext(settledCode,settled);
  const stubs={
   './source-checkpoint':settled.exports,
