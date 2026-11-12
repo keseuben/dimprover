@@ -7,7 +7,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 const lock=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package-lock.json"),"utf8"));
 const packages=lock.packages||{};
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
-check("desktop v0.1.134",()=>assert.equal(pkg.version,"0.1.134"));
+check("desktop v0.1.135",()=>assert.equal(pkg.version,"0.1.135"));
 const patchedMatchers=new Map([["brace-expansion","5.0.12"],["minimatch","11.0.3"],["glob","14.0.3"]]);
 for(const [name,version] of patchedMatchers) {
   check(name+" patched version present",()=>assert.equal(packages["node_modules/"+name]?.version,version));
@@ -30,4 +30,4 @@ for(const [key,version] of patchedTransitives) {
     assert.equal(installed.version,packages[key]?.version);
   });
 }
-console.log(`Developer Grid v0.1.134 build dependency security contract PASS · ${n}/${n}`);
+console.log(`Developer Grid v0.1.135 build dependency security contract PASS · ${n}/${n}`);

@@ -2687,12 +2687,12 @@ async function recoverConversationExecutionAuthority(task, workerCode) {
   });
   const local=loadTaskLaunchRecords()[taskId]||{};
   let resourceRetryAuthorization=null;
-  if(local.executionWorkflowBlocked&&local.executionBridgeCode==="EXECUTION_TEST_MEMORY_UNAVAILABLE"&&!workflowControl.executionPending(local)){
+  if(local.executionWorkflowBlocked&&["EXECUTION_TEST_MEMORY_UNAVAILABLE","EXECUTION_COMMAND_FAIL","EXECUTION_COMMAND_TIMEOUT"].includes(local.executionBridgeCode)&&!workflowControl.executionPending(local)){
     const last=(local.executionHistory||[]).at(-1);
-    if(last?.completedAt&&last.resultStatus==="BLOCKED"&&last.action==="RUN_DEV_COMMAND"){
+    if(last?.completedAt&&last.action==="RUN_DEV_COMMAND"&&(local.executionBridgeCode==="EXECUTION_TEST_MEMORY_UNAVAILABLE"?last.resultStatus==="BLOCKED":last.resultStatus==="FAIL")){
       const retry=await recordDeveloperGridExecutionReceipt({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{stage:"RETRY_RESOURCE",taskId,sessionId,workerCode:normalizedWorkerCode,sourceProofSha256:proofSha256,requestId:last.requestId,resultId:last.resultId,resultSha256:last.resultSha256,conversationId:String(refreshedTask.surfaceConversationId||refreshedTask.chatConversationId||refreshedTask.chatLaunch?.surfaceConversationId||"")}});
       const a=retry?.authorization;
-      if(retry?.ok!==true||retry.stage!=="RESOURCE_RETRY_AUTHORIZED"||a?.taskId!==taskId||a.sessionId!==sessionId||a.workerCode!==normalizedWorkerCode||a.sourceProofSha256!==proofSha256||a.command!=="TSC"||!a.blockedResultIds?.includes(last.resultId)||a.productionAccess!=="DENY")throw new Error("EXECUTION_RESOURCE_RETRY_AUTHORIZATION_MISMATCH");
+      if(retry?.ok!==true||retry.stage!=="RESOURCE_RETRY_AUTHORIZED"||a?.taskId!==taskId||a.sessionId!==sessionId||a.workerCode!==normalizedWorkerCode||a.sourceProofSha256!==proofSha256||!["TSC","LINT"].includes(a.command)||!a.blockedResultIds?.includes(last.resultId)||a.productionAccess!=="DENY")throw new Error("EXECUTION_RESOURCE_RETRY_AUTHORIZATION_MISMATCH");
       saveTaskLaunchPatch(refreshedTask,workerCode,{executionWorkflowBlocked:false,executionResourceRetryAuthorization:a,executionBridgeError:null});
       resourceRetryAuthorization=a;
     }
@@ -2734,7 +2734,7 @@ function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
     "A Central Core friss READY végrehajtási kapcsolatot igazolt ugyanahhoz a meglévő Grid task/session/worktree azonossághoz.",
     "Nem jött létre új Grid-task, Grid-session, worktree vagy TASK_LAUNCH.",
     "A korábbi forrásigazolást ne használd újra.",
-    ...(authority?.resourceRetryAuthorization?["A Central Core igazolta a memóriahiány miatt el sem indult TSC újrapróbálását. Az eredeti BLOCKED eredmény megmarad; nem jelent sikeres tesztet. Az alábbi GIT_STATUS sikeres eredményének visszaigazolása után adj ki új requestId-val TSC kérést, majd folytasd a meglévő feladat engedélyezett tesztelését és a függő fázisjelentést. Ne ismételj fájlírást, és ne bővítsd a feladat körét."]:[]),
+    ...(authority?.resourceRetryAuthorization?["A Central Core igazolta az erőforrás vagy időkorlát miatt megszakadt "+authority.resourceRetryAuthorization.command+" teszt újrapróbálását. Az eredeti BLOCKED/FAIL eredmény megmarad; nem jelent sikeres tesztet. Az alábbi GIT_STATUS sikeres eredményének visszaigazolása után adj ki új requestId-val "+authority.resourceRetryAuthorization.command+" kérést, majd folytasd a meglévő feladat engedélyezett tesztelését és a függő fázisjelentést. Ne ismételj fájlírást, és ne bővítsd a feladat körét."]:[]),
     "A DEV-forrás és forrásazonosság műveleteihez a közvetlen DIMPROVER VPS MCP, VPS-shell és nyers shell továbbra is tiltott.",
     "Pontosan EGY végrehajtási kérésblokkot adj vissza, kísérőszöveg nélkül:",
     EXECUTION_REQUEST_START,

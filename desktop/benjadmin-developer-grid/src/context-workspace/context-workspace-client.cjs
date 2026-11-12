@@ -150,7 +150,8 @@ async function heartbeatDeveloperGridSession({ baseUrl, deviceToken, input }) {
 }
 async function executeDeveloperGridRequest({ baseUrl, deviceToken, input }) {
   const base = ensureDevBase(baseUrl);
-  const payload = await jsonRequest(`${base}/api/dev/grid/execution`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify(input || {}) }, 300000);
+  const timeoutMs=input?.action==="RUN_DEV_COMMAND"&&String(input.command||"").toUpperCase()==="LINT"?650000:300000;
+  const payload = await jsonRequest(`${base}/api/dev/grid/execution`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify(input || {}) }, timeoutMs);
   return payload || null;
 }
 async function recordDeveloperGridExecutionReceipt({baseUrl,deviceToken,input}) {

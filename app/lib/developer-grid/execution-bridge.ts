@@ -3,7 +3,7 @@ import {resolveDeveloperGridModuleSource} from "./module-source";
 import {boundReviewedWritePaths} from "./reviewed-write-scope";
 import moduleCatalog from "@/config/developer-grid-module-sources.json";
 import {withDeveloperGridTaskOperation} from "./task-operation-lock";
-import {isMemoryPreflight,resultSettled,resourceRetryResolved,sameExecution} from "./resource-retry";
+import {isMemoryPreflight,recoverableTestCommand,resultSettled,resourceRetryResolved,sameExecution} from "./resource-retry";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -419,7 +419,7 @@ async function runDevCommand(root: string, scope: ScopePlan, input: Input): Prom
     file = "/usr/bin/npm";
     try { await stat(path.join(root, "node_modules")); } catch { return { status: "BLOCKED", code: "EXECUTION_TOOLCHAIN_UNAVAILABLE", summary: "A task worktree-ben nincs helyi node_modules; lint a Central Core tesztfázisban fut.", data: { command } }; }
     args = ["run", "lint"];
-    timeout = 240_000;
+    timeout = 600_000;
   } else if (command === "CONTRACT") {
     const rel = cleanRel(input.path);
     assertReadableScope(rel, scope);
@@ -433,19 +433,21 @@ async function runDevCommand(root: string, scope: ScopePlan, input: Input): Prom
   } else {
     throw new DeveloperGridExecutionError("RUN_DEV_COMMAND csak TSC, LINT vagy CONTRACT lehet.", "EXECUTION_COMMAND_DENIED", 403);
   }
-  const execute = async (): Promise<Result> => { try {
-    const result = await execFileAsync(command === "TSC" ? "/usr/bin/prlimit" : file, command === "TSC" ? ["--core=0","--",file,...args] : args, { cwd: root, encoding: "utf8", maxBuffer: 2 * 1024 * 1024, timeout, env: { ...process.env, ...(command === "TSC" ? {NODE_OPTIONS:"--max-old-space-size=4096"} : {}), DIMPRO_PRODUCTION_ACCESS: "DENY" } });
+  const boundedTest=command==="TSC"||command==="LINT";
+  const execute = async (): Promise<Result> => { const started=Date.now();try {
+    const result = await execFileAsync(boundedTest ? "/usr/bin/prlimit" : file, boundedTest ? ["--core=0","--",file,...args] : args, { cwd: root, encoding: "utf8", maxBuffer: 2 * 1024 * 1024, timeout, env: { ...process.env, ...(boundedTest ? {NODE_OPTIONS:"--max-old-space-size=4096"} : {}), DIMPRO_PRODUCTION_ACCESS: "DENY" } });
     return { status: "PASS", code: "EXECUTION_COMMAND_OK", summary: `${command} PASS.`, data: { command, exitCode: 0, output: output(`${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`) } };
   } catch (error) {
-    const candidate = error as { code?: number | string; stdout?: string; stderr?: string; signal?: string };
-    return { status: "FAIL", code: "EXECUTION_COMMAND_FAIL", summary: `${command} sikertelen.`, data: { command, exitCode: typeof candidate.code === "number" ? candidate.code : 1, signal: candidate.signal || null, output: output(`${candidate.stdout || ""}${candidate.stderr ? `\n${candidate.stderr}` : ""}`) } };
+    const candidate = error as { code?: number | string; stdout?: string; stderr?: string; signal?: string;killed?:boolean };
+    const elapsedMs=Date.now()-started,timedOut=boundedTest&&candidate.killed===true&&candidate.signal==="SIGTERM"&&elapsedMs>=timeout-250;
+    return { status: "FAIL", code: timedOut?"EXECUTION_COMMAND_TIMEOUT":"EXECUTION_COMMAND_FAIL", summary: timedOut?`${command}: a korlátozott futási idő lejárt.`:`${command} sikertelen.`, data: { command, exitCode: typeof candidate.code === "number" ? candidate.code : 1, signal: candidate.signal || null,...(timedOut?{timedOut:true,timeoutMs:timeout,elapsedMs}:{}), output: output(`${candidate.stdout || ""}${candidate.stderr ? `\n${candidate.stderr}` : ""}`) } };
   } };
-  if (command !== "TSC") return execute();
+  if (!boundedTest) return execute();
   // The API's small heap must not be inherited by a full-project typecheck.
   // One shared cross-process slot bounds aggregate memory across all workers.
   try { return await withDeveloperGridTaskOperation("grid-tsc-memory-slot", async () => {
     const available = (process as typeof process & {availableMemory?:()=>number}).availableMemory?.() || 0;
-    if (available < 6 * 1024 ** 3) return {status:"BLOCKED",code:"EXECUTION_TEST_MEMORY_UNAVAILABLE",summary:"A típusellenőrzéshez nincs igazolt 6 GiB szabad memóriakeret.",data:{command,availableBytes:available,requiredAvailableBytes:6*1024**3}};
+    if (available < 6 * 1024 ** 3) return {status:"BLOCKED",code:"EXECUTION_TEST_MEMORY_UNAVAILABLE",summary:"A DEV teszthez nincs igazolt 6 GiB szabad memóriakeret.",data:{command,availableBytes:available,requiredAvailableBytes:6*1024**3}};
     return execute();
   }); } catch(error) {
     return {status:"BLOCKED",code:"EXECUTION_TEST_SLOT_UNAVAILABLE",summary:"A közös típusellenőrzési erőforrás nem foglalható. Új teszt nem indult.",data:{command,reason:(error as {code?:string}).code||"TEST_SLOT_FAILED"}};
@@ -487,12 +489,12 @@ async function retrySourceFingerprint(root:string) {
 }
 async function assertPriorExecutionSettled(context:{taskId:string;sessionId:string;proofSha:string;requestId:string;worker?:string;root?:string;action?:string},input:Input={}) {
   const rows=await auditRows(context.taskId);
-  const unresolved=rows.filter(r=>r.sessionId===context.sessionId&&isMemoryPreflight(r)&&!resourceRetryResolved(rows,r));
+  const unresolved=rows.filter(r=>r.sessionId===context.sessionId&&recoverableTestCommand(rows,r)&&!resourceRetryResolved(rows,r));
   let retryAuthorizationId:string|null=null;
   if(unresolved.length){
     const authorization=[...rows].reverse().find(r=>r.event==="RESOURCE_RETRY_AUTHORIZED"&&r.sessionId===context.sessionId&&r.workerCode===context.worker&&r.sourceProofSha256===context.proofSha&&Array.isArray(r.blockedResultIds)&&unresolved.every(b=>(r.blockedResultIds as unknown[]).includes(b.resultId)));
     if(!authorization||!context.root||authorization.sourceFingerprint!==await retrySourceFingerprint(context.root)
-      ||!(context.action==="RUN_DEV_COMMAND"&&text(input.command,80).toUpperCase()==="TSC"||["GIT_STATUS","GIT_DIFF","GIT_DIFF_CHECK","READ_FILE","LIST_FILES","SEARCH_FILES"].includes(context.action||"")))
+      ||!(context.action==="RUN_DEV_COMMAND"&&text(input.command,80).toUpperCase()===authorization.command||["GIT_STATUS","GIT_DIFF","GIT_DIFF_CHECK","READ_FILE","LIST_FILES","SEARCH_FILES"].includes(context.action||"")))
       throw new DeveloperGridExecutionError("A memória miatt megállt teszthez igazolt, azonos forrású újrapróbálás szükséges.","EXECUTION_RESOURCE_RETRY_REQUIRED",409);
     retryAuthorizationId=String(authorization.authorizationId);
   }
@@ -519,18 +521,19 @@ export async function recordDeveloperGridExecutionReceipt(raw:unknown) {
     if(!row)throw new DeveloperGridExecutionError("Nincs ilyen eltárolt szerveres eredmény.","EXECUTION_RESULT_NOT_FOUND",404);
     const envelope=envelopeFromAudit(row,rows);
     if(stage==="RETRY_RESOURCE"){
-      if(!isMemoryPreflight(row)||!resultSettled(rows,row,false)||input.resultId!==envelope.resultId||input.resultSha256!==envelope.resultSha256)
+      const command=recoverableTestCommand(rows,row);
+      if(!command||!resultSettled(rows,row,false)||input.resultId!==envelope.resultId||input.resultSha256!==envelope.resultSha256)
         throw new DeveloperGridExecutionError("Csak visszaigazolt memória-előellenőrzés próbálható újra.","EXECUTION_RESOURCE_RETRY_DENIED",409);
-      const context=await validateContext({...input,schemaVersion:1,requestId:"retry-"+randomUUID(),action:"RUN_DEV_COMMAND",command:"TSC"});
+      const context=await validateContext({...input,schemaVersion:1,requestId:"retry-"+randomUUID(),action:"RUN_DEV_COMMAND",command});
       // Every prior request must have a known, accepted outcome. Only this exact
       // resource preflight is recoverable; code failures and rejected ACKs stay blocked.
       const prior=rows.filter(r=>r.event==="RESULT"&&r.sessionId===sessionId);
       if(rows.some(r=>r.event==="REQUEST"&&r.sessionId===sessionId&&!prior.some(p=>sameExecution(p,r)&&p.requestHash===r.requestHash))
-        ||prior.some(r=>!resultSettled(rows,r,false)||((r.result as Result).status!=="PASS"&&!resourceRetryResolved(rows,r)&&!isMemoryPreflight(r))))
+        ||prior.some(r=>!resultSettled(rows,r,false)||((r.result as Result).status!=="PASS"&&!resourceRetryResolved(rows,r)&&recoverableTestCommand(rows,r)!==command)))
         throw new DeveloperGridExecutionError("Más függő vagy hibás művelet mellett nincs erőforrás-újrapróbálás.","EXECUTION_RESOURCE_RETRY_DENIED",409);
       const availableBytes=(process as typeof process & {availableMemory?:()=>number}).availableMemory?.()||0;
       if(availableBytes<6*1024**3)throw new DeveloperGridExecutionError("A típusellenőrzéshez továbbra sincs 6 GiB szabad memóriakeret.","EXECUTION_TEST_MEMORY_UNAVAILABLE",409);
-      const authorization={event:"RESOURCE_RETRY_AUTHORIZED",authorizationId:"retry-"+randomUUID(),at:new Date().toISOString(),taskId,sessionId,workerCode:worker,sourceProofSha256:context.proofSha,conversationId:bound,command:"TSC",blockedResultIds:prior.filter(r=>isMemoryPreflight(r)&&!resourceRetryResolved(rows,r)).map(r=>r.resultId),sourceFingerprint:await retrySourceFingerprint(context.root),availableBytes,requiredAvailableBytes:6*1024**3,environment:"DEV",productionAccess:"DENY"};
+      const authorization={event:"RESOURCE_RETRY_AUTHORIZED",authorizationId:"retry-"+randomUUID(),at:new Date().toISOString(),taskId,sessionId,workerCode:worker,sourceProofSha256:context.proofSha,conversationId:bound,command,reason:isMemoryPreflight(row)?"MEMORY_PREFLIGHT":"BOUNDED_TEST_TERMINATION",blockedResultIds:prior.filter(r=>recoverableTestCommand(rows,r)===command&&!resourceRetryResolved(rows,r)).map(r=>r.resultId),sourceFingerprint:await retrySourceFingerprint(context.root),availableBytes,requiredAvailableBytes:6*1024**3,environment:"DEV",productionAccess:"DENY"};
       await appendAudit(taskId,authorization);
       return {ok:true,stage:"RESOURCE_RETRY_AUTHORIZED",authorization};
     }
