@@ -2687,9 +2687,12 @@ async function recoverConversationExecutionAuthority(task, workerCode) {
   });
   const local=loadTaskLaunchRecords()[taskId]||{};
   let resourceRetryAuthorization=null;
-  if(local.executionWorkflowBlocked&&["EXECUTION_TEST_MEMORY_UNAVAILABLE","EXECUTION_COMMAND_FAIL","EXECUTION_COMMAND_TIMEOUT"].includes(local.executionBridgeCode)&&!workflowControl.executionPending(local)){
+  // A prior recovery can clear the local stop before the test is retried.
+  // Refreshing authority invalidates that proof-bound retry authorization too.
+  if(["EXECUTION_TEST_MEMORY_UNAVAILABLE","EXECUTION_COMMAND_FAIL","EXECUTION_COMMAND_TIMEOUT"].includes(local.executionBridgeCode)&&!workflowControl.executionPending(local)){
     const last=(local.executionHistory||[]).at(-1);
     if(last?.completedAt&&last.action==="RUN_DEV_COMMAND"&&(local.executionBridgeCode==="EXECUTION_TEST_MEMORY_UNAVAILABLE"?last.resultStatus==="BLOCKED":last.resultStatus==="FAIL")){
+      saveTaskLaunchPatch(refreshedTask,workerCode,{executionWorkflowBlocked:true});
       const retry=await recordDeveloperGridExecutionReceipt({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{stage:"RETRY_RESOURCE",taskId,sessionId,workerCode:normalizedWorkerCode,sourceProofSha256:proofSha256,requestId:last.requestId,resultId:last.resultId,resultSha256:last.resultSha256,conversationId:String(refreshedTask.surfaceConversationId||refreshedTask.chatConversationId||refreshedTask.chatLaunch?.surfaceConversationId||"")}});
       const a=retry?.authorization;
       if(retry?.ok!==true||retry.stage!=="RESOURCE_RETRY_AUTHORIZED"||a?.taskId!==taskId||a.sessionId!==sessionId||a.workerCode!==normalizedWorkerCode||a.sourceProofSha256!==proofSha256||!["TSC","LINT"].includes(a.command)||!a.blockedResultIds?.includes(last.resultId)||a.productionAccess!=="DENY")throw new Error("EXECUTION_RESOURCE_RETRY_AUTHORIZATION_MISMATCH");

@@ -102,5 +102,16 @@ assert.equal(resourceRetry.resourceRetryResolved(await server.test.auditRows(tas
 reset();local.executionBridgeCode='EXECUTION_COMMAND_FAIL';local.executionHistory=[{completedAt:'now',resultStatus:'FAIL',action:'RUN_DEV_COMMAND',requestId:lintRequest.requestId,resultId:lintEnvelope.resultId,resultSha256:lintEnvelope.resultSha256}];reply=lintAuth;
 await desktop.exports.recover(refreshedTask,'OUTMINAI');assert.equal(local.executionWorkflowBlocked,false);assert.equal(local.executionResourceRetryAuthorization.command,'LINT');
 reset();local.executionBridgeCode='EXECUTION_COMMAND_FAIL';local.executionHistory[0].resultStatus='FAIL';reply=Error('ordinary code failure denied');await assert.rejects(()=>desktop.exports.recover(refreshedTask,'OUTMINAI'));assert.equal(local.executionWorkflowBlocked,true);
+// Reopening tomorrow refreshes authority after the first retry authorization
+// already cleared the local stop. The same immutable failure still needs a
+// server authorization bound to today's proof before any test may run.
+reset();local.executionBridgeCode='EXECUTION_COMMAND_FAIL';local.executionHistory=[{completedAt:'now',resultStatus:'FAIL',action:'RUN_DEV_COMMAND',requestId:lintRequest.requestId,resultId:lintEnvelope.resultId,resultSha256:lintEnvelope.resultSha256}];reply=lintAuth;
+await desktop.exports.recover(refreshedTask,'OUTMINAI');assert.equal(calls,1);assert.equal(local.executionWorkflowBlocked,false);
+proof.sha256='c'.repeat(64);reply={...lintAuth,authorization:{...lintAuth.authorization,sourceProofSha256:proof.sha256}};
+await desktop.exports.recover(refreshedTask,'OUTMINAI');assert.equal(calls,2,'a refreshed proof must renew an unconsumed retry even after the local stop was cleared');
+assert.equal(local.executionResourceRetryAuthorization.sourceProofSha256,proof.sha256);assert.equal(local.executionWorkflowBlocked,false);assert.equal(local.manualExecutionPermission,undefined);
+proof.sha256='d'.repeat(64);reply=Error('fresh retry denied');await assert.rejects(()=>desktop.exports.recover(refreshedTask,'OUTMINAI'));assert.equal(local.executionWorkflowBlocked,true,'failed renewal must stop the workflow');
+assert.equal(local.executionHistory[0].resultStatus,'FAIL','recovery does not rewrite the original outcome');
+console.log('PASS repeated recovery: fresh proof renews the exact pending retry, denial stops execution, no test or permission grant');
 console.log('PASS bounded LINT timeout: measured termination only, ordinary diagnostics denied, same-command retry, immutable FAIL, exact ACK and checkpoint, real desktop recovery');
 console.log('PASS resource retry: accepted immutable failure, fresh authority, 6 GiB gate, source fingerprint, narrow TSC/read scope, unique replay-safe request, result-specific ACK, checkpoint resolution');
