@@ -7,11 +7,12 @@
         "DIMPRO Drive",
         "Drive"
       ],
-      "branch": "worker/benjaminai/drive-desktop-v019-v0924-integration-20261007",
-      "minimumCommit": "376ef8558b4a7f3084cc6abc1e5fc3c14746ad57",
+      "branch": "codex/drive-validated-dev-baseline",
+      "minimumCommit": "41aacbe30b5514c3fe60c033d7dd8c6a0a4f80d0",
       "requiredPaths": [
         "components/drive/driveBuildInfo.ts",
-        "app/lib/transfer-core/personalReceiptStorage.ts"
+        "app/lib/transfer-core/personalReceiptStorage.ts",
+        "app/projektkapu/kiadas/page.tsx"
       ],
       "readRoots": [
         "components/drive",

@@ -1,6 +1,6 @@
 "use strict";
 
-const DEVELOPMENT_ACTION = /(?:\b(?:folytasd|folytat(?:hatod|nád)?|kezd(?:d|heted|jük)?(?:\s+el)?|indítsd|csináld(?:\s+meg)?|készítsd(?:\s+el)?|fejleszd|javítsd|építsd|implementáld|dolgozz(?:\s+rajta)?|vidd(?:\s+végig)?|menj(?:\s+tovább)?|mehet)\b|\b(?:continue|start|implement|develop|fix|proceed|go\s+ahead)\b)/iu;
+const DEVELOPMENT_ACTION = /(?:\b(?:folytasd|folytassuk|folytat(?:hatod|nád)?|kezd(?:d|heted|jük)?(?:\s+el)?|indítsd|csináld(?:\s+meg)?|készítsd(?:\s+el)?|fejleszd|javítsd|építsd|implementáld|dolgozz(?:\s+rajta)?|vidd(?:\s+végig)?|menj(?:\s+tovább)?|mehet)\b|\b(?:continue|start|implement|develop|fix|proceed|go\s+ahead)\b)/iu;
 const DEVELOPMENT_CONTEXT = /(?:fejleszt|kód|commit|branch|worktree|build|teszt|developer\s*grid|benjadmin|dimpro|dimprover|auth|login|drive|projektkapu|api|adatbázis|postgres|typescript|next\.js)/iu;
 const TERSE_CONTINUATION = /^(?:ok(?:é|e)?[,.!? ]*|rendben[,.!? ]*)?(?:folytasd|mehet|kezd(?:d)?(?:\s+el)?|csináld(?:\s+meg)?|vidd(?:\s+végig)?|menj(?:\s+tovább)?|continue|go\s+ahead)[.!? ]*$/iu;
 const MACHINE_MARKER = /BENJADMIN_(?:PROMPT_KIND|EXECUTION_|STAGE_REPORT|CONTINUATION_|TASK_LAUNCH|HANDOFF_)/i;
@@ -12,7 +12,7 @@ function clean(value, max = 2000) {
 function userTurns(messages) {
   return (Array.isArray(messages) ? messages : [])
     .filter((item) => String(item?.role || "").toUpperCase() === "USER")
-    .map((item) => ({ messageId:clean(item?.messageId, 240), text:clean(item?.text, 1800) }))
+    .map((item) => ({ messageId:clean(item?.messageId, 240), text:String(item?.text ?? "").trim() }))
     .filter((item) => item.text && !MACHINE_MARKER.test(item.text));
 }
 
@@ -38,9 +38,11 @@ function inferAutoWorkModuleName(conversationTitle, messages) {
   const users = userTurns(messages);
   const latest = users.at(-1)?.text || "";
   // Kifejezett, egyértelmű felhasználói fejlesztési utasítás válthat modult.
-  const action = latest.match(/^\s*(?:(?:oké|rendben)[,.]?\s*)?(?:folytasd|javítsd|fejleszd|indítsd|implementáld|készítsd(?:\s+el)?|kezdd(?:\s+el)?)\s+(.+)/iu);
+  const action = latest.match(/^\s*(?:(?:oké|rendben)[,.]?\s*)?(?:folytasd|folytassuk|javítsd|fejleszd|indítsd|implementáld|készítsd(?:\s+el)?|kezdd(?:\s+el)?)\s+([\s\S]+)/iu);
   if (action) {
-    const directed = recognizeAutoWorkModules(action[1]);
+    // The first instruction sentence names the work; later button labels and
+    // integration dependencies must not replace that primary target.
+    const directed = recognizeAutoWorkModules(action[1].split(/[.!?\n]/u)[0]);
     if (directed.length === 1) return directed[0];
   }
   // Külön megnevezett témaváltás ("most a...", "inkább...", "váltsunk...").
@@ -51,12 +53,14 @@ function inferAutoWorkModuleName(conversationTitle, messages) {
   }
   const titleMatches = recognizeAutoWorkModules(title);
   if (titleMatches.length === 1) return titleMatches[0];
+  if (recognizeAutoWorkModules(latest).length > 1) return "";
   // ASSISTANT üzenet nem módosítja a fejlesztési scope-ot.
   for (let index = users.length - 1; index >= 0; index--) {
     const matches = recognizeAutoWorkModules(users[index].text);
     if (matches.length === 1) return matches[0];
   }
   if (title && !/^(chatgpt|new chat|új csevegés)$/iu.test(title)) {
+    if (/^\d{6}(?:_\d+)?\s+\S+AI\s*[–—-]\s*fejlesztés/iu.test(title)) return "";
     return title
       .replace(/\s*[–—:-]\s*(?:fejleszt[eé]s|folytat[aá]sa|jav[ií]t[aá]sa).*$/iu, "")
       .replace(/\s+(?:fejleszt[eé]s(?:e|ének)?|folytat[aá]sa|elkezd[eé]se|jav[ií]t[aá]sa).*$/iu, "")
@@ -72,7 +76,15 @@ function buildAutoWorkSourcePrompt(messages, conversationTitle) {
   if (title) lines.push(`Fejlesztési csevegés: ${title}`);
   lines.push("Felhasználói fejlesztési utasítások, időrendi sorrendben:");
   for (const turn of turns) lines.push(`- ${turn.text}`);
-  return lines.join("\n").slice(0, 12000);
+  return lines.join("\n");
+}
+
+function intentMatchesActiveModule(intent, moduleName) {
+  const canonical = value => {
+    const key=clean(value,180).normalize("NFKC").toLocaleLowerCase("hu-HU");
+    return key === "drive" ? "dimpro drive" : key === "benjadmin developer grid" ? "developer grid v1" : key;
+  };
+  return Boolean(intent?.moduleName && moduleName && canonical(intent.moduleName) === canonical(moduleName));
 }
 
 function detectChatDevelopmentIntent({ messages, conversationTitle = "" } = {}) {
@@ -89,14 +101,17 @@ function detectChatDevelopmentIntent({ messages, conversationTitle = "" } = {}) 
   const context=DEVELOPMENT_CONTEXT.test(recentContext(messages, conversationTitle));
   if (terse && !context) return { triggered:false, reason:"TERSE_WITHOUT_DEVELOPMENT_CONTEXT", latestUserMessageId:latest.messageId, latestUserText:latest.text };
   const sourcePrompt=buildAutoWorkSourcePrompt(messages, conversationTitle);
+  if (sourcePrompt.length > 12000) return { triggered:false, reason:"SOURCE_PROMPT_TOO_LONG", latestUserMessageId:latest.messageId };
   if (sourcePrompt.length < 12) return { triggered:false, reason:"SOURCE_PROMPT_TOO_SHORT", latestUserMessageId:latest.messageId, latestUserText:latest.text };
+  const moduleName=inferAutoWorkModuleName(conversationTitle, messages);
+  if (!moduleName) return { triggered:false, reason:"MODULE_AMBIGUOUS", latestUserMessageId:latest.messageId };
   return {
     triggered:true,
     reason:terse ? "TERSE_CONTINUATION_IN_DEVELOPMENT_CONTEXT" : "EXPLICIT_DEVELOPMENT_ACTION",
     latestUserMessageId:latest.messageId,
     latestUserText:latest.text,
     sourcePrompt,
-    moduleName:inferAutoWorkModuleName(conversationTitle, messages),
+    moduleName,
   };
 }
 
@@ -104,4 +119,5 @@ module.exports={
   detectChatDevelopmentIntent,
   inferAutoWorkModuleName,
   buildAutoWorkSourcePrompt,
+  intentMatchesActiveModule,
 };

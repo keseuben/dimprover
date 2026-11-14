@@ -31,7 +31,7 @@ const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.c
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
 const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLiteral, stopSelectorLiteral, microphoneSelectorLiteral, conversationLinkSelectorLiteral, inspectChatGptDom, inspectChatRefreshSafety: inspectChatRefreshSafetyViaAdapter, scrollToLatestChatTurn } = require("./chatgpt/chatgpt-dom-adapter.cjs");
-const { detectChatDevelopmentIntent } = require("./chatgpt/auto-work-start.cjs");
+const { detectChatDevelopmentIntent, intentMatchesActiveModule } = require("./chatgpt/auto-work-start.cjs");
 const { createAutoWorkStartObservationGuard, INSTALL_LIVE_SUBMISSION_OBSERVER_SCRIPT, READ_LIVE_SUBMISSIONS_SCRIPT } = require("./chatgpt/auto-work-observation.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
@@ -5347,6 +5347,14 @@ async function autoStartDeveloperGridWorkFromChat(workerCode) {
       const sameConversation = Boolean(taskConversationId && taskConversationId === currentConversationId);
       const primaryStale = primaryTaskId === String(pair.task.id || "") && primaryReconciliation !== "CURRENT";
       if (sameConversation && !primaryStale) {
+        if (!intentMatchesActiveModule(intent, context.moduleName)) {
+          rememberAutoWorkStartTurn(turnKey);
+          appendChatDiagnostic("ACTIVE_TASK_MODULE_MISMATCH", {
+            cellId:cell.id, workerCode:code, taskId:pair.task.id,
+            description:`A meglévő ${context.moduleName || "ismeretlen"} feladat nem folytatható ${intent.moduleName} utasítással. Ellenőrzött újfeladat-előnézet szükséges.`,
+          });
+          return { ok:false, reason:"ACTIVE_TASK_MODULE_MISMATCH", taskId:pair.task.id };
+        }
         rememberAutoWorkStartTurn(turnKey);
         void continueDeveloperGridAutopilot(code, pair.task.id).catch(() => undefined);
         return { ok:true, reason:"EXISTING_TASK_CONTINUES", taskId:pair.task.id };

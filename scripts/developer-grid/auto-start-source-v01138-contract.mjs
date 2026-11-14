@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(import.meta.url),ts=require('typescript');
+const catalog=JSON.parse(fs.readFileSync(path.join(root,'config/developer-grid-module-sources.json'),'utf8'));
+const transpile=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+const box={exports:{},require:id=>id==='@/config/developer-grid-module-sources.json'?catalog:id==='./worker-workspace'?{DEVELOPER_WORKER_REPOSITORY:'/fixture.git'}:require(id)};
+vm.runInNewContext(transpile(fs.readFileSync(path.join(root,'app/lib/developer-grid/module-source.ts'),'utf8')),box);
+let tests=0;async function check(name,fn){await fn();console.log('PASS',++tests,name);}
+const resolve=box.exports.resolveDeveloperGridModuleSource,drive=catalog.sources.find(s=>s.modules.includes('DIMPRO Drive'));
+const head='41aacbe30b5514c3fe60c033d7dd8c6a0a4f80d0',gridHead='dd2242e552183a06e0900151fbd1a7d5a4e10927';
+await check('new Drive baseline is the proven V0.9.68 commit',()=>{assert.equal(drive.minimumCommit,head);assert.equal(drive.branch,'codex/drive-validated-dev-baseline');assert(drive.requiredPaths.includes('components/drive/driveBuildInfo.ts'));assert(drive.requiredPaths.includes('app/projektkapu/kiadas/page.tsx'));});
+await check('automatic unknown module refuses Grid foundation fallback',async()=>{let gitCalls=0;await assert.rejects(resolve({projectId:'project_dimprover',moduleName:'DIMPRO Projektkapu',fallbackHead:gridHead,requireCatalog:true},async()=>{gitCalls++;return gridHead;}),e=>e.code==='MODULE_SOURCE_BINDING_REQUIRED');assert.equal(gitCalls,0);});
+await check('registered Drive resolves from its branch and checks required files',async()=>{const calls=[];const r=await resolve({projectId:'project_dimprover',moduleName:'DIMPRO Drive',fallbackHead:gridHead,requireCatalog:true},async args=>{calls.push(args);if(args[0]==='rev-parse')return head;if(args[0]==='merge-base')return '';if(args[0]==='cat-file')return 'blob';throw Error('unexpected');});assert.equal(r.head,head);assert.equal(r.authority,'MODULE_CATALOG');assert(calls.some(a=>a[0]==='cat-file'&&a[2]===head+':components/drive/driveBuildInfo.ts'));});
+await check('old wrong task cannot acquire the new Drive source under old proof',async()=>{await assert.rejects(resolve({projectId:'project_dimprover',moduleName:'DIMPRO Drive',fallbackHead:gridHead,pinnedHead:gridHead,requireCatalog:true},async args=>{if(args[0]==='rev-parse')return head;if(args[0]==='merge-base')throw Error('not ancestor');return 'blob';}),e=>e.code==='MODULE_SOURCE_BASELINE_MISMATCH');});
+const work=fs.readFileSync(path.join(root,'app/lib/developer-grid/work-start.ts'),'utf8');
+const nstart=work.indexOf('export function normalizeWorkStartInput('),nend=work.indexOf('export function workStartTaskId(',nstart);
+const normalized={exports:{},text:(v,max=12000)=>String(v??'').trim().slice(0,max),WORK_START_MAX_LENGTH:12000,WORK_START_MIN_LENGTH:12,WORK_START_IDEMPOTENCY_MAX:160,DEVELOPER_GRID_PROJECT_ID:'project_dimprover',normalizeDevDeliveryTarget:()=> 'NONE',normalizeReviewedWritePaths:()=>[]};
+vm.runInNewContext(transpile(work.slice(nstart,nend)),normalized);
+const valid={sourcePrompt:'Folytassuk a DIMPRO Drive fejlesztését. '+ 'x'.repeat(2100)+'\nCommit és kihelyezés most tilos.',moduleName:'DIMPRO Drive',preferredWorkerCode:'OUTMINAI',idempotencyKey:'test-auto-138',autoRetireStalePreBoot:true};
+await check('server preserves full valid prompt including tail restriction',()=>assert.equal(normalized.exports.normalizeWorkStartInput(valid).sourcePrompt,valid.sourcePrompt));
+await check('server rejects oversized direct caller instead of silently slicing',()=>assert.throws(()=>normalized.exports.normalizeWorkStartInput({...valid,sourcePrompt:'Javítsd a Drive-ot '+ 'x'.repeat(12000)}),e=>e.code==='DEVELOPER_GRID_WORK_PROMPT_TOO_LONG'));
+const start=work.indexOf('export async function startDeveloperGridWork('),end=work.indexOf('export async function recoverDeveloperGridLaunchExecution(',start);
+await check('automatic work-start requires module catalog before task creation',async()=>{let create=0,verified=false;const sandbox={exports:{},normalizeWorkStartInput:r=>r,getDeveloperGridFoundation:async()=>({sourceProvenance:{sourceState:'VERIFIED',head:gridHead}}),workStartTaskId:()=> 'fixture-task',ensureDeveloperGridCodingWorkerRegistry:async()=>{},retireStalePreBootWorkerSessionForAutoStart:async()=>({retired:false}),getDevCenterEngineState:async()=>({tasks:[]}),resolveContinuityContext:async()=>({}),readGridState:async()=>({sessions:[]}),resolveDeveloperGridModuleSource:async input=>{assert.equal(input.requireCatalog,true);verified=true;throw Object.assign(Error('unregistered'),{code:'MODULE_SOURCE_BINDING_REQUIRED'});},createDevEngineTask:async()=>{create++;},text:v=>String(v||'')};vm.runInNewContext(transpile(work.slice(start,end)),sandbox);await assert.rejects(sandbox.exports.startDeveloperGridWork({...valid,projectId:'project_dimprover'}),e=>e.code==='MODULE_SOURCE_BINDING_REQUIRED');assert.equal(verified,true);assert.equal(create,0);});
+console.log(JSON.stringify({ok:true,tests,scope:'canonical-Drive-source-and-prelaunch-failclosed',liveMutations:false}));

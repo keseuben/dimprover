@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(import.meta.url);
+const auto=require(path.join(root,'desktop/benjadmin-developer-grid/src/chatgpt/auto-work-start.cjs'));
+const title='261114_2 OutminAI – fejlesztés';
+const earlier='Következő fejlesztési kör: A Projektkapu gombot máshova kell áthelyezni a fejlécben.';
+const instruction='Folytassuk a DIMPRO Drive fejlesztését a jelenlegi V0.9.68 alapból, új fejlesztési feladatként. Saját munkatér: a korábban létrehozott saját munkateremet nem látom. Vizsgáld meg és javítsd a megjelenítését. Fejléc laptopon: a Projektlicenc és Projektkapu gombok kerüljenek megfelelő helyre. '+('A szakmai szerep önmagában ne változtassa meg a hozzáférési jogosultságot. '.repeat(24))+'\nA javításokat teszteld, és a Grid koordinálásával juttassuk el a kipróbálható Drive DEV felületre. PROD továbbra is DENY.';
+const turns=(...items)=>items.map((text,i)=>({role:'USER',messageId:'human-'+i,text}));
+let tests=0;function check(name,fn){fn();console.log('PASS',++tests,name);}
+check('real generic worker title must retain primary Drive target despite Projektkapu button',()=>{const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns(earlier,instruction)});assert.equal(r.moduleName,'DIMPRO Drive','primary Drive development target must win over incidental Projektkapu');assert.equal(r.triggered,true);});
+check('plural Hungarian development command works on its own',()=>{const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns('Folytassuk a DIMPRO Drive fejlesztését.')});assert.equal(r.triggered,true);assert.equal(r.moduleName,'DIMPRO Drive');});
+check('complete latest instruction including tail constraints reaches sourcePrompt',()=>{const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns(earlier,instruction)});assert(r.sourcePrompt.includes(instruction),'human instruction must not be truncated at 1800 characters');assert(r.latestUserText.endsWith('PROD továbbra is DENY.'));});
+check('indented lines and user constraints remain literal in sourcePrompt',()=>{const text='Javítsd a DIMPRO Drive fejlécét.\n  - Commit és kihelyezés most tilos.\n  - Csak olvasás.';const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns(text)});assert(r.sourcePrompt.includes(text));});
+check('ambiguous new generic request cannot borrow older Projektkapu scope',()=>{const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns(earlier,'Fejleszd a DIMPRO Drive és DIMPRO AUTH integrációját.')});assert.equal(r.triggered,false);assert.equal(r.reason,'MODULE_AMBIGUOUS');});
+check('over-limit source fails before creating a truncated launch',()=>{const r=auto.detectChatDevelopmentIntent({conversationTitle:title,messages:turns('Javítsd a DIMPRO Drive fejlécét. '+ 'x'.repeat(12500)+' Ne írj fájlt.')});assert.equal(r.triggered,false);assert.equal(r.reason,'SOURCE_PROMPT_TOO_LONG');});
+check('existing wrong module cannot be silently continued in same conversation',()=>{assert.equal(auto.intentMatchesActiveModule({moduleName:'DIMPRO Drive'},'DIMPRO Projektkapu'),false);assert.equal(auto.intentMatchesActiveModule({moduleName:'DIMPRO Drive'},'DIMPRO Drive'),true);});
+const main=fs.readFileSync(path.join(root,'desktop/benjadmin-developer-grid/src/main.cjs'),'utf8');
+check('desktop checks module before the existing task continuation branch',()=>{const guard=main.indexOf('ACTIVE_TASK_MODULE_MISMATCH'),resume=main.indexOf('EXISTING_TASK_CONTINUES');assert(guard>0&&guard<resume);});
+console.log(JSON.stringify({ok:true,tests,scope:'actual-chat-primary-target-and-lossless-source',liveMutations:false}));

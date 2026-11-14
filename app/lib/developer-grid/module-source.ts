@@ -15,12 +15,13 @@ const canonicalGit: Git = async args => {
   return result.stdout.trim();
 };
 
-export async function resolveDeveloperGridModuleSource(input: {projectId:string;moduleName:string;fallbackHead:string;pinnedHead?:string | null}, git: Git = canonicalGit): Promise<ModuleSourceBinding> {
+export async function resolveDeveloperGridModuleSource(input: {projectId:string;moduleName:string;fallbackHead:string;pinnedHead?:string | null;requireCatalog?:boolean}, git: Git = canonicalGit): Promise<ModuleSourceBinding> {
   const matches = catalog.sources.filter(item=>key(item.projectId)===key(input.projectId)&&item.modules.some(name=>key(name)===key(input.moduleName)));
   if(matches.length>1) fail("MODULE_SOURCE_AMBIGUOUS","A modulhoz több forráskötés tartozik.");
   const source=matches[0];
   const fallback=String(input.pinnedHead || input.fallbackHead || "").toLowerCase();
   if(!source){
+    if(input.requireCatalog) fail("MODULE_SOURCE_BINDING_REQUIRED","Az automatikus indításhoz igazolt modulforrás-kötés szükséges; a Grid kiadási forrása nem használható alkalmazásforrás helyett.");
     if(!/^[0-9a-f]{40}$/.test(fallback)) fail("MODULE_SOURCE_HEAD_INVALID","Hiányzó teljes modulforrás-commit.");
     return {schemaVersion:1,projectId:input.projectId,moduleName:input.moduleName,branch:null,head:fallback,minimumCommit:null,requiredPaths:[],authority:"GRID_FOUNDATION"};
   }

@@ -79,6 +79,7 @@ async function recoveredProofChainAllows(input: {
 }
 
 export function normalizeWorkStartInput(input: Record<string, unknown>) {
+  if(String(input.sourcePrompt ?? "").trim().length > WORK_START_MAX_LENGTH) throw Object.assign(new Error("A fejlesztési utasítás túl hosszú; csonkolt utasításból feladat nem indulhat."),{code:"DEVELOPER_GRID_WORK_PROMPT_TOO_LONG",status:400});
   const sourcePrompt = text(input.sourcePrompt);
   const projectId = text(input.projectId, 180) || DEVELOPER_GRID_PROJECT_ID;
   const moduleName = text(input.moduleName, 180) || "Developer Grid V1";
@@ -565,7 +566,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   const existingEngineTask = engineState.tasks.find(item=>item.id===taskId);
   const existingMeta = existingEngineTask?.metadata && typeof existingEngineTask.metadata === "object" ? existingEngineTask.metadata as Record<string,unknown> : {};
   const storedBinding = existingMeta.moduleSourceBinding as {head?:string} | undefined;
-  const moduleSourceBinding = await resolveDeveloperGridModuleSource({projectId:input.projectId,moduleName:input.moduleName,fallbackHead:String(foundation.sourceProvenance.head || ""),pinnedHead:storedBinding?.head || existingSession?.sourceProvenance.head || input.sourceCommit});
+  const moduleSourceBinding = await resolveDeveloperGridModuleSource({projectId:input.projectId,moduleName:input.moduleName,fallbackHead:String(foundation.sourceProvenance.head || ""),pinnedHead:storedBinding?.head || existingSession?.sourceProvenance.head || input.sourceCommit,requireCatalog:input.autoRetireStalePreBoot});
   // Handoff/continuity kizárólag kontextust adhat. Worker-választást nem írhat felül.
   const routingPreference = input.preferredWorkerCode;
   const routingPreferenceSource = "BENJADMIN_EXPLICIT";
