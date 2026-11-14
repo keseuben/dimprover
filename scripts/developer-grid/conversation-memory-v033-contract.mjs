@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {fileURLToPath} from "node:url";
 
-const root=process.cwd();
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
 const read=(f)=>fs.readFileSync(path.join(root,f),"utf8");
 const memory=read("app/lib/developer-grid/conversation-memory.ts");
 const route=read("app/api/dev/grid/conversation-memory/route.ts");
@@ -20,7 +21,7 @@ check("RAW black box is DEV PROD-DENY immutable",()=>{assert.match(memory,/envir
 check("RAW storage is append-only delta with reconstruction",()=>{assert.match(memory,/storageMode:\s*"DELTA"/);assert.match(memory,/deltaMessageCount/);assert.match(memory,/reconstructRawSnapshot/);assert.match(memory,/deltaMessages/);assert.match(memory,/appendFile\(rawFile/);});
 check("RAW snapshot preserves hash chain and full snapshot digest",()=>{assert.match(memory,/snapshotSha256/);assert.match(memory,/previousChainSha256/);assert.match(memory,/chainSha256/);assert.match(memory,/snapshotDigest/);});
 check("memory files are private",()=>{assert.match(memory,/mode:0o700/);assert.match(memory,/mode:0o600/);assert.match(memory,/chmod\(rawFile,0o600\)/);});
-check("RAW capture is bound to authoritative task session worker and conversation",()=>{for(const code of ["DEVELOPER_GRID_RAW_TASK_MISMATCH","DEVELOPER_GRID_RAW_SESSION_MISMATCH","DEVELOPER_GRID_RAW_CONVERSATION_MISMATCH"])assert.match(memory,new RegExp(code));});
+check("RAW capture is bound to authoritative task session worker and conversation",()=>{for(const code of ["DEVELOPER_GRID_RAW_TASK_REQUIRED","DEVELOPER_GRID_RAW_SESSION_MISMATCH","DEVELOPER_GRID_RAW_CONVERSATION_MISMATCH"])assert.match(memory,new RegExp(code));});
 check("sanitized Context Snapshot uses secret scanner",()=>{assert.match(memory,/scanSensitiveText/);assert.match(memory,/safeExcerpt/);assert.match(memory,/sanitized:true/);});
 check("Context Snapshot stores stage source blockers and next phase",()=>{for(const token of ["stageLabel","sourceHead","unresolvedBlockers","nextStageLabel","evidenceCounts"])assert.ok(memory.includes(token));});
 check("automatic Handoff requires stage6 PASS build tests and no blockers",()=>{assert.match(memory,/context\.stage>=6&&Boolean\(build\)&&tests\.length>0&&blockers\.length===0/);assert.match(memory,/saveDevelopmentHandoff/);assert.match(memory,/kind:"HANDOFF",status:"COMPLETED"/);});

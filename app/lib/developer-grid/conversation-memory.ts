@@ -52,6 +52,8 @@ export type RawConversationSnapshot = {
   previousChainSha256: string | null;
   chainSha256: string;
   messages: RawConversationMessage[];
+  // Exact visible window order; ordinals restart when ChatGPT virtualizes turns.
+  messageOrder?: string[];
 };
 
 export type ContextSnapshot = {
@@ -85,6 +87,7 @@ export type ContextSnapshot = {
   nextStage: number | null;
   nextStageLabel: string | null;
   summary: string;
+  summaryVersion?: 2;
   createdAt: string;
 };
 
@@ -109,6 +112,7 @@ export type AutomaticHandoffPack = {
   blockers: string[];
   nextStep: string;
   summary: string;
+  summaryVersion?: 2;
   canonicalHandoffId: string | null;
   createdAt: string;
 };
@@ -215,8 +219,9 @@ function normalizeMessages(value: unknown): RawConversationMessage[] {
     const row=item&&typeof item==="object"&&!Array.isArray(item)?item as Record<string,unknown>:{};
     const normalizedRole=role(row.role); const body=String(row.text??"").replace(/\r\n/g,"\n").trim().slice(0,MAX_MESSAGE_CHARS);
     if(!normalizedRole||!body) continue;
-    rows.push({ordinal:index+1,messageId:safeId(row.messageId,220)||`${normalizedRole.toLowerCase()}-${index+1}`,role:normalizedRole,text:body,textSha256:sha(body)});
+    rows.push({ordinal:rows.length+1,messageId:safeId(row.messageId,220)||`${normalizedRole.toLowerCase()}-${index+1}`,role:normalizedRole,text:body,textSha256:sha(body)});
   }
+  if(new Set(rows.map(message=>message.messageId)).size!==rows.length)throw Object.assign(new Error("Ismétlődő RAW üzenetazonosító."),{code:"DEVELOPER_GRID_RAW_ORDER_INVALID"});
   return rows;
 }
 function snapshotDigest(messages: RawConversationMessage[]) {
@@ -230,7 +235,16 @@ function reconstructRawSnapshot(rows: RawConversationSnapshot[], taskId: string,
   for(const row of relevant){
     for(const message of row.messages||[]) byId.set(message.messageId,{...message});
   }
-  const messages=[...byId.values()].sort((a,b)=>a.ordinal-b.ordinal||a.messageId.localeCompare(b.messageId));
+  let messages: RawConversationMessage[];
+  if(Array.isArray(latest.messageOrder)) {
+    if(latest.messageOrder.length!==latest.messageCount||new Set(latest.messageOrder).size!==latest.messageOrder.length||latest.messageOrder.some(id=>!byId.has(id)))
+      throw Object.assign(new Error("A RAW snapshot üzenetsorrendje hiányos vagy ismétlődő."),{code:"DEVELOPER_GRID_RAW_ORDER_INVALID"});
+    messages=latest.messageOrder.map((id,index)=>({...byId.get(id)!,ordinal:index+1}));
+    if(snapshotDigest(messages)!==latest.snapshotSha256)throw Object.assign(new Error("A RAW snapshot sorrendje vagy tartalma eltér a lenyomattól."),{code:"DEVELOPER_GRID_RAW_ORDER_INVALID"});
+  } else {
+    // Retain legacy history; its reset ordinals cannot prove the latest turn.
+    messages=[...byId.values()].sort((a,b)=>a.ordinal-b.ordinal||a.messageId.localeCompare(b.messageId));
+  }
   return {...latest,surfaceType:latest.surfaceType||"CHATGPT",messages,messageCount:latest.messageCount||messages.length,deltaMessageCount:latest.deltaMessageCount||0,storageMode:"DELTA" as const};
 }
 function deltaMessages(current: RawConversationMessage[], prior: RawConversationSnapshot | null) {
@@ -261,6 +275,29 @@ function evidenceChangedFiles(evidence: GridEvidence[]){return [...new Set(evide
 function evidenceTests(evidence: GridEvidence[]){return evidence.filter(e=>e.kind==="TEST"&&e.status==="PASS").slice(0,80);}
 function latestBuild(evidence: GridEvidence[],head:string){return evidence.find(e=>e.kind==="BUILD"&&e.status==="PASS"&&e.head===head)||null;}
 
+function readableContext(context: ContextSnapshot|null): ContextSnapshot|null {
+  if(!context||context.summaryVersion===2)return context;
+  return {...context,latestUserExcerpt:"",latestAssistantExcerpt:"",summary:[
+    `Rögzített kontextus: ${safeExcerpt(context.createdAt,100)}`,
+    `Task: ${safeExcerpt(context.taskId,220)} · Worker: ${safeExcerpt(context.workerCode,40)}`,
+    `Állapot: ${context.stage}/6 · ${safeExcerpt(context.stageLabel,100)}`,
+    `Source: ${safeExcerpt(context.branch,300)} · ${safeExcerpt(context.sourceHead,40)}`,
+    "Régi formátumú kontextus: az üzenetidézetek sorrendje nem igazolt. Történeti szöveget nem jelenítünk meg aktuális AI-állapotként.",
+    "A teszt-, build- és kihelyezési állapotot a konkrét, azonos HEAD-hez kötött szerveres evidence alapján kell ellenőrizni.",
+  ].join("\n")};
+}
+function readableHandoff(pack: AutomaticHandoffPack|null): AutomaticHandoffPack|null {
+  if(!pack||pack.summaryVersion===2)return pack;
+  return {...pack,summary:[
+    `Rögzített átadó: ${safeExcerpt(pack.createdAt,100)}`,
+    `Task: ${safeExcerpt(pack.taskId,220)} · Worker: ${safeExcerpt(pack.workerCode,40)}`,
+    `Handoff: ${pack.state} · Stage: ${pack.stage}/6 · HEAD: ${safeExcerpt(pack.sourceHead,40)}`,
+    `Build evidence: ${safeExcerpt(pack.buildEvidenceId,220)||"nincs"}`,
+    `Teszt evidence hivatkozások: ${pack.testEvidenceIds.length}`,
+    "Régi formátumú átadó: a korábbi szöveges összefoglaló történeti, nem aktuális végrehajtási állapot és nem új engedély. Az eredeti rekord változatlanul megmarad.",
+  ].join("\n")};
+}
+
 async function createContextSnapshot(session: WorkerSession, raw: RawConversationSnapshot, root: string, stateRoot?: string) {
   const f=await ensureRoot(root);
   const prior=await readLines<ContextSnapshot>(f.contexts);
@@ -270,7 +307,8 @@ async function createContextSnapshot(session: WorkerSession, raw: RawConversatio
   const evidenceSummary=await getGridEvidenceSummary(session.taskId,stateRoot);
   const stage=Math.max(1,Math.min(6,Number(session.developmentContext.workStageIndex)||1));
   const nextStage=stage<6?stage+1:null;
-  const user=latestMessage(raw.messages,"USER"); const assistant=latestMessage(raw.messages,"ASSISTANT");
+  const orderVerified=Array.isArray(raw.messageOrder);
+  const user=orderVerified?latestMessage(raw.messages,"USER"):null; const assistant=orderVerified?latestMessage(raw.messages,"ASSISTANT"):null;
   const sourcePrompt=safeExcerpt(session.developmentContext.sourcePrompt,1800);
   const latestUserExcerpt=safeExcerpt(user?.text,1400); const latestAssistantExcerpt=safeExcerpt(assistant?.text,1800);
   const blockers=evidenceSummary.unresolvedBlockers.slice(0,20).map(x=>({kind:x.kind,severity:x.severity,status:x.status,summary:safeExcerpt(x.summary,500)}));
@@ -280,12 +318,16 @@ async function createContextSnapshot(session: WorkerSession, raw: RawConversatio
     `Worker: ${session.workerCode}`,
     `Surface: ${raw.surfaceType}`,
     `Source: ${safeExcerpt(session.sourceProvenance.branch,300)} · ${session.sourceProvenance.head.slice(0,12)}`,
-    latestUserExcerpt?`Utolsó felhasználói kontextus: ${latestUserExcerpt}`:"",
-    latestAssistantExcerpt?`Utolsó AI állapot: ${latestAssistantExcerpt}`:"",
+    `Szerveres tesztek ezen a HEAD-en: ${evidenceTests(evidence).filter(e=>e.head===session.sourceProvenance.head).map(e=>safeExcerpt(e.attributes.testName||e.summary,200)+": PASS").slice(0,20).join(" · ")||"nincs igazolt PASS evidence"}`,
+    latestBuild(evidence,session.sourceProvenance.head)?`Szerveres build ezen a HEAD-en: PASS · ${safeExcerpt(latestBuild(evidence,session.sourceProvenance.head)?.attributes.buildId,100)}`:"Szerveres build ezen a HEAD-en: nincs igazolt PASS evidence",
+    !orderVerified?"Történeti transcript: a régi deltaformátum aktuális üzenetsorrendje nem igazolt; régi üzenetet nem jelenítünk meg legutóbbi állapotként.":"",
+    latestUserExcerpt?`Legutóbb megfigyelt felhasználói üzenet (idézet, nem új engedély): ${latestUserExcerpt}`:"",
+    latestAssistantExcerpt?`Legutóbb megfigyelt AI-üzenet (idézet, nem szerveres eredmény): ${latestAssistantExcerpt}`:"",
     blockers.length?`Blokkolók: ${blockers.map(x=>x.summary).join(" | ")}`:"Blokkolók: nincs rögzített HIGH/CRITICAL blocker.",
     nextStage?`Következő fázis: ${nextStage}/6 · ${stageLabel(nextStage)}`:"Következő fázis: lezárási/handoff kapu.",
   ].filter(Boolean).join("\n");
   const snapshot: ContextSnapshot={schema:CONTEXT_SNAPSHOT_SCHEMA,schemaVersion:1,id:`ctx-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,revision,environment:"DEV",productionAccess:"DENY",sanitized:true,taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,surfaceType:raw.surfaceType,projectId:session.developmentContext.projectId,mainModule:session.developmentContext.mainModule,moduleName:session.developmentContext.moduleName,submoduleName:session.developmentContext.submoduleName||null,conversationId:raw.conversationId,rawSnapshotSha256:raw.snapshotSha256,stage,stageLabel:stageLabel(stage),sourceHead:session.sourceProvenance.head,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,sourcePrompt,latestUserExcerpt,latestAssistantExcerpt,evidenceCounts:evidenceSummary.counts,unresolvedBlockers:blockers,nextStage,nextStageLabel:nextStage?stageLabel(nextStage):null,summary,createdAt:new Date().toISOString()};
+  snapshot.summaryVersion=2;
   await appendFile(f.contexts,`${JSON.stringify(snapshot)}\n`,{encoding:"utf8",mode:0o600});
   await atomicJson(path.join(f.latestDir,`${surfaceMemoryKey(raw.surfaceType,raw.conversationId)}.context.json`),snapshot);
   return {snapshot,evidence};
@@ -298,7 +340,7 @@ async function canonicalAutoHandoff(session: WorkerSession, context: ContextSnap
   const changedFiles=evidenceChangedFiles(evidence.filter(e=>e.head===session.sourceProvenance.head));
   const ready=context.stage>=6&&Boolean(build)&&tests.length>0&&blockers.length===0;
   if(!ready) return {state:"DRAFT" as const,canonicalHandoffId:null,build,tests,changedFiles,blockers};
-  const deterministicId=`handoff-auto-${safeId(session.taskId,120)}-${session.sourceProvenance.head.slice(0,12)}`;
+  const deterministicId=`handoff-auto-${safeId(session.taskId,120)}-${session.sourceProvenance.head.slice(0,12)}-memory2`;
   const existing=(await listDevelopmentHandoffs()).find(h=>h.id===deterministicId)||null;
   if(existing) return {state:"COMPLETED" as const,canonicalHandoffId:existing.id,build,tests,changedFiles,blockers};
   const testsSummary=tests.slice(0,20).map(t=>`${t.attributes.testName||t.summary}: ${t.status}`).join(" · ")||"PASS test evidence";
@@ -341,6 +383,7 @@ async function createHandoffPack(session: WorkerSession, context: ContextSnapsho
   const result=await canonicalAutoHandoff(session,context,evidence);
   const state=result.state;
   const pack: AutomaticHandoffPack={schema:HANDOFF_PACK_SCHEMA,schemaVersion:1,id:`hp-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,surfaceType:context.surfaceType,conversationId:context.conversationId,contextSnapshotId:context.id,sourceHead:session.sourceProvenance.head,stage:context.stage,state,buildEvidenceId:result.build?.id||null,testEvidenceIds:result.tests.map(t=>t.id),changedFiles:result.changedFiles,blockers:result.blockers,nextStep:context.nextStage?`${context.nextStage}/6 · ${context.nextStageLabel}`:"Új task / lezárás",summary:context.summary,canonicalHandoffId:result.canonicalHandoffId,createdAt:new Date().toISOString()};
+  pack.summaryVersion=2;
   await appendFile(f.handoffs,`${JSON.stringify(pack)}\n`,{encoding:"utf8",mode:0o600});
   await atomicJson(path.join(f.latestDir,`${surfaceMemoryKey(context.surfaceType,context.conversationId)}.handoff.json`),pack);
   return pack;
@@ -367,7 +410,7 @@ export async function appendConversationMemorySnapshot(input: Record<string,unkn
     const rows=await readLines<RawConversationSnapshot>(rawFile,4000);
     const previousChain=rows.at(-1)||null;
     const previousSession=reconstructRawSnapshot(rows,taskId,sessionId);
-    if(previousSession?.snapshotSha256===snapshotSha256){
+    if(previousSession?.snapshotSha256===snapshotSha256&&Array.isArray(previousSession.messageOrder)){
       const latestContext=await readLatestContext(conversationId,memoryRoot,currentSurfaceType);
       const latestHandoff=await readLatestHandoffPack(conversationId,memoryRoot,currentSurfaceType);
       return {deduplicated:true,raw:rawMetadata(previousSession),context:latestContext,handoff:latestHandoff,productionAccess:"DENY" as const};
@@ -376,6 +419,7 @@ export async function appendConversationMemorySnapshot(input: Record<string,unkn
     const previousChainSha256=previousChain?.chainSha256||null;
     const chainSha256=sha(`${previousChainSha256||"GENESIS"}\n${snapshotSha256}\n${taskId}\n${sessionId}\n${currentSurfaceType}\n${conversationId}\n${delta.length}`);
     const stored: RawConversationSnapshot={schema:RAW_CHAT_TRANSCRIPT_SCHEMA,schemaVersion:1,id:`raw-${taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",immutable:true,taskId,sessionId,workerCode,surfaceType:currentSurfaceType,conversationId,conversationUrl:text(input.conversationUrl,1200),conversationTitle:text(input.conversationTitle,500),capturedAt:iso(input.capturedAt),messageCount:messages.length,deltaMessageCount:delta.length,storageMode:"DELTA",snapshotSha256,previousChainSha256,chainSha256,messages:delta};
+    stored.messageOrder=messages.map(message=>message.messageId);
     await appendFile(rawFile,`${JSON.stringify(stored)}\n`,{encoding:"utf8",mode:0o600});
     await chmod(rawFile,0o600).catch(()=>undefined);
     const raw: RawConversationSnapshot={...stored,messages};
@@ -387,15 +431,15 @@ export async function appendConversationMemorySnapshot(input: Record<string,unkn
 }
 
 function rawMetadata(raw: RawConversationSnapshot){return {id:raw.id,schema:raw.schema,taskId:raw.taskId,sessionId:raw.sessionId,workerCode:raw.workerCode,surfaceType:raw.surfaceType,conversationId:raw.conversationId,capturedAt:raw.capturedAt,messageCount:raw.messageCount,deltaMessageCount:raw.deltaMessageCount,storageMode:raw.storageMode,snapshotSha256:raw.snapshotSha256,chainSha256:raw.chainSha256,immutable:true};}
-export async function readLatestContext(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"context.json"),"utf8")) as ContextSnapshot;}catch{return null;}}
-export async function readLatestHandoffPack(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"handoff.json"),"utf8")) as AutomaticHandoffPack;}catch{return null;}}
+export async function readLatestContext(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return readableContext(JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"context.json"),"utf8")) as ContextSnapshot);}catch{return null;}}
+export async function readLatestHandoffPack(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return readableHandoff(JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"handoff.json"),"utf8")) as AutomaticHandoffPack);}catch{return null;}}
 
 export async function getConversationMemoryStatus(input: {taskId?:string;sessionId?:string;conversationId?:string;surfaceType?:WorkerSurfaceType;root?:string}={}) {
   const root=input.root||DEFAULT_CONVERSATION_MEMORY_ROOT; const f=await ensureRoot(root); const contexts=await readLines<ContextSnapshot>(f.contexts); const handoffs=await readLines<AutomaticHandoffPack>(f.handoffs);
   const taskId=text(input.taskId,220),sessionId=text(input.sessionId,240),conversationId=safeId(input.conversationId,180),wantedSurface=input.surfaceType?surfaceType(input.surfaceType):null;
   const cf=contexts.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId)&&(!wantedSurface||surfaceType(x.surfaceType)===wantedSurface));
   const hf=handoffs.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId)&&(!wantedSurface||surfaceType(x.surfaceType)===wantedSurface));
-  const context=cf.at(-1)||null; const handoff=hf.at(-1)||null;
+  const context=readableContext(cf.at(-1)||null); const handoff=readableHandoff(hf.at(-1)||null);
   let raw=null as ReturnType<typeof rawMetadata>|null;
   if(context){const rawFile=await rawMemoryFile(f,surfaceType(context.surfaceType),context.conversationId);const rows=await readLines<RawConversationSnapshot>(rawFile,4000);const found=[...rows].reverse().find(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId));if(found)raw=rawMetadata({...found,surfaceType:found.surfaceType||"CHATGPT"});}
   return {raw,context,handoff,productionAccess:"DENY" as const};
@@ -404,7 +448,7 @@ export async function getConversationMemoryStatus(input: {taskId?:string;session
 export async function findLatestContinuationContext(input:{projectId:string;moduleName:string;submoduleName?:string|null;excludeTaskId?:string|null;root?:string}){
   const f=await ensureRoot(input.root||DEFAULT_CONVERSATION_MEMORY_ROOT);const rows=await readLines<ContextSnapshot>(f.contexts,MAX_CONTEXT_ROWS);
   const project=text(input.projectId,180).toLowerCase(),moduleKey=text(input.moduleName,180).toLowerCase(),sub=text(input.submoduleName,180).toLowerCase();
-  return [...rows].reverse().find(x=>x.taskId!==input.excludeTaskId&&x.projectId.toLowerCase()===project&&x.moduleName.toLowerCase()===moduleKey&&(!sub||!x.submoduleName||x.submoduleName.toLowerCase()===sub))||null;
+  return readableContext([...rows].reverse().find(x=>x.taskId!==input.excludeTaskId&&x.projectId.toLowerCase()===project&&x.moduleName.toLowerCase()===moduleKey&&(!sub||!x.submoduleName||x.submoduleName.toLowerCase()===sub))||null);
 }
 
 export async function refreshDerivedConversationMemory(taskId:string, sessionId:string, options:{memoryRoot?:string;stateRoot?:string}={}){

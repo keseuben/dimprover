@@ -32,6 +32,7 @@ export type DevelopmentHandoff = {
   productionAccess: "DENY";
   tags: string[];
   summary: string;
+  summaryPresentation?: "LEGACY_AUTOMATIC_METADATA";
   fileName: string;
   filePath: string;
   sha256: string;
@@ -152,8 +153,20 @@ async function acquireWriteLock() {
   }
 }
 
+function readableAutomaticHandoff(item: DevelopmentHandoff): DevelopmentHandoff {
+  if(!item.id.startsWith("handoff-auto-")||item.id.endsWith("-memory2")||!item.tags?.includes("automatic")||!item.tags.includes("conversation-memory"))return item;
+  return {...item,summaryPresentation:"LEGACY_AUTOMATIC_METADATA",summary:[
+    "Történeti automatikus átadó: a régi chatidézetek nem igazolt aktuális állapotok és nem új engedélyek.",
+    `Rögzítve: ${text(item.finishedAt,100)} · Task: ${text(item.taskId,180)}`,
+    `Állapot: ${item.status} · HEAD: ${text(item.endCommit,64)}`,
+    `Tesztek: ${text(item.testsSummary,1000)}`,
+    `Build: ${text(item.buildRelease,1000)}`,
+    "Az eredeti Markdown és integritási lenyomata változatlan történeti dokumentumként megmarad.",
+  ].join("\n")};
+}
+
 export async function listDevelopmentHandoffs(filters: Record<string, string> = {}) {
-  let items = await readIndex();
+  let items = (await readIndex()).map(readableAutomaticHandoff);
   const query = text(filters.query, 240).toLocaleLowerCase("hu-HU");
   if (query) items = items.filter((item) => `${item.fileName || ""} ${item.chatSessionId} ${item.chatTitle} ${item.workerCode} ${item.mainProject} ${item.project} ${item.module} ${item.contextModule} ${item.developmentArea || ""} ${item.fileAreaKey || ""} ${item.taskId} ${item.taskTitle} ${item.liveNextTaskId || ""} ${item.liveNextTaskTitle || ""} ${item.summary} ${(item.tags || []).join(" ")}`.toLocaleLowerCase("hu-HU").includes(query));
   for (const [key, field] of [["worker", "workerCode"], ["project", "project"], ["module", "module"], ["status", "status"], ["chat", "chatSessionId"]] as const) {
@@ -267,5 +280,5 @@ export async function readDevelopmentHandoff(id: string) {
   const content = await readFile(item.filePath, "utf8");
   const actual = createHash("sha256").update(content).digest("hex");
   if (actual !== item.sha256) throw new Error("Az átadó integritás-ellenőrzése sikertelen.");
-  return { item, content };
+  return { item:readableAutomaticHandoff(item), content };
 }
